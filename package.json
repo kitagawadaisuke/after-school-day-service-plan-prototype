@@ -1,0 +1,11 @@
+{
+  "name": "michi-note-demo",
+  "version": "1.0.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "serve": "python3 scripts/serve.py",
+    "test": "node --test tests/plan-engine.test.mjs",
+    "test:e2e": "node tests/e2e.test.mjs"
+  }
+}

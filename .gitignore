@@ -1,0 +1,9 @@
+# 参考資料には実在者の個人情報が含まれるため、リポジトリへ含めない。
+/*.jpg
+
+# ローカル環境・テスト生成物
+.DS_Store
+node_modules/
+playwright-report/
+test-results/
+*.log

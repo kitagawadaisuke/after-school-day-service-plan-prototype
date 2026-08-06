@@ -1,0 +1,370 @@
+<!doctype html>
+<html lang="ja">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <meta
+      name="description"
+      content="放課後等デイサービスの日誌から、根拠を確認しながら個別支援計画書の案を作成するローカルデモアプリ"
+    />
+    <title>みちのーと｜個別支援計画作成デモ</title>
+    <link rel="icon" href="data:," />
+    <link rel="stylesheet" href="./styles.css" />
+  </head>
+  <body>
+    <a class="skip-link" href="#main-content">本文へ移動</a>
+
+    <div class="app-shell">
+      <aside class="sidebar" aria-label="メインナビゲーション">
+        <div class="brand-block">
+          <div class="brand-mark" aria-hidden="true">
+            <span></span><span></span><span></span>
+          </div>
+          <div>
+            <p class="brand-name">みちのーと</p>
+            <p class="brand-subtitle">個別支援計画ワークベンチ</p>
+          </div>
+        </div>
+
+        <div class="demo-ribbon"><span></span>デモ環境・仮名データ</div>
+
+        <nav class="main-nav">
+          <button class="nav-item is-active" type="button" data-view-target="dashboard" aria-current="page">
+            <span class="nav-index">01</span><span>概要</span>
+          </button>
+          <button class="nav-item" type="button" data-view-target="journals">
+            <span class="nav-index">02</span><span>日誌を確認</span><span class="nav-count" id="nav-journal-count">0</span>
+          </button>
+          <button class="nav-item" type="button" data-view-target="analysis">
+            <span class="nav-index">03</span><span>傾向を整理</span>
+          </button>
+          <button class="nav-item" type="button" data-view-target="plan">
+            <span class="nav-index">04</span><span>計画書をつくる</span>
+          </button>
+        </nav>
+
+        <div class="sidebar-spacer"></div>
+
+        <section class="child-mini-card" aria-labelledby="child-mini-title">
+          <div class="avatar" aria-hidden="true">A</div>
+          <div>
+            <p class="eyebrow" id="child-mini-title">対象児童</p>
+            <p class="child-name" id="sidebar-child-name">Aさん <small>（仮名）</small></p>
+            <p class="child-meta" id="sidebar-child-meta">小学4年生・利用週3回</p>
+          </div>
+        </section>
+
+        <p class="local-note">
+          <span aria-hidden="true">●</span>
+          このデモの入力内容は、このブラウザ内だけに保存されます。
+        </p>
+      </aside>
+
+      <main class="main-area" id="main-content" tabindex="-1">
+        <header class="topbar">
+          <div>
+            <p class="breadcrumb">みらいステップ <span>/</span> <span id="breadcrumb-current">支援サマリー</span></p>
+            <h1 class="page-title" id="page-title">支援サマリー</h1>
+          </div>
+          <div class="topbar-actions">
+            <span class="save-status" id="save-status" role="status"><i></i>自動保存済み</span>
+            <button class="icon-button" id="open-guide" type="button" aria-label="このアプリの使い方">?</button>
+            <button class="text-button subtle" id="reset-demo" type="button">デモを初期化</button>
+          </div>
+        </header>
+
+        <section class="view is-active" id="view-dashboard" data-view="dashboard" aria-labelledby="dashboard-heading">
+          <div class="hero-panel reveal">
+            <div class="hero-copy">
+              <p class="section-kicker">OBSERVATION → PLAN</p>
+              <h2 id="dashboard-heading">観察から、<br /><em>次の一歩</em>へ。</h2>
+              <p class="hero-lead">
+                2か月分の日誌を、5領域と成長の変化で整理。<br />
+                記録の根拠を残したまま、個別支援計画の案にまとめます。
+              </p>
+              <div class="hero-actions">
+                <button class="primary-button" type="button" data-view-target="journals">
+                  日誌から確認する <span aria-hidden="true">→</span>
+                </button>
+                <button class="ghost-button" type="button" data-view-target="plan">作成済みの計画案を見る</button>
+              </div>
+            </div>
+            <div class="hero-visual" aria-hidden="true">
+              <div class="orbit orbit-one"></div>
+              <div class="orbit orbit-two"></div>
+              <div class="hero-stamp">
+                <span id="hero-entry-count">24</span>
+                <small>観察記録</small>
+              </div>
+              <div class="floating-note note-one"><i></i>見通し</div>
+              <div class="floating-note note-two"><i></i>ことば</div>
+              <div class="floating-note note-three"><i></i>仲間</div>
+            </div>
+          </div>
+
+          <div class="metric-grid reveal delay-1" id="dashboard-metrics"></div>
+
+          <div class="dashboard-grid reveal delay-2">
+            <section class="paper-card journey-card" aria-labelledby="journey-heading">
+              <div class="card-heading-row">
+                <div>
+                  <p class="eyebrow">作成フロー</p>
+                  <h3 id="journey-heading">根拠を失わない4つの工程</h3>
+                </div>
+                <span class="card-tag">現在 4 / 4</span>
+              </div>
+              <ol class="journey-list">
+                <li class="is-complete">
+                  <span class="journey-number">01</span>
+                  <div><strong>日誌をそろえる</strong><small id="journey-period">2026年4月〜5月</small></div>
+                  <span class="journey-status">完了</span>
+                </li>
+                <li class="is-complete">
+                  <span class="journey-number">02</span>
+                  <div><strong>5領域と変化を整理</strong><small>記録頻度と前半・後半を比較</small></div>
+                  <span class="journey-status">完了</span>
+                </li>
+                <li class="is-complete">
+                  <span class="journey-number">03</span>
+                  <div><strong>支援計画の案を作る</strong><small>根拠日誌を紐づけて下書き</small></div>
+                  <span class="journey-status">完了</span>
+                </li>
+                <li class="is-current">
+                  <span class="journey-number">04</span>
+                  <div><strong>専門職が確認・説明</strong><small>会議、本人・家族への説明と同意</small></div>
+                  <span class="journey-status">要確認</span>
+                </li>
+              </ol>
+            </section>
+
+            <section class="paper-card latest-card" aria-labelledby="latest-heading">
+              <div class="card-heading-row">
+                <div>
+                  <p class="eyebrow">直近の観察</p>
+                  <h3 id="latest-heading">日誌のハイライト</h3>
+                </div>
+                <button class="inline-link" type="button" data-view-target="journals">すべて見る</button>
+              </div>
+              <div id="latest-journals"></div>
+            </section>
+          </div>
+
+          <section class="paper-card domain-overview reveal delay-3" aria-labelledby="domain-overview-heading">
+            <div class="card-heading-row">
+              <div>
+                <p class="eyebrow">5領域の記録</p>
+                <h3 id="domain-overview-heading">偏りと抜けを、ひと目で確認</h3>
+              </div>
+              <p class="card-caption">1つの日誌に複数領域を設定できます</p>
+            </div>
+            <div class="domain-strip" id="dashboard-domains"></div>
+          </section>
+        </section>
+
+        <section class="view" id="view-journals" data-view="journals" aria-labelledby="journals-heading" hidden>
+          <div class="section-intro">
+            <div>
+              <p class="section-kicker">DAILY RECORDS</p>
+              <h2 id="journals-heading">日誌を、観察の根拠に。</h2>
+              <p>印象だけでまとめず、「観察 → 支援 → 本人の反応」の流れを確認します。</p>
+            </div>
+            <div class="section-actions">
+              <button class="ghost-button" id="export-journals" type="button">CSV出力</button>
+              <button class="primary-button" id="add-journal" type="button">＋ 日誌を追加</button>
+            </div>
+          </div>
+
+          <div class="filter-bar" aria-label="日誌の絞り込み">
+            <label class="search-field">
+              <span aria-hidden="true">⌕</span>
+              <span class="sr-only">キーワード検索</span>
+              <input id="journal-search" type="search" placeholder="活動・観察内容を検索" />
+            </label>
+            <label>
+              <span class="sr-only">領域</span>
+              <select id="journal-domain-filter">
+                <option value="all">すべての領域</option>
+                <option value="health">健康・生活</option>
+                <option value="motor">運動・感覚</option>
+                <option value="cognition">認知・行動</option>
+                <option value="language">言語・コミュニケーション</option>
+                <option value="social">人間関係・社会性</option>
+              </select>
+            </label>
+            <label>
+              <span class="sr-only">月</span>
+              <select id="journal-month-filter">
+                <option value="all">すべての月</option>
+              </select>
+            </label>
+            <span class="result-count" id="journal-result-count">0件</span>
+          </div>
+
+          <div class="journal-workspace">
+            <div class="journal-list" id="journal-list" aria-live="polite"></div>
+            <aside class="journal-detail paper-card" id="journal-detail" aria-label="選択した日誌の詳細"></aside>
+          </div>
+        </section>
+
+        <section class="view" id="view-analysis" data-view="analysis" aria-labelledby="analysis-heading" hidden>
+          <div class="section-intro">
+            <div>
+              <p class="section-kicker">PATTERN REVIEW</p>
+              <h2 id="analysis-heading">変化は、回数と文脈で読む。</h2>
+              <p>前半と後半を比較し、できた場面だけでなく、支援が有効だった条件も残します。</p>
+            </div>
+            <button class="primary-button" type="button" data-view-target="plan">計画案へ進む <span aria-hidden="true">→</span></button>
+          </div>
+
+          <div class="analysis-notice" role="note">
+            <span aria-hidden="true">i</span>
+            <p><strong>これは診断・自動判定ではありません。</strong> 日誌に記載された指標と5領域タグを集計した下書きです。本人・家族の意向と専門職のアセスメントを優先してください。</p>
+          </div>
+
+          <section class="analysis-range-card paper-card" aria-labelledby="analysis-range-heading">
+            <div>
+              <p class="eyebrow">ANALYSIS WINDOW</p>
+              <h3 id="analysis-range-heading">計画案に使う2〜3か月を選ぶ</h3>
+              <p id="analysis-range-status" aria-live="polite"></p>
+            </div>
+            <div class="analysis-range-fields">
+              <label><span>開始日</span><input id="analysis-range-start" type="date" /></label>
+              <span aria-hidden="true">〜</span>
+              <label><span>終了日</span><input id="analysis-range-end" type="date" /></label>
+              <button class="ghost-button" id="apply-analysis-range" type="button">この期間で分析</button>
+            </div>
+          </section>
+
+          <div class="analysis-grid">
+            <section class="paper-card progress-card" aria-labelledby="progress-heading">
+              <div class="card-heading-row">
+                <div><p class="eyebrow">前半 / 後半</p><h3 id="progress-heading">4つの観察指標</h3></div>
+                <span class="legend"><i></i>前半 <i></i>後半</span>
+              </div>
+              <div id="indicator-chart" class="indicator-chart"></div>
+            </section>
+            <section class="paper-card pattern-card" aria-labelledby="pattern-heading">
+              <div class="card-heading-row">
+                <div><p class="eyebrow">読み取れた傾向</p><h3 id="pattern-heading">支援につながる4つの手がかり</h3></div>
+              </div>
+              <div id="pattern-list" class="pattern-list"></div>
+            </section>
+          </div>
+
+          <section class="paper-card evidence-board" aria-labelledby="evidence-heading">
+            <div class="card-heading-row">
+              <div><p class="eyebrow">計画案の根拠</p><h3 id="evidence-heading">代表的な観察記録</h3></div>
+              <p class="card-caption">日付を選ぶと元の日誌を開きます</p>
+            </div>
+            <div class="evidence-grid" id="analysis-evidence"></div>
+          </section>
+
+          <section class="paper-card domain-analysis" aria-labelledby="domain-analysis-heading">
+            <div class="card-heading-row">
+              <div><p class="eyebrow">5領域</p><h3 id="domain-analysis-heading">領域別の観察サマリー</h3></div>
+            </div>
+            <div id="domain-analysis-list" class="domain-analysis-list"></div>
+          </section>
+        </section>
+
+        <section class="view" id="view-plan" data-view="plan" aria-labelledby="plan-heading" hidden>
+          <div class="section-intro plan-intro">
+            <div>
+              <div class="title-with-badge"><p class="section-kicker">INDIVIDUAL SUPPORT PLAN</p><span>下書き</span></div>
+              <h2 id="plan-heading">個別支援計画書を整える。</h2>
+              <p>自動作成した案を、本人中心の言葉に直し、根拠と抜けを確認してから説明・同意へ進みます。</p>
+            </div>
+            <div class="section-actions plan-actions">
+              <button class="ghost-button" id="regenerate-plan" type="button">日誌から再作成</button>
+              <div class="segmented-control" aria-label="表示モード">
+                <button class="is-active" type="button" data-plan-mode="edit" aria-pressed="true">編集</button>
+                <button type="button" data-plan-mode="preview" aria-pressed="false">帳票プレビュー</button>
+              </div>
+              <button class="primary-button" id="print-plan" type="button">印刷 / PDF</button>
+            </div>
+          </div>
+
+          <div class="plan-layout">
+            <aside class="plan-audit paper-card" aria-labelledby="audit-heading">
+              <div class="audit-score-wrap">
+                <div class="audit-ring" id="audit-ring"><strong id="audit-score">0</strong><small>%</small></div>
+                <div><p class="eyebrow">記載チェック</p><h3 id="audit-heading">計画案の準備状況</h3></div>
+              </div>
+              <div id="plan-checklist" class="checklist"></div>
+              <div class="human-review-note">
+                <span aria-hidden="true">!</span>
+                <p><strong>最終判断は人が行います</strong>サービス担当者会議、本人・家族への説明、文書同意・交付はアプリ外で実施してください。</p>
+              </div>
+            </aside>
+
+            <div class="plan-main">
+              <div id="plan-editor" class="plan-editor"></div>
+              <article id="plan-preview" class="plan-document" aria-label="個別支援計画書プレビュー" hidden></article>
+            </div>
+          </div>
+        </section>
+      </main>
+    </div>
+
+    <dialog class="journal-dialog" id="journal-dialog" aria-labelledby="journal-dialog-title">
+      <form id="journal-form" method="dialog">
+        <div class="dialog-heading">
+          <div><p class="eyebrow">DAILY RECORD</p><h2 id="journal-dialog-title">日誌を追加</h2></div>
+          <button class="icon-button" type="button" data-close-dialog aria-label="閉じる">×</button>
+        </div>
+        <input id="journal-id" name="id" type="hidden" />
+        <div class="form-grid compact">
+          <label><span>利用日 <b>必須</b></span><input id="journal-date" name="date" type="date" required /></label>
+          <label><span>主な活動 <b>必須</b></span><input id="journal-activity" name="activity" type="text" required maxlength="80" placeholder="例：協力ゲーム" /></label>
+          <label><span>来所時の様子</span><select id="journal-mood" name="mood"><option>おだやか</option><option>楽しみ</option><option>少し不安</option><option>疲れ気味</option><option>気持ちが高ぶる</option></select></label>
+          <label><span>健康・体調</span><input id="journal-physical" name="physical" type="text" maxlength="120" placeholder="例：体調良好、睡眠やや短め" /></label>
+          <label><span>利用開始 <b>必須</b></span><input id="journal-start-time" name="startTime" type="time" required /></label>
+          <label><span>利用終了 <b>必須</b></span><input id="journal-end-time" name="endTime" type="time" required /></label>
+          <label><span>記録者 <b>必須</b></span><input id="journal-staff" name="staff" type="text" required maxlength="80" placeholder="例：佐藤" /></label>
+        </div>
+        <div class="form-stack">
+          <label><span>観察した事実 <b>必須</b></span><textarea id="journal-observation" name="observation" required maxlength="1000" rows="3" placeholder="解釈ではなく、本人の言葉や行動を具体的に記録"></textarea></label>
+          <label><span>行った支援 <b>必須</b></span><textarea id="journal-support" name="support" required maxlength="1000" rows="2" placeholder="声かけ、環境調整、視覚提示など"></textarea></label>
+          <label><span>本人の反応・変化 <b>必須</b></span><textarea id="journal-response" name="response" required maxlength="1000" rows="2" placeholder="支援の後にどう変化したか"></textarea></label>
+          <label><span>家庭との共有</span><textarea id="journal-family" name="familyNote" maxlength="1000" rows="2" placeholder="保護者からの情報、帰宅時に共有したこと"></textarea></label>
+        </div>
+        <fieldset class="domain-fieldset">
+          <legend>関連する5領域 <b>1つ以上</b></legend>
+          <div id="journal-domain-options"></div>
+        </fieldset>
+        <fieldset class="indicator-fieldset">
+          <legend>観察指標 <small>対象場面だけ評価。1：全面的な支援　2：一部支援　3：声かけ程度　4：自発的</small></legend>
+          <div class="indicator-fields">
+            <label><span>気持ちを伝える</span><select name="selfExpression"><option value="" selected>未評価／対象外</option><option value="1">1</option><option value="2">2</option><option value="3">3</option><option value="4">4</option></select></label>
+            <label><span>活動を切り替える</span><select name="transition"><option value="" selected>未評価／対象外</option><option value="1">1</option><option value="2">2</option><option value="3">3</option><option value="4">4</option></select></label>
+            <label><span>集団に参加する</span><select name="groupParticipation"><option value="" selected>未評価／対象外</option><option value="1">1</option><option value="2">2</option><option value="3">3</option><option value="4">4</option></select></label>
+            <label><span>気持ちを整える</span><select name="regulation"><option value="" selected>未評価／対象外</option><option value="1">1</option><option value="2">2</option><option value="3">3</option><option value="4">4</option></select></label>
+          </div>
+        </fieldset>
+        <div class="dialog-actions">
+          <button class="text-button subtle" type="button" data-close-dialog>キャンセル</button>
+          <button class="primary-button" type="submit">日誌を保存</button>
+        </div>
+      </form>
+    </dialog>
+
+    <dialog class="guide-dialog" id="guide-dialog" aria-labelledby="guide-dialog-title">
+      <div class="dialog-heading">
+        <div><p class="eyebrow">ABOUT THIS DEMO</p><h2 id="guide-dialog-title">このデモの使い方</h2></div>
+        <button class="icon-button" type="button" data-close-guide aria-label="閉じる">×</button>
+      </div>
+      <ol class="guide-steps">
+        <li><span>1</span><div><strong>日誌を確認・追加</strong><p>Aさんの2か月分の仮データを用意しています。元の観察記録までたどれます。</p></div></li>
+        <li><span>2</span><div><strong>傾向を整理</strong><p>5領域の記録数と4つの観察指標を、前半・後半で比較します。</p></div></li>
+        <li><span>3</span><div><strong>計画案を編集</strong><p>本人・家族の意向、目標、支援内容、評価方法を専門職が修正します。</p></div></li>
+        <li><span>4</span><div><strong>帳票を印刷</strong><p>記載チェック後、帳票プレビューから印刷またはPDF保存できます。</p></div></li>
+      </ol>
+      <div class="guide-caution"><strong>重要</strong> 本アプリは計画作成を補助するデモです。自動出力だけで個別支援計画を確定しないでください。</div>
+    </dialog>
+
+    <div class="toast" id="toast" role="status" aria-live="polite"></div>
+    <div class="sr-only" id="live-region" aria-live="polite"></div>
+
+    <script type="module" src="./src/app.js"></script>
+  </body>
+</html>
