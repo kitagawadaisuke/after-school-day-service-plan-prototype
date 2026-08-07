@@ -1,0 +1,13 @@
+[Unit]
+Description=After-school day service plan prototype
+After=network.target
+
+[Service]
+Type=simple
+WorkingDirectory=/home/dev1/business-after-school-day-service-plan-prototype
+ExecStart=/usr/bin/python3 scripts/serve.py --host 0.0.0.0 --port 8015
+Restart=on-failure
+RestartSec=5
+
+[Install]
+WantedBy=default.target

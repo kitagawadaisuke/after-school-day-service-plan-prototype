@@ -6,6 +6,9 @@
   "scripts": {
     "serve": "python3 scripts/serve.py",
     "test": "node --test tests/plan-engine.test.mjs",
-    "test:e2e": "node tests/e2e.test.mjs"
+    "test:e2e": "node scripts/run-e2e.mjs"
+  },
+  "devDependencies": {
+    "playwright": "1.62.1"
   }
 }

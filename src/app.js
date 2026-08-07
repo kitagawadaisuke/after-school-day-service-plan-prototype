@@ -16,8 +16,15 @@ const STORAGE_KEY = "michi-note-demo-v1";
 const VIEW_TITLES = {
   dashboard: { title: "支援サマリー", breadcrumb: "支援サマリー" },
   journals: { title: "日誌を確認", breadcrumb: "日誌 / 観察記録" },
-  analysis: { title: "傾向を整理", breadcrumb: "モニタリング / 傾向分析" },
+  analysis: { title: "計画書づくりのヒント", breadcrumb: "モニタリング / 計画書づくりのヒント" },
   plan: { title: "個別支援計画書", breadcrumb: "計画作成 / 見直し原案" }
+};
+
+const PATTERN_SUPPORT_IDS = {
+  expression: "support-expression",
+  transition: "support-transition",
+  peers: "support-peers",
+  regulation: "support-regulation"
 };
 
 let toastTimer;
@@ -533,25 +540,35 @@ function renderJournals() {
 function renderAnalysis() {
   const sourceJournals = getAnalysisJournals();
   const analysis = analyzeJournals(sourceJournals);
+  const splitPeriod = (start, end, count) =>
+    start && end ? `${formatDateJP(start, { withYear: false })}〜${formatDateJP(end, { withYear: false })}（${count}件）` : "記録なし";
   $("#analysis-range-start").value = state.analysisRange.start;
   $("#analysis-range-end").value = state.analysisRange.end;
   const days = rangeDays(state.analysisRange);
   $("#analysis-range-status").textContent = Number.isFinite(days)
-    ? `${formatDateJP(state.analysisRange.start)}〜${formatDateJP(state.analysisRange.end)}・${days}日間・${sourceJournals.length}件。期間の変更後は計画案の再作成が必要です。`
-    : `開始日から終了日まで${MAX_ANALYSIS_DAYS}日以内を選択してください。`;
+    ? `${formatDateJP(state.analysisRange.start)}〜${formatDateJP(state.analysisRange.end)}の${sourceJournals.length}件を、前半と後半に分けて見比べます（${days}日間）。期間を変えると、計画案は再作成が必要です。`
+    : `開始日から終了日まで${MAX_ANALYSIS_DAYS}日以内で選んでください。`;
+  $("#indicator-comparison-key").innerHTML = `
+    <span><i></i><strong>前半</strong><small>${escapeHtml(splitPeriod(analysis.split.firstStart, analysis.split.firstEnd, analysis.split.firstCount))}</small></span>
+    <span><i></i><strong>後半</strong><small>${escapeHtml(splitPeriod(analysis.split.secondStart, analysis.split.secondEnd, analysis.split.secondCount))}</small></span>`;
   $("#indicator-chart").innerHTML = Object.values(analysis.indicators)
     .map((indicator) => {
       const first = Number.isFinite(indicator.first) ? indicator.first : null;
       const second = Number.isFinite(indicator.second) ? indicator.second : null;
       const delta = Number.isFinite(indicator.delta) ? indicator.delta : null;
+      const deltaLabel = delta === null
+        ? "比べられません"
+        : Math.abs(delta) < 0.05
+          ? "ほぼ同じです"
+          : `後半は${Math.abs(delta).toFixed(1)}点${delta > 0 ? "高い" : "低い"}`;
       return `
       <div class="indicator-row ${delta === null ? "is-unrated" : ""}">
-        <div class="indicator-row-label"><strong>${escapeHtml(indicator.name)}</strong><small>${escapeHtml(indicator.description)}・有効 ${indicator.firstCount + indicator.secondCount}件</small></div>
+        <div class="indicator-row-label"><strong>${escapeHtml(indicator.name)}</strong><small>${escapeHtml(indicator.description)}</small><em>比較に使った記録：${indicator.firstCount + indicator.secondCount}件</em></div>
         <div class="dual-bars">
           <div class="bar-track" title="前半 ${first ?? "未評価"}"><span style="width:${first === null ? 0 : (first / 4) * 100}%"></span></div>
           <div class="bar-track" title="後半 ${second ?? "未評価"}"><span style="width:${second === null ? 0 : (second / 4) * 100}%"></span></div>
         </div>
-        <span class="indicator-delta ${delta === null || Math.abs(delta) < 0.05 ? "is-flat" : ""}">${delta === null ? "–" : `${delta >= 0 ? "+" : ""}${delta.toFixed(1)}`}</span>
+        <span class="indicator-delta ${delta === null || Math.abs(delta) < 0.05 ? "is-flat" : ""}"><small>平均点の差</small><strong>${deltaLabel}</strong></span>
       </div>`;
     })
     .join("");
@@ -560,7 +577,7 @@ function renderAnalysis() {
     .map((pattern) => `
       <article class="pattern-item ${pattern.isConfirmed ? "" : "is-unconfirmed"}">
         <span class="pattern-icon">${escapeHtml(pattern.isConfirmed ? pattern.marker : "?")}</span>
-        <div><strong>${escapeHtml(pattern.isConfirmed ? pattern.title : `確認途中｜${pattern.title}`)}</strong><p>${escapeHtml(pattern.summary)}（${pattern.isConfirmed ? "関連" : "該当"}記録 ${pattern.count}件）</p></div>
+        <div class="pattern-item-body"><strong>${escapeHtml(pattern.isConfirmed ? pattern.title : `確認途中｜${pattern.title}`)}</strong><p>${escapeHtml(pattern.summary)}（${pattern.isConfirmed ? "関連" : "該当"}記録 ${pattern.count}件）</p>${pattern.isConfirmed ? `<button class="pattern-plan-link" type="button" data-edit-pattern-plan="${escapeAttribute(pattern.id)}">このヒントを編集して計画書へ <span aria-hidden="true">→</span></button>` : ""}</div>
       </article>`)
     .join("");
 
@@ -675,7 +692,7 @@ function renderPlanEditor() {
           .map((item, index) => `
             <article class="support-goal-card" data-support-card="${index}">
               <div class="support-goal-heading">
-                <div class="support-goal-title"><span class="priority-badge">${escapeHtml(item.priority)}</span><div><strong>${escapeHtml(item.title)}</strong><small>${escapeHtml(item.category)}・優先${escapeHtml(item.priority)}</small></div></div>
+                <div class="support-goal-title"><span class="priority-badge">${escapeHtml(item.priority)}</span><div><strong>${escapeHtml(item.title)}</strong><small>${escapeHtml(item.category)}・優先${escapeHtml(item.priority)} ${String(item.id).startsWith("support-custom-") ? "" : '<span class="journal-candidate-badge">日誌から候補</span>'}</small></div></div>
                 <button class="mini-button danger" type="button" data-remove-support="${index}">この目標を削除</button>
               </div>
               <div class="goal-fields">
@@ -698,7 +715,7 @@ function renderPlanEditor() {
                 </div>
                 <div class="full-width">${planTextarea(`supportItems.${index}.notes`, "留意事項", item.notes, 2)}</div>
               </div>
-              <div class="evidence-links"><span>根拠日誌</span>
+              <div class="evidence-links"><span>日誌から自動でつないだ根拠</span>
                 ${(item.evidenceIds ?? []).length
                   ? item.evidenceIds
                       .map((id) => {
@@ -777,7 +794,88 @@ function documentRow(label, value, colspan = 1) {
   return `<tr><th>${escapeHtml(label)}</th><td colspan="${colspan}">${escapeHtml(value || "未記入")}</td></tr>`;
 }
 
-function renderPlanPreview() {
+function compactPlanText(value, limit = 76) {
+  const text = String(value ?? "").replace(/\s+/g, " ").trim();
+  if (!text) return "未記入";
+  return text.length > limit ? `${text.slice(0, limit)}…` : text;
+}
+
+function renderPlanSummary() {
+  const plan = state.plan;
+  const sourceJournals = getAnalysisJournals();
+  const sourceFresh = isPlanSourceFresh(plan, sourceJournals);
+  const audit = validatePlan(plan, sourceJournals);
+  const visibleItems = plan.supportItems.slice(0, 5);
+  const hiddenItemCount = Math.max(0, plan.supportItems.length - visibleItems.length);
+  const supportRows = visibleItems
+    .map((item) => {
+      const domains = item.domains
+        .map((domain) => DOMAIN_META[domain]?.short ?? domain)
+        .filter(Boolean)
+        .join("・");
+      return `
+        <tr>
+          <td class="summary-priority">${escapeHtml(item.priority)}</td>
+          <td><strong>${escapeHtml(compactPlanText(item.title, 42))}</strong><small>${escapeHtml(domains || "領域未設定")}</small></td>
+          <td>${escapeHtml(compactPlanText(item.goal, 105))}</td>
+          <td>${escapeHtml(compactPlanText(item.support, 112))}</td>
+          <td>${escapeHtml(`${item.evidenceIds?.length ?? 0}件`)}</td>
+        </tr>`;
+    })
+    .join("");
+  const summaryCards = [
+    ["家族支援", plan.familySupport.goal],
+    ["移行支援", plan.transitionSupport.goal],
+    ["地域連携", plan.communitySupport.notApplicable ? `該当なし（${plan.communitySupport.reason || "理由未記入"}）` : plan.communitySupport.goal]
+  ]
+    .map(([label, value]) => `<article><span>${escapeHtml(label)}</span><p>${escapeHtml(compactPlanText(value, 92))}</p></article>`)
+    .join("");
+
+  $("#plan-preview").innerHTML = `
+    ${sourceFresh ? "" : `<div class="document-stale-banner" role="alert">根拠更新前・印刷不可｜対象期間または日誌が変更されています。日誌から計画案を再作成してください。</div>`}
+    <header class="summary-document-header">
+      <div>
+        <p class="summary-kicker">INDIVIDUAL SUPPORT PLAN · ONE-PAGE OVERVIEW</p>
+        <h2>個別支援計画書　概要</h2>
+        <p>${escapeHtml(plan.service.type)}・${escapeHtml(plan.service.name)}｜日誌をもとにした見直し原案</p>
+      </div>
+      <div class="summary-document-meta">
+        <span>対象児童</span><strong>${escapeHtml(plan.child.name)}</strong>
+        <span>計画期間</span><strong>${escapeHtml(formatDateJP(plan.planStart))}〜${escapeHtml(formatDateJP(plan.planEnd))}</strong>
+        <span>作成日・版</span><strong>${escapeHtml(formatDateJP(plan.createdDate))}｜第${escapeHtml(plan.version)}版</strong>
+      </div>
+    </header>
+
+    <section class="summary-intentions">
+      <article><span>本人が大切にしたいこと</span><p>${escapeHtml(compactPlanText(plan.personWish, 156))}</p></article>
+      <article><span>ご家族の意向</span><p>${escapeHtml(compactPlanText(plan.familyWish, 156))}</p></article>
+      <article class="summary-policy"><span>この期間の支援方針</span><p>${escapeHtml(compactPlanText(plan.comprehensivePolicy, 260))}</p></article>
+    </section>
+
+    <section class="summary-support-section">
+      <div class="summary-section-heading">
+        <div><p class="summary-kicker">SUPPORT PRIORITIES</p><h3>この期間に大切にする支援</h3></div>
+        <p>${escapeHtml(plan.sourcePeriod)}の日誌 ${escapeHtml(plan.sourceCount)}件を確認</p>
+      </div>
+      <table class="summary-support-table">
+        <thead><tr><th>優先</th><th>支援のテーマ</th><th>目指す姿</th><th>主な支援の工夫</th><th>根拠日誌</th></tr></thead>
+        <tbody>${supportRows}</tbody>
+      </table>
+      ${hiddenItemCount ? `<p class="summary-more-items">このほかに本人支援 ${hiddenItemCount}件。詳細版に全項目を掲載しています。</p>` : ""}
+    </section>
+
+    <section class="summary-linked-support">
+      <div><p class="summary-kicker">AROUND THE CHILD</p><h3>本人支援を支える連携</h3></div>
+      <div class="summary-linked-cards">${summaryCards}</div>
+    </section>
+
+    <footer class="summary-document-footer">
+      <p><strong>準備状況 ${escapeHtml(audit.score)}%</strong>　この1ページ版は説明用の概要です。本人・家族の意向、アセスメント、会議、説明・同意を踏まえ、詳細版で内容を確認・決定します。</p>
+      <span>根拠となる日誌：${escapeHtml(plan.sourceCount)}件　｜　詳細版は複数ページ</span>
+    </footer>`;
+}
+
+function renderPlanDetailPreview() {
   const plan = state.plan;
   const sourceJournals = getAnalysisJournals();
   const sourceFresh = isPlanSourceFresh(plan, sourceJournals);
@@ -828,7 +926,7 @@ function renderPlanPreview() {
     })
     .join("");
 
-  $("#plan-preview").innerHTML = `
+  $("#plan-detail-preview").innerHTML = `
     ${sourceFresh ? "" : `<div class="document-stale-banner" role="alert">根拠更新前・印刷不可｜対象期間または日誌が変更されています。日誌から計画案を再作成してください。</div>`}
     <header class="document-header">
       <div><h2>個別支援計画書</h2><p>${escapeHtml(plan.service.type)}・${escapeHtml(plan.service.name)}・次期計画見直し原案</p></div>
@@ -879,29 +977,57 @@ function renderPlanPreview() {
     <p class="document-footer-note">準備状況 ${audit.score}%　｜　本書は日誌から作成した見直し原案です。面接・アセスメント、個別支援会議、本人・保護者への説明、文書同意、必要な交付を経て確定してください。署名済み同意書と交付記録の原本は別途管理します。参考様式は全国一律の必須様式ではなく、指定権者・事業所の運用確認が必要です。</p>`;
 }
 
-function applyPlanMode() {
+function applyPlanMode({ scrollToPreview = false } = {}) {
   const preview = state.planMode === "preview";
   $("#plan-editor").hidden = preview;
   $("#plan-preview").hidden = !preview;
+  $("#plan-preview-notice").hidden = !preview;
+  $(".plan-layout").classList.toggle("is-preview", preview);
+  $(".plan-audit").hidden = preview;
   $$("[data-plan-mode]").forEach((button) => {
     const active = button.dataset.planMode === state.planMode;
     button.classList.toggle("is-active", active);
     button.setAttribute("aria-pressed", String(active));
   });
+  if (preview && scrollToPreview) {
+    window.setTimeout(() => $("#plan-preview-notice").scrollIntoView({ behavior: "smooth", block: "start" }), 0);
+  }
 }
 
 function renderPlan() {
   refreshPlanStale();
+  const sourceJournals = getAnalysisJournals();
+  const sourceSummary = sourceJournals.length
+    ? `${formatDateJP(state.plan.sourceStartDate)}〜${formatDateJP(state.plan.sourceEndDate)}の${state.plan.sourceCount}件の日誌から、本人支援の候補と根拠日誌を表示しています。`
+    : "対象となる日誌がないため、本人支援の候補は作成していません。";
+  $("#plan-source-summary").textContent = sourceSummary;
   renderPlanEditor();
   renderAudit();
-  renderPlanPreview();
+  renderPlanSummary();
+  renderPlanDetailPreview();
   applyPlanMode();
   const regenerate = $("#regenerate-plan");
   regenerate.textContent = state.planStale ? "● 日誌から再作成" : "日誌から再作成";
   regenerate.title = state.planStale ? "対象期間または日誌が変更されています。再作成するまで印刷できません。" : "現在の分析対象から計画案を作り直します";
   const printButton = $("#print-plan");
   printButton.disabled = state.planStale;
-  printButton.title = state.planStale ? "根拠日誌の更新を反映するため、計画案を再作成してください" : "A4横で印刷またはPDF保存";
+  printButton.title = state.planStale ? "根拠日誌の更新を反映するため、計画案を再作成してください" : "A4横1ページの概要を印刷またはPDF保存";
+  const detailPrintButton = $("#print-plan-detail");
+  detailPrintButton.disabled = state.planStale;
+  detailPrintButton.title = state.planStale ? "根拠日誌の更新を反映するため、計画案を再作成してください" : "全項目を掲載した詳細版を印刷またはPDF保存";
+}
+
+function printPlan(mode) {
+  if (refreshPlanStale()) {
+    renderPlan();
+    showToast("日誌または分析期間が変更されています。計画案を再作成するまで印刷できません。");
+    return;
+  }
+  renderPlanSummary();
+  renderPlanDetailPreview();
+  document.body.classList.toggle("print-detail-plan", mode === "detail");
+  window.print();
+  document.body.classList.remove("print-detail-plan");
 }
 
 function createUniqueJournalId(date, currentId = "") {
@@ -1088,7 +1214,100 @@ function updatePlanAfterInput(input) {
   state.plan.status = "draft";
   saveState();
   renderAudit();
-  renderPlanPreview();
+  renderPlanSummary();
+  renderPlanDetailPreview();
+}
+
+function getPatternById(patternId) {
+  return analyzeJournals(getAnalysisJournals()).patterns.find((pattern) => pattern.id === patternId && pattern.isConfirmed) ?? null;
+}
+
+function getPatternDomains(pattern) {
+  const evidenceIds = new Set(pattern.evidenceIds ?? []);
+  return [...new Set(getAnalysisJournals()
+    .filter((journal) => evidenceIds.has(journal.id))
+    .flatMap((journal) => journal.domains ?? [])
+    .filter((domain) => DOMAIN_META[domain]))];
+}
+
+function getPlanItemForPattern(pattern) {
+  const supportId = PATTERN_SUPPORT_IDS[pattern.id] ?? `support-${pattern.id}`;
+  return state.plan.supportItems.find((item) => item.id === supportId) ?? null;
+}
+
+function openPatternPlanDialog(patternId) {
+  if (refreshPlanStale()) {
+    state.planMode = "edit";
+    navigate("plan");
+    showToast("日誌または期間が変わっています。先に「日誌から再作成」をしてからヒントを反映してください。");
+    return;
+  }
+  const pattern = getPatternById(patternId);
+  if (!pattern) {
+    showToast("このヒントは、もう一度日誌を確認してから計画書へ反映してください。");
+    return;
+  }
+  const item = getPlanItemForPattern(pattern);
+  const evidenceCount = pattern.evidenceIds?.length ?? 0;
+  $("#pattern-plan-id").value = pattern.id;
+  $("#pattern-source-summary-heading").textContent = pattern.title;
+  $("#pattern-source-summary").textContent = pattern.summary;
+  $("#pattern-source-evidence").textContent = `${evidenceCount}件の日誌を根拠として、計画書の「本人支援」にひも付けます。`;
+  $("#pattern-plan-title").value = item?.title ?? pattern.title;
+  $("#pattern-plan-goal").value = item?.goal ?? "";
+  $("#pattern-plan-support").value = item?.support ?? "";
+  $("#pattern-plan-dialog").showModal();
+  window.setTimeout(() => $("#pattern-plan-title").focus(), 0);
+}
+
+function applyPatternPlan(event) {
+  event.preventDefault();
+  const pattern = getPatternById($("#pattern-plan-id").value);
+  if (!pattern) {
+    $("#pattern-plan-dialog").close();
+    showToast("日誌の内容が変わったため、反映を中止しました。もう一度確認してください。");
+    return;
+  }
+  const title = $("#pattern-plan-title").value.trim();
+  if (!title) {
+    $("#pattern-plan-title").focus();
+    return;
+  }
+  const supportId = PATTERN_SUPPORT_IDS[pattern.id] ?? `support-${pattern.id}`;
+  const evidenceIds = [...new Set(pattern.evidenceIds ?? [])];
+  const currentItem = getPlanItemForPattern(pattern);
+  let itemIndex = state.plan.supportItems.indexOf(currentItem);
+  if (itemIndex < 0) {
+    itemIndex = state.plan.supportItems.length;
+    state.plan.supportItems.push({
+      id: supportId,
+      category: "本人支援",
+      priority: itemIndex + 1,
+      title,
+      goal: "",
+      support: "",
+      evaluation: "",
+      domains: getPatternDomains(pattern),
+      targetDate: state.plan.planEnd,
+      responsible: "児童発達支援管理責任者・支援チーム（要確認）",
+      notes: "日誌の根拠を本人・家族の意向とあわせて確認する。",
+      evidenceIds
+    });
+  }
+  const item = state.plan.supportItems[itemIndex];
+  item.title = title;
+  item.goal = $("#pattern-plan-goal").value.trim();
+  item.support = $("#pattern-plan-support").value.trim();
+  item.domains = [...new Set([...(item.domains ?? []), ...getPatternDomains(pattern)])];
+  item.evidenceIds = [...new Set([...(item.evidenceIds ?? []), ...evidenceIds])];
+  state.plan.supportItems.forEach((support, index) => { support.priority = index + 1; });
+  state.plan.status = "draft";
+  state.planMode = "edit";
+  saveState();
+  $("#pattern-plan-dialog").close();
+  navigate("plan");
+  showToast(`「${title}」を計画書の本人支援に反映しました。根拠日誌と内容を続けて確認してください。`);
+  window.setTimeout(() => $(`[data-support-card="${itemIndex}"] [data-plan-path$=".title"]`)?.focus(), 80);
 }
 
 function addSupportGoal() {
@@ -1141,7 +1360,7 @@ function applyAnalysisRange() {
   saveState();
   renderAnalysis();
   renderPlan();
-  showToast(`${days}日間・${getAnalysisJournals().length}件を分析対象にしました。計画案を再作成してください。`);
+  showToast(`${days}日間・${getAnalysisJournals().length}件の日誌をふり返ります。計画案は再作成してください。`);
 }
 
 function regeneratePlan() {
@@ -1225,6 +1444,12 @@ function initializeStaticControls() {
     const removeButton = event.target.closest("[data-remove-support]");
     if (removeButton) {
       removeSupportGoal(Number(removeButton.dataset.removeSupport));
+      return;
+    }
+
+    const patternPlanButton = event.target.closest("[data-edit-pattern-plan]");
+    if (patternPlanButton) {
+      openPatternPlanDialog(patternPlanButton.dataset.editPatternPlan);
     }
   });
 
@@ -1248,6 +1473,8 @@ function initializeStaticControls() {
   $("#export-journals").addEventListener("click", exportJournalsCsv);
   $("#journal-form").addEventListener("submit", handleJournalSubmit);
   $$('[data-close-dialog]').forEach((button) => button.addEventListener("click", () => $("#journal-dialog").close()));
+  $("#pattern-plan-form").addEventListener("submit", applyPatternPlan);
+  $$('[data-close-pattern-plan]').forEach((button) => button.addEventListener("click", () => $("#pattern-plan-dialog").close()));
 
   $("#plan-editor").addEventListener("input", (event) => {
     if (event.target.matches("[data-plan-path]")) updatePlanAfterInput(event.target);
@@ -1262,20 +1489,13 @@ function initializeStaticControls() {
   $$("[data-plan-mode]").forEach((button) => {
     button.addEventListener("click", () => {
       state.planMode = button.dataset.planMode;
-      applyPlanMode();
+      applyPlanMode({ scrollToPreview: state.planMode === "preview" });
       saveState({ quiet: true });
     });
   });
   $("#regenerate-plan").addEventListener("click", regeneratePlan);
-  $("#print-plan").addEventListener("click", () => {
-    if (refreshPlanStale()) {
-      renderPlan();
-      showToast("日誌または分析期間が変更されています。計画案を再作成するまで印刷できません。");
-      return;
-    }
-    renderPlanPreview();
-    window.print();
-  });
+  $("#print-plan").addEventListener("click", () => printPlan("summary"));
+  $("#print-plan-detail").addEventListener("click", () => printPlan("detail"));
   $("#reset-demo").addEventListener("click", resetDemo);
 
   $("#open-guide").addEventListener("click", () => $("#guide-dialog").showModal());
