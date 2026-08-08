@@ -362,6 +362,7 @@ function renderDashboard() {
   const indicatorDeltas = Object.values(analysis.indicators).map((item) => item.delta).filter(Number.isFinite);
   const meanDelta = indicatorDeltas.length ? indicatorDeltas.reduce((sum, value) => sum + value, 0) / indicatorDeltas.length : null;
   $("#hero-entry-count").textContent = String(analysis.count);
+  $("#hero-entry-count-visual").textContent = String(analysis.count).padStart(2, "0");
   $("#journey-period").textContent = analysis.period;
 
   const metrics = [

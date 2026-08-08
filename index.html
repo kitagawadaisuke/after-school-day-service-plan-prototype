@@ -76,29 +76,42 @@
         <section class="view is-active" id="view-dashboard" data-view="dashboard" aria-labelledby="dashboard-heading">
           <div class="hero-panel reveal">
             <div class="hero-copy">
-              <p class="section-kicker">OBSERVATION → PLAN</p>
-              <h2 id="dashboard-heading">観察から、<br /><em>次の一歩</em>へ。</h2>
+              <h2 class="sr-only" id="dashboard-heading">支援サマリー</h2>
+              <p class="section-kicker">観察記録の整理 / 2026.04–05</p>
               <p class="hero-lead">
-                2か月分の日誌を、支援の5つの観点（5領域）と成長の変化で整理。<br />
-                記録の根拠を残したまま、個別支援計画の案にまとめます。
+                対象期間の日誌を、5領域と支援の変化で整理しています。<br />
+                計画書の候補には、必ず根拠となる日誌を紐づけます。
               </p>
+              <ul class="hero-signals" aria-label="このデモで確認できる内容">
+                <li><strong id="hero-entry-count">24</strong><span>件の観察記録</span></li>
+                <li><strong>5</strong><span>つの支援領域</span></li>
+                <li><strong>1</strong><span>つの計画案</span></li>
+              </ul>
               <div class="hero-actions">
                 <button class="primary-button" type="button" data-view-target="journals">
-                  日誌から確認する <span aria-hidden="true">→</span>
+                  記録を確認する <span aria-hidden="true">→</span>
                 </button>
-                <button class="ghost-button" type="button" data-view-target="plan">作成済みの計画案を見る</button>
+                <button class="ghost-button" type="button" data-view-target="plan">計画案を確認する</button>
               </div>
             </div>
             <div class="hero-visual" aria-hidden="true">
-              <div class="orbit orbit-one"></div>
-              <div class="orbit orbit-two"></div>
-              <div class="hero-stamp">
-                <span id="hero-entry-count">24</span>
-                <small>観察記録</small>
+              <div class="record-sheet">
+                <div class="record-sheet-head">
+                  <span>OBSERVATION INDEX</span>
+                  <i></i>
+                  <small>更新済み</small>
+                </div>
+                <div class="record-total">
+                  <strong>0<span id="hero-entry-count-visual">24</span></strong>
+                  <p>日誌をもとにした<br />支援の整理</p>
+                </div>
+                <ol class="record-path">
+                  <li><b>01</b><span>観察を残す</span><i></i></li>
+                  <li><b>02</b><span>変化を読み取る</span><i></i></li>
+                  <li><b>03</b><span>支援案に結ぶ</span><i></i></li>
+                </ol>
               </div>
-              <div class="floating-note note-one"><i></i>見通し</div>
-              <div class="floating-note note-two"><i></i>ことば</div>
-              <div class="floating-note note-three"><i></i>仲間</div>
+              <p class="visual-footnote">日誌 → 分析 → 個別支援計画</p>
             </div>
           </div>
 
