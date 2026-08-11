@@ -16,8 +16,8 @@ import {
 } from "../src/plan-engine.js";
 import { toCsvCell, toLocalIsoDate } from "../src/utils.js";
 
-test("Aさんの日誌は2か月・24件で、全件に観察→支援→反応がある", () => {
-  assert.equal(DEMO_JOURNALS.length, 24);
+test("Aさんの日誌は2か月・48件で、全件に観察→支援→反応がある", () => {
+  assert.equal(DEMO_JOURNALS.length, 48);
   assert.equal(getPeriodLabel(DEMO_JOURNALS), "2026年4月〜5月");
   assert.ok(DEMO_JOURNALS.every((journal) => journal.observation.trim()));
   assert.ok(DEMO_JOURNALS.every((journal) => journal.support.trim()));
@@ -28,13 +28,13 @@ test("Aさんの日誌は2か月・24件で、全件に観察→支援→反応�
 
 test("分析は5領域を網羅し、前半・後半を安全に比較できる", () => {
   const analysis = analyzeJournals(DEMO_JOURNALS);
-  assert.equal(analysis.count, 24);
+  assert.equal(analysis.count, 48);
   assert.equal(analysis.coverage.covered, 5);
   assert.equal(analysis.coverage.percent, 100);
   assert.deepEqual(Object.keys(analysis.domainCounts).sort(), Object.keys(DOMAIN_META).sort());
   assert.ok(Object.values(analysis.domainCounts).every((count) => count > 0));
-  assert.equal(analysis.split.firstCount, 12);
-  assert.equal(analysis.split.secondCount, 12);
+  assert.equal(analysis.split.firstCount, 24);
+  assert.equal(analysis.split.secondCount, 24);
   assert.ok(Object.values(analysis.indicators).every((indicator) => Number.isFinite(indicator.delta)));
   assert.ok(Object.values(analysis.indicators).some((indicator) => indicator.delta > 0));
 });
@@ -145,7 +145,7 @@ test("関連しない表出タグの件数だけで援助要求を推定しな�
 });
 
 test("同梱デモ以外では件数だけから詳細な数値目標や有効支援を断定しない", () => {
-  const journals = DEMO_JOURNALS.filter((journal) => journal.tags.includes("help_request")).slice(0, 3);
+  const journals = DEMO_JOURNALS.filter((journal) => ["2026-04-06", "2026-04-22", "2026-05-08"].includes(journal.date));
   const plan = generatePlan(DEMO_PROFILE, journals);
 
   assert.equal(plan.supportItems.length, 1);

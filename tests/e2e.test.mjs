@@ -81,7 +81,7 @@ try {
   const privateSampleResponse = await page.request.get(`${APP_URL}/80530519-AF79-4FD5-9522-ACE4374768C1.jpg`);
   assert.equal(privateSampleResponse.status(), 404, "参考JPGがデモサーバーから取得できてしまいます");
   assert.match(await page.title(), /みちのーと/);
-  assert.equal((await page.locator("#hero-entry-count").textContent())?.trim(), "24");
+  assert.equal((await page.locator("#hero-entry-count").textContent())?.trim(), "48");
   assert.equal(
     await page.evaluate(() => document.documentElement.scrollWidth <= document.documentElement.clientWidth + 1),
     true,
@@ -109,7 +109,7 @@ try {
   await page.locator('.main-nav [data-view-target="plan"]').click();
   await assertVisible(page.locator("#plan-editor"), "初期デモの計画編集画面が表示されません");
   assert.equal(await page.locator("#print-plan").isDisabled(), false, "初期デモ計画を印刷できません");
-  assert.equal((await page.evaluate(() => window.michiNote.getState().plan?.sourceCount)), 24);
+  assert.equal((await page.evaluate(() => window.michiNote.getState().plan?.sourceCount)), 48);
   await page.locator('[data-plan-mode="preview"]').click();
   await assertVisible(page.locator("#plan-preview-notice"), "帳票プレビューの案内が表示されません");
   assert.equal(await page.locator("#plan-editor").isVisible(), false, "帳票プレビューで編集画面が閉じません");
@@ -134,7 +134,7 @@ try {
   await page.locator('.main-nav [data-view-target="journals"]').click();
   await assertVisible(page.locator('#view-journals'), "日誌画面が表示されません");
   assert.equal(await page.evaluate(() => document.activeElement?.id), "journals-heading", "画面遷移後に見出しへフォーカスされません");
-  assert.equal((await page.locator("#journal-result-count").textContent())?.trim(), "24件");
+  assert.equal((await page.locator("#journal-result-count").textContent())?.trim(), "48件");
 
   await page.locator("#add-journal").click();
   await assertVisible(page.locator("#journal-dialog"), "日誌追加ダイアログが開きません");
@@ -145,8 +145,8 @@ try {
   await page.locator("#journal-response").fill("一時入力");
   await page.locator("#journal-form button[type='submit']").click();
   await assertVisible(page.locator("#journal-dialog"), "空白だけの必須項が保存されてしまいました");
-  assert.equal((await page.locator("#journal-result-count").textContent())?.trim(), "24件");
-  await page.locator("#journal-date").fill("2026-05-28");
+  assert.equal((await page.locator("#journal-result-count").textContent())?.trim(), "48件");
+  await page.locator("#journal-date").fill("2026-05-03");
   await page.locator("#journal-activity").fill("ブラウザ試験活動");
   await page.locator("#journal-physical").fill("体調良好");
   await page.locator("#journal-observation").fill("予定表を見て、始まる時刻を職員に尋ねた。");
@@ -162,32 +162,32 @@ try {
   await page.locator('select[name="regulation"]').selectOption("3");
   await page.locator("#journal-form button[type='submit']").click();
 
-  await page.waitForFunction(() => document.querySelector("#journal-result-count")?.textContent?.trim() === "25件");
-  assert.equal((await page.locator("#nav-journal-count").textContent())?.trim(), "25");
+  await page.waitForFunction(() => document.querySelector("#journal-result-count")?.textContent?.trim() === "49件");
+  assert.equal((await page.locator("#nav-journal-count").textContent())?.trim(), "49");
   assert.equal(await page.locator("#journal-detail").getByText("ブラウザ試験活動").count(), 1);
   await page.waitForFunction(
-    ({ storageKey }) => JSON.parse(localStorage.getItem(storageKey) ?? "{}").journals?.length === 25,
+    ({ storageKey }) => JSON.parse(localStorage.getItem(storageKey) ?? "{}").journals?.length === 49,
     { storageKey: STORAGE_KEY }
   );
 
   await page.reload({ waitUntil: "networkidle" });
-  assert.equal((await page.locator("#journal-result-count").textContent())?.trim(), "25件", "追加日誌が再読込後に復元されません");
+  assert.equal((await page.locator("#journal-result-count").textContent())?.trim(), "49件", "追加日誌が再読込後に復元されません");
   const reloadedState = await page.evaluate(() => window.michiNote.getState());
   const reloadedAddedJournal = reloadedState.journals.find((journal) => journal.activity === "ブラウザ試験活動");
-  assert.equal(reloadedState.journals.length, 25);
+  assert.equal(reloadedState.journals.length, 49);
   assert.equal(reloadedAddedJournal.time, "15:30〜17:30");
   assert.equal(reloadedAddedJournal.staff, "デモ入力");
 
   await page.locator('.main-nav [data-view-target="analysis"]').click();
   await assertVisible(page.locator("#view-analysis"), "分析画面が表示されません");
-  assert.equal(await page.locator("#analysis-range-start").inputValue(), "2026-04-06");
-  assert.equal(await page.locator("#analysis-range-end").inputValue(), "2026-05-29");
-  assert.match((await page.locator("#analysis-range-status").textContent()) ?? "", /25件/);
+  assert.equal(await page.locator("#analysis-range-start").inputValue(), "2026-04-04");
+  assert.equal(await page.locator("#analysis-range-end").inputValue(), "2026-05-30");
+  assert.match((await page.locator("#analysis-range-status").textContent()) ?? "", /49件/);
   await page.locator("#analysis-range-start").fill("2025-01-01");
   await page.locator("#apply-analysis-range").click();
   await assertVisible(page.locator("#toast"), "92日を超える分析期間のエラーが表示されません");
-  assert.equal((await page.evaluate(() => window.michiNote.getState().analysisRange.start)), "2026-04-06");
-  await page.locator("#analysis-range-start").fill("2026-04-06");
+  assert.equal((await page.evaluate(() => window.michiNote.getState().analysisRange.start)), "2026-04-04");
+  await page.locator("#analysis-range-start").fill("2026-04-04");
   assert.equal(await page.locator(".domain-analysis-row").count(), 5, "5領域すべてが表示されていません");
   assert.equal(await page.locator(".indicator-row").count(), 4, "4つの観察指標が表示されていません");
   assert.equal(await page.locator("[data-edit-pattern-plan]").count(), 4, "確認できたヒントを計画書へ反映する導線が表示されていません");
@@ -197,7 +197,7 @@ try {
   assert.equal(await page.locator("#print-plan").isDisabled(), true, "日誌更新後の古い計画案を印刷できてしまいます");
   page.once("dialog", (dialog) => dialog.accept());
   await page.locator("#regenerate-plan").click();
-  await page.waitForFunction(() => window.michiNote.getState().plan?.sourceCount === 25 && window.michiNote.getState().planStale === false);
+  await page.waitForFunction(() => window.michiNote.getState().plan?.sourceCount === 49 && window.michiNote.getState().planStale === false);
   await page.locator('.main-nav [data-view-target="analysis"]').click();
   await page.locator('[data-edit-pattern-plan="expression"]').click();
   await assertVisible(page.locator("#pattern-plan-dialog"), "ヒントを編集するダイアログが表示されません");
@@ -356,7 +356,7 @@ try {
   assert.equal(repairedState.profile.displayName, "Aさん");
   assert.equal(repairedState.filters.search, "");
   assert.equal(repairedState.journals.some((journal) => journal.date === "2026-02-30"), false);
-  assert.equal(repairedState.journals.length, 23);
+  assert.equal(repairedState.journals.length, 47);
   assert.equal(repairedState.plan.supportItems.length, 4);
   assert.deepEqual(corruptErrors, [], `破損保存データ復旧時のページ例外: ${corruptErrors.join(" / ")}`);
   await corruptContext.close();
@@ -454,7 +454,7 @@ try {
   const initialWorkflowState = await workflowPage.evaluate(() => window.michiNote.getState());
   const initialMay29 = initialWorkflowState.journals.find((journal) => journal.date === "2026-05-29");
   const initialMay27 = initialWorkflowState.journals.find((journal) => journal.date === "2026-05-27");
-  assert.equal(initialWorkflowState.journals.length, 24, "ワークフローテストの初期日誌数が24件ではありません");
+  assert.equal(initialWorkflowState.journals.length, 48, "ワークフローテストの初期日誌数が48件ではありません");
   assert.deepEqual(
     { recordStatus: initialMay29?.recordStatus, familyShareStatus: initialMay29?.familyShareStatus },
     { recordStatus: "review", familyShareStatus: "private" },
@@ -465,7 +465,7 @@ try {
     { recordStatus: "confirmed", familyShareStatus: "ready" },
     "5月27日の初期共有準備状態が想定と異なります"
   );
-  assert.equal((await workflowPage.locator("#nav-journal-count").textContent())?.trim(), "24");
+  assert.equal((await workflowPage.locator("#nav-journal-count").textContent())?.trim(), "48");
 
   for (const [view, headingId] of [
     ["compose", "compose-heading"],
@@ -488,7 +488,7 @@ try {
   await workflowPage.locator('.main-nav [data-view-target="family"]').click();
   assert.equal(
     await workflowPage.locator("#family-share-list [data-family-select]").count(),
-    23,
+    47,
     "共有準備・デモ共有済みの履歴をすべて選択できません"
   );
 
@@ -511,7 +511,7 @@ try {
   assert.equal(await workflowPage.locator("#compose-activity").inputValue(), "破棄確認用の一時入力", "未保存確認のキャンセルで入力が失われました");
 
   const internalSupport = "内部限定メモ：机の位置を調整し、職員が手順を個別提示した。";
-  await workflowPage.locator("#compose-date").fill("2026-05-28");
+  await workflowPage.locator("#compose-date").fill("2026-05-03");
   await workflowPage.locator("#compose-activity").fill("E2E共有フロー活動");
   await workflowPage.locator("#compose-staff").fill("田中（E2E）");
   await workflowPage.locator("#compose-observation").fill("絵カードを見て、「先に宿題」と自分で選んだ。");
@@ -521,7 +521,7 @@ try {
   await workflowPage.locator("#save-record-draft").click();
   assert.equal(
     await workflowPage.evaluate(() => window.michiNote.getState().journals.length),
-    24,
+    48,
     "必須の利用時刻がない記録を保存できてしまいます"
   );
   assert.equal(await workflowPage.evaluate(() => document.activeElement?.id), "compose-start-time", "未入力の利用開始へフォーカスされません");
@@ -552,7 +552,7 @@ try {
   );
   assert.ok(savedWorkflowJournal, "保存直後の再読込で新規記録が失われました");
   const workflowJournalId = savedWorkflowJournal.id;
-  assert.equal((await workflowPage.evaluate(() => window.michiNote.getState().journals.length)), 25, "記録保存後の日誌数が25件ではありません");
+  assert.equal((await workflowPage.evaluate(() => window.michiNote.getState().journals.length)), 49, "記録保存後の日誌数が49件ではありません");
   assert.deepEqual(
     { recordStatus: savedWorkflowJournal.recordStatus, familyShareStatus: savedWorkflowJournal.familyShareStatus },
     { recordStatus: "review", familyShareStatus: "private" },
@@ -714,7 +714,7 @@ try {
   });
   await storageErrorPage.locator('.main-nav [data-view-target="compose"]').click();
   await storageErrorPage.locator("#compose-journal-select").selectOption("");
-  await storageErrorPage.locator("#compose-date").fill("2026-05-28");
+  await storageErrorPage.locator("#compose-date").fill("2026-05-03");
   await storageErrorPage.locator("#compose-activity").fill("保存エラー試験");
   await storageErrorPage.locator("#compose-staff").fill("試験担当");
   await storageErrorPage.locator("#compose-start-time").fill("15:30");
@@ -738,10 +738,10 @@ try {
       {
         result: "pass",
         verified: [
-          "24件の初期表示",
+          "48件の初期表示",
           "参考JPGの非配信",
           "キーボード導線",
-          "24件の初期デモPDF",
+          "48件の初期デモPDF",
           "日誌の追加と永続化",
           "5領域と4指標の分析",
           "92日以内の分析対象期間",

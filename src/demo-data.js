@@ -135,7 +135,7 @@ function record({
   };
 }
 
-export const DEMO_JOURNALS = [
+const BASE_DEMO_JOURNALS = [
   record({
     date: "2026-04-06",
     activity: "新学期の予定確認",
@@ -432,6 +432,94 @@ export const DEMO_JOURNALS = [
     familyShareStatus: "private"
   })
 ];
+
+export const LEGACY_DEMO_JOURNALS = BASE_DEMO_JOURNALS;
+
+const SUPPLEMENTAL_DATES = [
+  "2026-04-04", "2026-04-07", "2026-04-09", "2026-04-11", "2026-04-14", "2026-04-16",
+  "2026-04-18", "2026-04-21", "2026-04-23", "2026-04-25", "2026-04-28", "2026-04-30",
+  "2026-05-02", "2026-05-05", "2026-05-07", "2026-05-09", "2026-05-12", "2026-05-14",
+  "2026-05-19", "2026-05-21", "2026-05-24", "2026-05-26", "2026-05-28", "2026-05-30"
+];
+
+const SUPPLEMENTAL_RECORD_TYPES = [
+  {
+    activity: "役割のある協力ゲーム",
+    mood: "楽しみ",
+    observation: "ゲーム開始前、友達の役割カードを見てから自分の担当を確認した。順番を待つ間に駒へ手を伸ばす場面が1回あった。",
+    support: "役割と順番を机上のカードで見えるようにし、次の人を指差して確認できるようにした。",
+    response: "自分の番で役割を行い、待つ時はカードを見て待てた。終わりに友達へ「次もやろう」と伝えた。",
+    familyNote: "役割と順番が見えると、友達と最後までゲームに参加できました。",
+    domains: ["social", "cognition", "language"],
+    tags: ["peer_interaction", "turn_taking", "visual_support"],
+    indicators: { selfExpression: 3, transition: 3, groupParticipation: 3, regulation: 3 }
+  },
+  {
+    activity: "来所後の予定確認と宿題",
+    mood: "おだやか",
+    observation: "来所後に予定表を見て、宿題の前におやつの時間を確認した。宿題を始める前に鉛筆を探す手が止まった。",
+    support: "「荷物・おやつ・宿題」の手順カードと、筆箱の場所を示す写真を置いた。",
+    response: "予定表を自分で確認し、筆箱を取って宿題を始めた。終了後に次の自由活動を尋ねた。",
+    familyNote: "予定と準備物を見える形にすると、自分で宿題の準備へ移れました。",
+    domains: ["health", "cognition", "language"],
+    tags: ["visual_schedule", "transition", "daily_living"],
+    indicators: { selfExpression: 3, transition: 3, groupParticipation: 2, regulation: 3 }
+  },
+  {
+    activity: "少人数のボール遊び",
+    mood: "楽しみ",
+    observation: "体育室の声が大きくなった時、入口付近で立ち止まり、周囲を見ていた。",
+    support: "静かな端で始めること、小さいボールへ替えること、見学することの3つを提示した。",
+    response: "小さいボールを選び、友達と交互に投げた。「今はこれならできる」と職員に伝えた。",
+    familyNote: "音や人数に合わせて参加方法を選び、活動を続けられました。",
+    domains: ["motor", "health", "language", "social"],
+    tags: ["sensory", "choice", "self_expression", "regulation"],
+    indicators: { selfExpression: 3, transition: 3, groupParticipation: 3, regulation: 3 }
+  },
+  {
+    activity: "工作の手順づくり",
+    mood: "楽しみ",
+    observation: "材料を並べた後、次に何をするか考えて手が止まった。隣の友達の作品を見ていた。",
+    support: "「選ぶ・貼る・仕上げる」の工程カードを置き、困った時は職員か友達に聞けることを伝えた。",
+    response: "工程カードを見て貼る作業を始め、「テープ取って」と友達に頼んだ。完成後に作品の工夫を説明した。",
+    familyNote: "工程を確認しながら、必要な物を友達へ頼んで工作を完成させました。",
+    domains: ["cognition", "motor", "language", "social"],
+    tags: ["visual_schedule", "help_request", "peer_interaction", "strength"],
+    indicators: { selfExpression: 3, transition: 3, groupParticipation: 3, regulation: 3 }
+  },
+  {
+    activity: "おやつ準備と片付け",
+    mood: "おだやか",
+    observation: "手洗い後、席に座ってから配膳の順番を見ていた。自分のコップを取る前に職員の方を見た。",
+    support: "手洗い・コップ・配膳・片付けの写真カードを示し、迷った時はカードを指差せるようにした。",
+    response: "コップを自分で取り、配膳後に「次は片付け？」と確認した。使用した物を所定の場所へ戻せた。",
+    familyNote: "写真カードを確認しながら、おやつの準備と片付けを進められました。",
+    domains: ["health", "cognition", "language"],
+    tags: ["daily_living", "visual_schedule", "transition"],
+    indicators: { selfExpression: 3, transition: 3, groupParticipation: 2, regulation: 3 }
+  },
+  {
+    activity: "気持ちを整える読書時間",
+    mood: "疲れ気味",
+    physical: "来所時に少し疲れた様子あり",
+    observation: "自由活動の誘いを受けた後、椅子に座ったまま返答まで時間がかかった。",
+    support: "静かな席、5分休憩、読書から選べるようにし、休憩カードを机上に置いた。",
+    response: "「少し休む」と伝えて読書を選んだ。タイマー後に職員へ「次は工作に行く」と知らせた。",
+    familyNote: "疲れを感じた時に休憩を選び、次の活動へ移る見通しを伝えられました。",
+    domains: ["health", "cognition", "language"],
+    tags: ["fatigue", "regulation", "help_request", "transition"],
+    indicators: { selfExpression: 3, transition: 3, groupParticipation: 2, regulation: 4 }
+  }
+];
+
+const SUPPLEMENTAL_DEMO_JOURNALS = SUPPLEMENTAL_DATES.map((date, index) => record({
+  date,
+  ...SUPPLEMENTAL_RECORD_TYPES[index % SUPPLEMENTAL_RECORD_TYPES.length],
+  staff: index % 2 ? "田中（デモ）" : "佐藤（デモ）"
+}));
+
+export const DEMO_JOURNALS = [...BASE_DEMO_JOURNALS, ...SUPPLEMENTAL_DEMO_JOURNALS]
+  .sort((first, second) => first.date.localeCompare(second.date));
 
 export function cloneDemoData() {
   return {

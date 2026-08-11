@@ -1,4 +1,4 @@
-import { cloneDemoData, DOMAIN_META, INDICATOR_META } from "./demo-data.js";
+import { cloneDemoData, DOMAIN_META, INDICATOR_META, LEGACY_DEMO_JOURNALS } from "./demo-data.js";
 import {
   MAX_ANALYSIS_DAYS,
   analyzeJournals,
@@ -81,18 +81,25 @@ function journalsInRange(journals, range) {
   return journals.filter((journal) => journal.date >= range.start && journal.date <= range.end);
 }
 
-function isBundledDemoJournalContent(candidateJournals) {
+function matchesBundledJournalContent(candidateJournals, sourceJournals) {
   if (!Array.isArray(candidateJournals)) return false;
-  const { journals: demoJournals } = cloneDemoData();
-  if (candidateJournals.length !== demoJournals.length) return false;
+  if (candidateJournals.length !== sourceJournals.length) return false;
   const fields = ["id", "date", "time", "activity", "mood", "physical", "observation", "support", "response", "familyNote", "staff"];
   const candidatesById = new Map(candidateJournals.map((journal) => [journal?.id, journal]));
-  return demoJournals.every((demoJournal) => {
+  return sourceJournals.every((demoJournal) => {
     const candidate = candidatesById.get(demoJournal.id);
     if (!candidate || fields.some((field) => candidate[field] !== demoJournal[field])) return false;
     return JSON.stringify(candidate.domains) === JSON.stringify(demoJournal.domains)
       && JSON.stringify(candidate.indicators) === JSON.stringify(demoJournal.indicators);
   });
+}
+
+function isBundledDemoJournalContent(candidateJournals) {
+  return matchesBundledJournalContent(candidateJournals, cloneDemoData().journals);
+}
+
+function isLegacyBundledDemoJournalContent(candidateJournals) {
+  return matchesBundledJournalContent(candidateJournals, LEGACY_DEMO_JOURNALS);
 }
 
 function createInitialState() {
@@ -105,6 +112,7 @@ function createInitialState() {
   return {
     schemaVersion: 1,
     workflowVersion: 1,
+    demoDataVersion: 2,
     profile,
     journals,
     plan: generatePlan(profile, planSourceJournals),
@@ -234,8 +242,10 @@ function loadState() {
       }
       return [key, fallbackValue];
     }));
-    const applyBundledDemoWorkflow = saved.workflowVersion !== 1 && isBundledDemoJournalContent(saved.journals);
-    const journals = saved.journals.map(normalizeSavedJournal).filter(Boolean);
+    const upgradeBundledDemo = saved.demoDataVersion !== 2 && isLegacyBundledDemoJournalContent(saved.journals);
+    const sourceForJournals = upgradeBundledDemo ? cloneDemoData().journals : saved.journals;
+    const applyBundledDemoWorkflow = saved.workflowVersion !== 1 && isBundledDemoJournalContent(sourceForJournals);
+    const journals = sourceForJournals.map(normalizeSavedJournal).filter(Boolean);
     if (applyBundledDemoWorkflow) {
       const demoWorkflowById = new Map(cloneDemoData().journals.map((journal) => [journal.id, journal]));
       journals.forEach((journal) => {
@@ -245,11 +255,11 @@ function loadState() {
         journal.familyDraft = journal.familyNote;
       });
     }
-    const candidateRange = { start: saved.analysisRange?.start, end: saved.analysisRange?.end };
+    const candidateRange = upgradeBundledDemo ? {} : { start: saved.analysisRange?.start, end: saved.analysisRange?.end };
     const analysisRange = isUsableAnalysisRange(candidateRange) ? candidateRange : getDefaultAnalysisRange(journals);
     const sourceJournals = journalsInRange(journals, analysisRange);
     const generatedPlan = generatePlan(profile, sourceJournals);
-    const savedPlan = sanitizeSavedPlanValue(saved.plan);
+    const savedPlan = upgradeBundledDemo ? null : sanitizeSavedPlanValue(saved.plan);
     const filters = {
       search: typeof saved.filters?.search === "string" ? saved.filters.search.slice(0, 200) : "",
       domain: saved.filters?.domain === "all" || DOMAIN_META[saved.filters?.domain] ? saved.filters.domain : "all",
@@ -284,6 +294,7 @@ function loadState() {
       ...fallback,
       ...saved,
       workflowVersion: 1,
+      demoDataVersion: 2,
       profile,
       journals,
       filters,
