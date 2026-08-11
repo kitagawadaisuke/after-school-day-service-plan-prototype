@@ -1,4 +1,4 @@
-import { cloneDemoData, DOMAIN_META, INDICATOR_META, LEGACY_DEMO_JOURNALS } from "./demo-data.js";
+import { cloneDemoData, DEMO_PROFILES, DOMAIN_META, INDICATOR_META, LEGACY_DEMO_JOURNALS } from "./demo-data.js";
 import {
   MAX_ANALYSIS_DAYS,
   analyzeJournals,
@@ -102,8 +102,8 @@ function isLegacyBundledDemoJournalContent(candidateJournals) {
   return matchesBundledJournalContent(candidateJournals, LEGACY_DEMO_JOURNALS);
 }
 
-function createInitialState() {
-  const { profile, journals: sourceJournals } = cloneDemoData();
+function createInitialState(studentId = "demo-a") {
+  const { profile, journals: sourceJournals } = cloneDemoData(studentId);
   const journals = sourceJournals.map(normalizeSavedJournal).filter(Boolean);
   const analysisRange = getDefaultAnalysisRange(journals);
   const planSourceJournals = journalsInRange(journals, analysisRange);
@@ -113,6 +113,8 @@ function createInitialState() {
     schemaVersion: 1,
     workflowVersion: 1,
     demoDataVersion: 2,
+    studentId,
+    studentSnapshots: {},
     profile,
     journals,
     plan: generatePlan(profile, planSourceJournals),
@@ -233,7 +235,8 @@ function loadState() {
     if (saved?.schemaVersion !== 1 || !saved.profile || !Array.isArray(saved.journals)) {
       throw new Error("保存形式が現在のデモと一致しません");
     }
-    const fallback = createInitialState();
+    const studentId = DEMO_PROFILES[saved.studentId] ? saved.studentId : "demo-a";
+    const fallback = createInitialState(studentId);
     const profile = Object.fromEntries(Object.entries(fallback.profile).map(([key, fallbackValue]) => {
       const savedValue = saved.profile[key];
       if (typeof fallbackValue === "string" && typeof savedValue === "string") return [key, savedValue.slice(0, 2000)];
@@ -295,6 +298,8 @@ function loadState() {
       ...saved,
       workflowVersion: 1,
       demoDataVersion: 2,
+      studentId,
+      studentSnapshots: saved.studentSnapshots && typeof saved.studentSnapshots === "object" ? saved.studentSnapshots : {},
       profile,
       journals,
       filters,
@@ -487,9 +492,45 @@ function navigate(view, { preserveScroll = false, focusHeading = true } = {}) {
   saveState({ quiet: true });
 }
 
+const STUDENT_STATE_KEYS = [
+  "profile", "journals", "plan", "analysisRange", "selectedJournalId", "composeJournalId", "selectedFamilyJournalId",
+  "filters", "planMode", "planStale", "chatMessages", "workflowVersion", "demoDataVersion"
+];
+
+function snapshotActiveStudent() {
+  return structuredClone(Object.fromEntries(STUDENT_STATE_KEYS.map((key) => [key, state[key]])));
+}
+
+function switchStudent(nextStudentId) {
+  if (!DEMO_PROFILES[nextStudentId] || nextStudentId === state.studentId) return;
+  if (!confirmDiscardComposeChanges()) {
+    $("#child-select").value = state.studentId;
+    return;
+  }
+  const snapshots = { ...(state.studentSnapshots ?? {}), [state.studentId]: snapshotActiveStudent() };
+  const nextSnapshot = snapshots[nextStudentId];
+  const nextState = nextSnapshot ? structuredClone(nextSnapshot) : createInitialState(nextStudentId);
+  Object.assign(state, nextState, {
+    studentId: nextStudentId,
+    studentSnapshots: snapshots,
+    activeView: "dashboard",
+    updatedAt: new Date().toISOString()
+  });
+  composeDirty = false;
+  renderAll();
+  navigate("dashboard", { preserveScroll: true, focusHeading: false });
+  saveState({ immediate: true });
+  showToast(`${state.profile.displayName}のデモに切り替えました。`);
+}
+
 function renderSidebar() {
   $("#sidebar-child-name").innerHTML = `${escapeHtml(state.profile.displayName)} <small>（仮名）</small>`;
   $("#sidebar-child-meta").textContent = `${state.profile.grade}・利用週3回`;
+  $(".child-mini-card .avatar").textContent = state.profile.displayName.slice(0, 1);
+  $("#child-select").innerHTML = Object.values(DEMO_PROFILES)
+    .map((profile) => `<option value="${escapeAttribute(profile.id)}">${escapeHtml(profile.displayName)}（${escapeHtml(profile.grade)}）</option>`)
+    .join("");
+  $("#child-select").value = state.studentId;
   $("#nav-journal-count").textContent = String(state.journals.length);
   $("#nav-family-count").textContent = String(
     state.journals.filter((journal) => journal.familyShareStatus === "ready" && canShareFamilyRecord(journal)).length
@@ -2075,13 +2116,16 @@ function regeneratePlan() {
 }
 
 function resetDemo() {
-  if (!window.confirm("追加・編集した内容をすべて破棄し、Aさんのデモを初期状態へ戻しますか？")) return;
-  state = createInitialState();
-  localStorage.removeItem(STORAGE_KEY);
+  if (!window.confirm(`追加・編集した内容をすべて破棄し、${state.profile.displayName}のデモを初期状態へ戻しますか？`)) return;
+  const studentId = state.studentId;
+  const studentSnapshots = { ...(state.studentSnapshots ?? {}) };
+  delete studentSnapshots[studentId];
+  state = createInitialState(studentId);
+  state.studentSnapshots = studentSnapshots;
   saveState({ quiet: true });
   renderAll();
   navigate("dashboard");
-  showToast("デモを初期状態へ戻しました。");
+  showToast(`${state.profile.displayName}のデモを初期状態へ戻しました。`);
 }
 
 function renderAll() {
@@ -2098,6 +2142,7 @@ function renderAll() {
 function initializeStaticControls() {
   $("#journal-domain-options").innerHTML = renderDomainToggles("journalDomains");
   $("#compose-domain-options").innerHTML = renderDomainToggles("composeDomains");
+  $("#child-select").addEventListener("change", (event) => switchStudent(event.target.value));
 
   document.addEventListener("click", (event) => {
     const viewButton = event.target.closest("[data-view-target]");
@@ -2299,7 +2344,7 @@ if (loadWarning) window.setTimeout(() => showToast(loadWarning), 250);
 window.michiNote = {
   getState: () => structuredClone(state),
   reset: () => {
-    state = createInitialState();
+    state = createInitialState(state.studentId);
     renderAll();
     navigate("dashboard");
   }

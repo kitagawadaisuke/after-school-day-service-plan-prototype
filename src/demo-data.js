@@ -96,6 +96,55 @@ export const DEMO_PROFILE = {
   caveat: "すべて架空のデモ設定です。診断名は設定していません。実運用では本人・家族との面接内容に置き換えます。"
 };
 
+export const DEMO_PROFILES = {
+  "demo-a": DEMO_PROFILE,
+  "demo-b": {
+    ...DEMO_PROFILE,
+    id: "demo-b",
+    displayName: "Bさん",
+    legalName: "Bさん（仮名）",
+    grade: "小学2年生",
+    ageLabel: "7歳（デモ）",
+    birthDate: "2018-02-11",
+    recipientNumber: "DEMO-0002",
+    guardianName: "保護者B（仮名）",
+    interests: ["恐竜図鑑", "粘土工作", "リズム遊び"],
+    strengths: ["好きなテーマがあると、見つけたことを言葉で共有できる", "大人とのやり取りでは、選択肢があると希望を伝えやすい", "短い手順を見ながら、最後まで取り組める場面がある"],
+    personWish: "好きな遊びを友達に伝えたい。困った時に先生へ言えるようになりたい。",
+    familyWish: "学校や事業所であったことを、家庭でも少しずつ話せるようになってほしい。"
+  },
+  "demo-c": {
+    ...DEMO_PROFILE,
+    id: "demo-c",
+    displayName: "Cさん",
+    legalName: "Cさん（仮名）",
+    grade: "小学5年生",
+    ageLabel: "10歳（デモ）",
+    birthDate: "2015-04-02",
+    recipientNumber: "DEMO-0003",
+    guardianName: "保護者C（仮名）",
+    interests: ["プログラミング", "カードゲーム", "バスケットボール"],
+    strengths: ["目的と役割が明確だと、周囲と相談しながら進められる", "自分なりの工夫を言葉にできる", "休憩後に活動へ戻れる場面が増えている"],
+    personWish: "友達と相談してゲームを進めたい。予定が変わっても落ち着いて選びたい。",
+    familyWish: "疲れた時に無理をせず、自分から休憩や相談を選べるようになってほしい。"
+  },
+  "demo-d": {
+    ...DEMO_PROFILE,
+    id: "demo-d",
+    displayName: "Dさん",
+    legalName: "Dさん（仮名）",
+    grade: "中学1年生",
+    ageLabel: "12歳（デモ）",
+    birthDate: "2013-10-23",
+    recipientNumber: "DEMO-0004",
+    guardianName: "保護者D（仮名）",
+    interests: ["料理", "写真", "卓球"],
+    strengths: ["自分の役割が分かると、周囲を見ながら活動できる", "興味のある活動では、継続して取り組める", "大人との確認を通じて、見通しを立てられる"],
+    personWish: "みんなと役割を分けて活動したい。自分で予定を確認して動きたい。",
+    familyWish: "中学校生活に向け、身支度や予定確認を自分で進める場面を増やしたい。"
+  }
+};
+
 function record({
   date,
   activity,
@@ -521,9 +570,22 @@ const SUPPLEMENTAL_DEMO_JOURNALS = SUPPLEMENTAL_DATES.map((date, index) => recor
 export const DEMO_JOURNALS = [...BASE_DEMO_JOURNALS, ...SUPPLEMENTAL_DEMO_JOURNALS]
   .sort((first, second) => first.date.localeCompare(second.date));
 
-export function cloneDemoData() {
+const STUDENT_JOURNAL_CONTEXT = {
+  "demo-b": "低学年・ことばと遊びの記録",
+  "demo-c": "高学年・仲間との活動の記録",
+  "demo-d": "中学生・自立と役割の記録"
+};
+
+export function cloneDemoData(studentId = "demo-a") {
+  const profile = DEMO_PROFILES[studentId] ?? DEMO_PROFILE;
   return {
-    profile: structuredClone(DEMO_PROFILE),
-    journals: structuredClone(DEMO_JOURNALS)
+    profile: structuredClone(profile),
+    journals: structuredClone(DEMO_JOURNALS).map((journal) => studentId === "demo-a"
+      ? journal
+      : {
+          ...journal,
+          id: `${studentId.slice(-1).toUpperCase()}-${journal.id.slice(2)}`,
+          activity: `${STUDENT_JOURNAL_CONTEXT[studentId]}｜${journal.activity}`
+        })
   };
 }

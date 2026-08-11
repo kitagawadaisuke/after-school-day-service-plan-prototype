@@ -347,6 +347,24 @@ h3 {
   font-weight: 400;
 }
 
+.child-switcher {
+  display: block;
+  margin-top: 9px;
+}
+
+.child-switcher select {
+  width: 100%;
+  min-height: 30px;
+  padding: 0 22px 0 8px;
+  border: 1px solid rgba(235, 242, 232, 0.22);
+  border-radius: 7px;
+  color: #eff3ed;
+  background: rgba(255, 255, 255, 0.08);
+  font-size: 12px;
+}
+
+.child-switcher select option { color: var(--ink); background: var(--sheet); }
+
 .child-meta {
   margin-bottom: 0;
 }

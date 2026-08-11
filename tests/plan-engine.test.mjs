@@ -1,7 +1,7 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 
-import { DEMO_JOURNALS, DEMO_PROFILE, DOMAIN_META } from "../src/demo-data.js";
+import { cloneDemoData, DEMO_JOURNALS, DEMO_PROFILE, DOMAIN_META } from "../src/demo-data.js";
 import {
   MAX_ANALYSIS_DAYS,
   analyzeJournals,
@@ -24,6 +24,15 @@ test("Aさんの日誌は2か月・48件で、全件に観察→支援→反応�
   assert.ok(DEMO_JOURNALS.every((journal) => journal.response.trim()));
   assert.ok(DEMO_JOURNALS.every((journal) => journal.domains.length >= 1));
   assert.ok(DEMO_JOURNALS.every((journal) => Object.values(journal.indicators).every((value) => value >= 1 && value <= 4)));
+});
+
+test("Bさん・Cさん・Dさんも独立した仮名プロフィールと48件の日誌を持つ", () => {
+  for (const studentId of ["demo-b", "demo-c", "demo-d"]) {
+    const demo = cloneDemoData(studentId);
+    assert.equal(demo.journals.length, 48);
+    assert.notEqual(demo.profile.displayName, DEMO_PROFILE.displayName);
+    assert.ok(demo.journals.every((journal) => journal.id.startsWith(`${studentId.slice(-1).toUpperCase()}-`)));
+  }
 });
 
 test("分析は5領域を網羅し、前半・後半を安全に比較できる", () => {

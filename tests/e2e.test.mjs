@@ -97,6 +97,16 @@ try {
   await page.keyboard.press("Tab");
   await page.screenshot({ path: artifactPath("michi-dashboard.png"), fullPage: true });
 
+  await page.locator("#child-select").selectOption("demo-b");
+  await page.waitForFunction(() => window.michiNote.getState().studentId === "demo-b");
+  assert.match((await page.locator("#sidebar-child-name").textContent()) ?? "", /Bさん/);
+  assert.equal((await page.locator("#hero-entry-count").textContent())?.trim(), "48");
+  await page.locator("#child-select").selectOption("demo-d");
+  await page.waitForFunction(() => window.michiNote.getState().studentId === "demo-d");
+  assert.match((await page.locator("#sidebar-child-name").textContent()) ?? "", /Dさん/);
+  await page.locator("#child-select").selectOption("demo-a");
+  await page.waitForFunction(() => window.michiNote.getState().studentId === "demo-a");
+
   await page.locator('.main-nav [data-view-target="chat"]').click();
   await assertVisible(page.locator("#view-chat"), "日誌チャット画面が表示されません");
   await page.getByRole("button", { name: "友だちとの関わりはどう変化した？" }).click();
