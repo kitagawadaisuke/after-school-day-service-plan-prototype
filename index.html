@@ -5,9 +5,9 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <meta
       name="description"
-      content="放課後等デイサービスの日誌から、根拠を確認しながら個別支援計画書の案を作成するローカルデモアプリ"
+      content="放課後等デイサービスの日々の記録、保護者共有、個別支援計画をひとつにつなぐローカルデモアプリ"
     />
-    <title>みちのーと｜個別支援計画作成デモ</title>
+    <title>みちのーと｜放課後のあゆみ</title>
     <link rel="icon" href="data:," />
     <link rel="stylesheet" href="./styles.css" />
   </head>
@@ -22,7 +22,7 @@
           </div>
           <div>
             <p class="brand-name">みちのーと</p>
-            <p class="brand-subtitle">個別支援計画ワークベンチ</p>
+            <p class="brand-subtitle">放課後のあゆみ</p>
           </div>
         </div>
 
@@ -30,16 +30,22 @@
 
         <nav class="main-nav">
           <button class="nav-item is-active" type="button" data-view-target="dashboard" aria-current="page">
-            <span class="nav-index">01</span><span>概要</span>
+            <span class="nav-index">01</span><span>今日の状況</span>
+          </button>
+          <button class="nav-item" type="button" data-view-target="compose">
+            <span class="nav-index">02</span><span>日誌を書く</span>
           </button>
           <button class="nav-item" type="button" data-view-target="journals">
-            <span class="nav-index">02</span><span>日誌を確認</span><span class="nav-count" id="nav-journal-count">0</span>
+            <span class="nav-index">03</span><span>児童・日誌</span><span class="nav-count" id="nav-journal-count">0</span>
           </button>
           <button class="nav-item" type="button" data-view-target="analysis">
-            <span class="nav-index">03</span><span>計画書のヒント</span>
+            <span class="nav-index">04</span><span>日誌をふり返る</span>
           </button>
           <button class="nav-item" type="button" data-view-target="plan">
-            <span class="nav-index">04</span><span>計画書をつくる</span>
+            <span class="nav-index">05</span><span>個別支援計画</span>
+          </button>
+          <button class="nav-item" type="button" data-view-target="family">
+            <span class="nav-index">06</span><span>保護者への共有</span><span class="nav-count" id="nav-family-count">0</span>
           </button>
         </nav>
 
@@ -63,8 +69,8 @@
       <main class="main-area" id="main-content" tabindex="-1">
         <header class="topbar">
           <div>
-            <p class="breadcrumb">みらいステップ <span>/</span> <span id="breadcrumb-current">支援サマリー</span></p>
-            <h1 class="page-title" id="page-title">支援サマリー</h1>
+            <p class="breadcrumb">みらいステップ <span>/</span> <span id="breadcrumb-current">記録 / 今日の状況</span></p>
+            <h1 class="page-title" id="page-title">今日の状況</h1>
           </div>
           <div class="topbar-actions">
             <span class="save-status" id="save-status" role="status"><i></i>自動保存済み</span>
@@ -74,10 +80,22 @@
         </header>
 
         <section class="view is-active" id="view-dashboard" data-view="dashboard" aria-labelledby="dashboard-heading">
+          <div class="today-board reveal">
+            <div class="today-board-heading">
+              <div>
+                <p class="section-kicker">TODAY'S WORKBENCH</p>
+                <h2 id="dashboard-heading">今日、確認すること。</h2>
+                <p id="today-latest-date">Aさんの記録・共有・計画を同じ流れで確認します。</p>
+              </div>
+              <button class="primary-button" type="button" data-view-target="compose">日誌を書く <span aria-hidden="true">→</span></button>
+            </div>
+            <div class="today-status-grid" id="today-status-grid" aria-live="polite"></div>
+            <div class="today-focus" id="today-focus-card"></div>
+          </div>
+
           <div class="hero-panel reveal">
             <div class="hero-copy">
-              <h2 class="sr-only" id="dashboard-heading">支援サマリー</h2>
-              <p class="section-kicker">観察記録の整理 / 2026.04–05</p>
+              <p class="section-kicker">SUPPORT SUMMARY / 2026.04–05</p>
               <p class="hero-lead">
                 対象期間の日誌を、5領域と支援の変化で整理しています。<br />
                 計画書の候補には、必ず根拠となる日誌を紐づけます。
@@ -216,6 +234,79 @@
           </section>
         </section>
 
+        <section class="view" id="view-compose" data-view="compose" aria-labelledby="compose-heading" hidden>
+          <div class="section-intro compose-intro">
+            <div>
+              <p class="section-kicker">ONE SOURCE, TWO DRAFTS</p>
+              <h2 id="compose-heading">ひとつの記録から、<br />用途別の下書きへ。</h2>
+              <p>観察した事実を原本として、職員記録と保護者向け文章を分けて整えます。どちらも職員が確認するまで確定しません。</p>
+            </div>
+            <label class="record-picker">
+              <span>編集する日誌</span>
+              <select id="compose-journal-select" aria-label="編集する日誌"></select>
+            </label>
+          </div>
+
+          <div class="compose-safety" role="note">
+            <span aria-hidden="true">i</span>
+            <p><strong>デモ生成です。</strong> 外部AIへ送信せず、入力した文章を用途別に並べ替えます。日付・回数・状態など、元記録にない事実は補いません。</p>
+          </div>
+
+          <form id="quick-record-form" class="compose-workbench" novalidate>
+            <input id="compose-journal-id" name="id" type="hidden" />
+            <section class="compose-source paper-card" aria-labelledby="compose-source-heading">
+              <div class="compose-card-heading">
+                <div><p class="eyebrow">SOURCE / 原本</p><h3 id="compose-source-heading">今日の観察記録</h3></div>
+                <span class="source-lock">ここが根拠</span>
+              </div>
+              <div class="compose-meta-fields">
+                <label><span>利用日 <b>必須</b></span><input id="compose-date" name="date" type="date" required /></label>
+                <label><span>主な活動 <b>必須</b></span><input id="compose-activity" name="activity" type="text" maxlength="80" required /></label>
+                <label><span>来所時の様子</span><select id="compose-mood" name="mood"><option value="未記入">未記入</option><option>おだやか</option><option>楽しみ</option><option>少し不安</option><option>疲れ気味</option><option>気持ちが高ぶる</option></select></label>
+                <label><span>記録者 <b>必須</b></span><input id="compose-staff" name="staff" type="text" maxlength="80" required /></label>
+                <label><span>利用開始 <b>必須</b></span><input id="compose-start-time" name="startTime" type="time" required /></label>
+                <label><span>利用終了 <b>必須</b></span><input id="compose-end-time" name="endTime" type="time" required /></label>
+              </div>
+              <div class="compose-source-flow">
+                <label><span><b>01</b> 観察した事実 <em>必須</em></span><textarea id="compose-observation" name="observation" rows="4" maxlength="1000" required placeholder="本人の言葉や行動を、解釈せず具体的に"></textarea></label>
+                <label><span><b>02</b> 行った支援 <em>必須</em></span><textarea id="compose-support" name="support" rows="3" maxlength="1000" required placeholder="声かけ、環境調整、視覚提示など"></textarea></label>
+                <label><span><b>03</b> 本人の反応・変化 <em>必須</em></span><textarea id="compose-response" name="response" rows="4" maxlength="1000" required placeholder="支援の後に見られた言葉や行動"></textarea></label>
+              </div>
+              <fieldset class="compose-domain-fieldset">
+                <legend>関連する5領域 <small>1つ以上選択</small></legend>
+                <div id="compose-domain-options"></div>
+              </fieldset>
+            </section>
+
+            <section class="compose-output paper-card" aria-labelledby="compose-output-heading">
+              <div class="compose-card-heading">
+                <div><p class="eyebrow">REVIEW / 確認</p><h3 id="compose-output-heading">用途別の下書き</h3></div>
+                <span class="workflow-status" id="compose-workflow-status">未作成</span>
+              </div>
+              <ol class="approval-rail" aria-label="確認と共有の進み方">
+                <li id="compose-step-draft"><span>1</span><strong>下書き</strong></li>
+                <li id="compose-step-confirm"><span>2</span><strong>職員確認</strong></li>
+                <li id="compose-step-share"><span>3</span><strong>共有準備</strong></li>
+              </ol>
+              <label class="draft-field is-staff">
+                <span><b>職員記録</b><small>支援経過として確認</small></span>
+                <textarea id="compose-staff-draft" name="staffDraft" rows="8" maxlength="3200" placeholder="「デモ下書きをつくる」を押すと表示されます"></textarea>
+              </label>
+              <label class="draft-field is-family">
+                <span><b>保護者向け</b><small>内部の支援メモとは分けて編集</small></span>
+                <textarea id="compose-family-draft" name="familyDraft" rows="7" maxlength="1200" placeholder="共有してよい内容だけを職員が確認します"></textarea>
+              </label>
+              <div class="compose-actions">
+                <button class="ghost-button" id="generate-record-drafts" type="button">デモ下書きをつくる</button>
+                <button class="primary-button" id="save-record-draft" type="submit">記録として保存</button>
+                <button class="ghost-button" id="confirm-staff-record" type="button">職員確認を完了</button>
+                <button class="ghost-button" id="prepare-family-share" type="button">保護者共有の準備へ</button>
+              </div>
+              <p class="compose-action-note" id="compose-action-note" aria-live="polite">下書きを作成しても、保存・共有は自動では行われません。</p>
+            </section>
+          </form>
+        </section>
+
         <section class="view" id="view-journals" data-view="journals" aria-labelledby="journals-heading" hidden>
           <div class="section-intro">
             <div>
@@ -224,7 +315,7 @@
               <p>印象だけでまとめず、「観察 → 支援 → 本人の反応」の流れを確認します。</p>
             </div>
             <div class="section-actions">
-              <button class="ghost-button" id="export-journals" type="button">CSV出力</button>
+              <button class="ghost-button" id="export-journals" type="button">NotebookLM用CSV</button>
               <button class="primary-button" id="add-journal" type="button">＋ 日誌を追加</button>
             </div>
           </div>
@@ -413,6 +504,49 @@
             </div>
           </div>
         </section>
+
+        <section class="view" id="view-family" data-view="family" aria-labelledby="family-heading" hidden>
+          <div class="section-intro family-intro">
+            <div>
+              <p class="section-kicker">FAMILY VIEW / 放課後のあゆみ</p>
+              <h2 id="family-heading">共有する前に、<br />見え方を確かめる。</h2>
+              <p>職員確認と共有準備を終えた文章だけを表示します。観察メモや内部の支援記録は、保護者画面には出しません。</p>
+            </div>
+            <div class="family-demo-badge"><span></span>送信しないプレビュー</div>
+          </div>
+
+          <div class="family-share-layout">
+            <aside class="family-queue paper-card" aria-labelledby="family-queue-heading">
+              <div class="card-heading-row">
+                <div><p class="eyebrow">SHARE QUEUE</p><h3 id="family-queue-heading">共有候補</h3></div>
+                <span class="card-tag" id="family-ready-count">0件</span>
+              </div>
+              <p class="family-queue-caption">「共有準備済み」はまだ保護者に見えません。内容を選び、最後にデモ共有を実行します。</p>
+              <div id="family-share-list"></div>
+            </aside>
+
+            <section class="family-preview-stage" aria-labelledby="family-preview-heading">
+              <div class="family-preview-toolbar">
+                <div><p class="eyebrow">GUARDIAN PREVIEW</p><h3 id="family-preview-heading">保護者画面</h3></div>
+                <div id="family-share-actions"></div>
+              </div>
+              <div class="family-device">
+                <header class="family-device-header">
+                  <div><span class="family-device-mark" aria-hidden="true">み</span><strong>放課後のあゆみ</strong></div>
+                  <span>Aさん（仮名）</span>
+                </header>
+                <div class="family-tabs" aria-label="保護者画面の表示イメージ">
+                  <span>画面イメージ</span><strong>今日の記録</strong><span>外部送信なし</span>
+                </div>
+                <div id="family-preview" class="family-preview-content" aria-live="polite"></div>
+              </div>
+              <div class="family-boundary-note" role="note">
+                <strong>デモ上の境界</strong>
+                <p>「デモ共有する」はこのブラウザ内の表示状態だけを変更します。メール・LINE・外部サービスへの送信は行いません。</p>
+              </div>
+            </section>
+          </div>
+        </section>
       </main>
     </div>
 
@@ -436,7 +570,7 @@
           <label><span>観察した事実 <b>必須</b></span><textarea id="journal-observation" name="observation" required maxlength="1000" rows="3" placeholder="解釈ではなく、本人の言葉や行動を具体的に記録"></textarea></label>
           <label><span>行った支援 <b>必須</b></span><textarea id="journal-support" name="support" required maxlength="1000" rows="2" placeholder="声かけ、環境調整、視覚提示など"></textarea></label>
           <label><span>本人の反応・変化 <b>必須</b></span><textarea id="journal-response" name="response" required maxlength="1000" rows="2" placeholder="支援の後にどう変化したか"></textarea></label>
-          <label><span>家庭との共有</span><textarea id="journal-family" name="familyNote" maxlength="1000" rows="2" placeholder="保護者からの情報、帰宅時に共有したこと"></textarea></label>
+          <label><span>保護者向け共有文 <small>保存だけでは共有されません</small></span><textarea id="journal-family" name="familyNote" maxlength="1200" rows="2" placeholder="保護者へ伝えてよい活動の様子や本人の言葉"></textarea></label>
         </div>
         <fieldset class="domain-fieldset">
           <legend>関連する5領域 <b>1つ以上</b></legend>
@@ -490,12 +624,13 @@
         <button class="icon-button" type="button" data-close-guide aria-label="閉じる">×</button>
       </div>
       <ol class="guide-steps">
-        <li><span>1</span><div><strong>日誌を確認・追加</strong><p>Aさんの2か月分の仮データを用意しています。元の観察記録までたどれます。</p></div></li>
-        <li><span>2</span><div><strong>傾向を整理</strong><p>5領域の記録数と4つの観察指標を、前半・後半で比較します。</p></div></li>
-        <li><span>3</span><div><strong>計画案を編集</strong><p>本人・家族の意向、目標、支援内容、評価方法を専門職が修正します。</p></div></li>
-        <li><span>4</span><div><strong>帳票を印刷</strong><p>記載チェック後、帳票プレビューから印刷またはPDF保存できます。</p></div></li>
+        <li><span>1</span><div><strong>今日の状況を確認</strong><p>職員確認待ち、保護者共有の準備、計画の更新状態を見渡します。</p></div></li>
+        <li><span>2</span><div><strong>日誌から下書きを作る</strong><p>同じ原本から、職員記録と保護者向け文章を分けて確認します。</p></div></li>
+        <li><span>3</span><div><strong>日誌をふり返る</strong><p>5領域の記録数と4つの観察指標を、前半・後半で比較します。</p></div></li>
+        <li><span>4</span><div><strong>計画案を編集</strong><p>本人・家族の意向、目標、支援内容、評価方法を専門職が修正します。</p></div></li>
+        <li><span>5</span><div><strong>共有と帳票を確認</strong><p>保護者への表示内容を確認し、計画書はプレビューからPDF保存できます。</p></div></li>
       </ol>
-      <div class="guide-caution"><strong>重要</strong> 本アプリは計画作成を補助するデモです。自動出力だけで個別支援計画を確定しないでください。</div>
+      <div class="guide-caution"><strong>重要</strong> 本アプリは記録・共有・計画作成を補助するデモです。外部送信は行わず、自動出力だけで共有や個別支援計画を確定しないでください。</div>
     </dialog>
 
     <div class="toast" id="toast" role="status" aria-live="polite"></div>

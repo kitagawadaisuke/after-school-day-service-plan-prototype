@@ -15,6 +15,7 @@ ALLOWED_PATHS = {
     "/src/app.js": "src/app.js",
     "/src/demo-data.js": "src/demo-data.js",
     "/src/plan-engine.js": "src/plan-engine.js",
+    "/src/record-workflow.js": "src/record-workflow.js",
     "/src/utils.js": "src/utils.js",
 }
 

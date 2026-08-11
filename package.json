@@ -5,7 +5,7 @@
   "type": "module",
   "scripts": {
     "serve": "python3 scripts/serve.py",
-    "test": "node --test tests/plan-engine.test.mjs",
+    "test": "node --test tests/plan-engine.test.mjs tests/record-workflow.test.mjs",
     "test:e2e": "node scripts/run-e2e.mjs"
   },
   "devDependencies": {

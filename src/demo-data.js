@@ -109,7 +109,9 @@ function record({
   tags,
   indicators,
   time = "15:30〜17:30",
-  staff = "佐藤（デモ）"
+  staff = "佐藤（デモ）",
+  recordStatus = "confirmed",
+  familyShareStatus = "shared-demo"
 }) {
   return {
     id: `J-${date.replaceAll("-", "")}`,
@@ -126,7 +128,10 @@ function record({
     staff,
     domains,
     tags,
-    indicators
+    indicators,
+    recordStatus,
+    familyShareStatus,
+    familyDraft: familyNote
   };
 }
 
@@ -406,10 +411,11 @@ export const DEMO_JOURNALS = [
     observation: "今日の出来事を尋ねると、最初は「ボール」と一語で答えた。",
     support: "「何が・どうだった」の2つの手掛かりを提示した。",
     response: "「キャッチが3回続いてうれしかった」と説明し、友達の話も最後まで聞いた。",
-    familyNote: "手掛かりがあると、出来事と気持ちを文章で伝えられたことを共有した。",
+    familyNote: "手掛かりを使いながら、出来事と気持ちを文章で伝えました。",
     domains: ["language", "social"],
     tags: ["self_expression", "peer_interaction", "reflection", "strength"],
-    indicators: { selfExpression: 4, transition: 3, groupParticipation: 3, regulation: 3 }
+    indicators: { selfExpression: 4, transition: 3, groupParticipation: 3, regulation: 3 },
+    familyShareStatus: "ready"
   }),
   record({
     date: "2026-05-29",
@@ -418,10 +424,12 @@ export const DEMO_JOURNALS = [
     observation: "公園中止を知って「えー」と言い、変更後の予定カードを見た。",
     support: "10分前に変更カードと、屋内ボール・工作の2案を提示した。",
     response: "約3分後に屋内ボールを選んだ。持物4項目中3項目を自分で確認し、水筒は職員へ援助を求めた。",
-    familyNote: "急な変更でも選択肢から活動を決め、持物確認を進められたことを共有した。",
+    familyNote: "急な変更でも選択肢から活動を決め、持物確認を進めました。",
     domains: ["motor", "health", "cognition", "language", "social"],
     tags: ["transition", "visual_schedule", "help_request", "daily_living", "peer_interaction"],
-    indicators: { selfExpression: 3, transition: 3, groupParticipation: 3, regulation: 3 }
+    indicators: { selfExpression: 3, transition: 3, groupParticipation: 3, regulation: 3 },
+    recordStatus: "review",
+    familyShareStatus: "private"
   })
 ];
 
