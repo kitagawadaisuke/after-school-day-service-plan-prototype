@@ -13,6 +13,7 @@ ALLOWED_PATHS = {
     "/index.html": "index.html",
     "/styles.css": "styles.css",
     "/src/app.js": "src/app.js",
+    "/src/journal-chat.js": "src/journal-chat.js",
     "/src/demo-data.js": "src/demo-data.js",
     "/src/plan-engine.js": "src/plan-engine.js",
     "/src/record-workflow.js": "src/record-workflow.js",
@@ -57,7 +58,7 @@ class AppOnlyHandler(SimpleHTTPRequestHandler):
         self.send_header("X-Content-Type-Options", "nosniff")
         self.send_header("X-Frame-Options", "DENY")
         self.send_header("Referrer-Policy", "no-referrer")
-        self.send_header("Permissions-Policy", "camera=(), microphone=(), geolocation=()")
+        self.send_header("Permissions-Policy", "camera=(), microphone=(self), geolocation=()")
         self.send_header("Cache-Control", "no-store")
         super().end_headers()
 

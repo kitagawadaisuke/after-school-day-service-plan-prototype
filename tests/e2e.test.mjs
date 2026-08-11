@@ -97,6 +97,15 @@ try {
   await page.keyboard.press("Tab");
   await page.screenshot({ path: artifactPath("michi-dashboard.png"), fullPage: true });
 
+  await page.locator('.main-nav [data-view-target="chat"]').click();
+  await assertVisible(page.locator("#view-chat"), "日誌チャット画面が表示されません");
+  await page.getByRole("button", { name: "友だちとの関わりはどう変化した？" }).click();
+  await assertVisible(page.locator(".chat-turn"), "日誌チャットの回答が表示されません");
+  assert.match((await page.locator(".chat-turn").textContent()) ?? "", /根拠の日誌/);
+  assert.ok(await page.locator(".chat-evidence button").count() >= 1, "日誌チャットに根拠日誌への導線がありません");
+  await page.locator("#clear-journal-chat").click();
+  await assertVisible(page.locator(".chat-welcome"), "日誌チャットをリセットできません");
+
   await page.locator('.main-nav [data-view-target="plan"]').click();
   await assertVisible(page.locator("#plan-editor"), "初期デモの計画編集画面が表示されません");
   assert.equal(await page.locator("#print-plan").isDisabled(), false, "初期デモ計画を印刷できません");

@@ -41,11 +41,14 @@
           <button class="nav-item" type="button" data-view-target="analysis">
             <span class="nav-index">04</span><span>日誌をふり返る</span>
           </button>
+          <button class="nav-item" type="button" data-view-target="chat">
+            <span class="nav-index">05</span><span>日誌に聞く</span><span class="nav-count">DEMO</span>
+          </button>
           <button class="nav-item" type="button" data-view-target="plan">
-            <span class="nav-index">05</span><span>個別支援計画</span>
+            <span class="nav-index">06</span><span>個別支援計画</span>
           </button>
           <button class="nav-item" type="button" data-view-target="family">
-            <span class="nav-index">06</span><span>保護者への共有</span><span class="nav-count" id="nav-family-count">0</span>
+            <span class="nav-index">07</span><span>保護者への共有</span><span class="nav-count" id="nav-family-count">0</span>
           </button>
         </nav>
 
@@ -268,10 +271,11 @@
                 <label><span>利用終了 <b>必須</b></span><input id="compose-end-time" name="endTime" type="time" required /></label>
               </div>
               <div class="compose-source-flow">
-                <label><span><b>01</b> 観察した事実 <em>必須</em></span><textarea id="compose-observation" name="observation" rows="4" maxlength="1000" required placeholder="本人の言葉や行動を、解釈せず具体的に"></textarea></label>
-                <label><span><b>02</b> 行った支援 <em>必須</em></span><textarea id="compose-support" name="support" rows="3" maxlength="1000" required placeholder="声かけ、環境調整、視覚提示など"></textarea></label>
-                <label><span><b>03</b> 本人の反応・変化 <em>必須</em></span><textarea id="compose-response" name="response" rows="4" maxlength="1000" required placeholder="支援の後に見られた言葉や行動"></textarea></label>
+                <div class="voice-record-field"><label for="compose-observation"><span><b>01</b> 観察した事実 <em>必須</em></span><textarea id="compose-observation" name="observation" rows="4" maxlength="1000" required placeholder="本人の言葉や行動を、解釈せず具体的に"></textarea></label><button class="voice-input-button" type="button" data-voice-input="compose-observation" aria-label="観察した事実を音声入力">● 音声入力</button></div>
+                <div class="voice-record-field"><label for="compose-support"><span><b>02</b> 行った支援 <em>必須</em></span><textarea id="compose-support" name="support" rows="3" maxlength="1000" required placeholder="声かけ、環境調整、視覚提示など"></textarea></label><button class="voice-input-button" type="button" data-voice-input="compose-support" aria-label="行った支援を音声入力">● 音声入力</button></div>
+                <div class="voice-record-field"><label for="compose-response"><span><b>03</b> 本人の反応・変化 <em>必須</em></span><textarea id="compose-response" name="response" rows="4" maxlength="1000" required placeholder="支援の後に見られた言葉や行動"></textarea></label><button class="voice-input-button" type="button" data-voice-input="compose-response" aria-label="本人の反応・変化を音声入力">● 音声入力</button></div>
               </div>
+              <p class="voice-input-note">マイクを押して話すと、この欄に文字として入力します。対応ブラウザのみ利用できます。</p>
               <fieldset class="compose-domain-fieldset">
                 <legend>関連する5領域 <small>1つ以上選択</small></legend>
                 <div id="compose-domain-options"></div>
@@ -425,6 +429,41 @@
               <div><p class="eyebrow">5領域</p><h3 id="domain-analysis-heading">領域別の観察サマリー</h3></div>
             </div>
             <div id="domain-analysis-list" class="domain-analysis-list"></div>
+          </section>
+        </section>
+
+        <section class="view" id="view-chat" data-view="chat" aria-labelledby="chat-heading" hidden>
+          <div class="section-intro chat-intro">
+            <div>
+              <p class="section-kicker">JOURNAL Q&A / NOTEBOOK-STYLE DEMO</p>
+              <h2 id="chat-heading">日誌に聞いて、<br />根拠をたどる。</h2>
+              <p>日々の記録について質問すると、関連する日誌を手がかりとして表示します。これは外部AIへ送信しないデモです。</p>
+            </div>
+            <div class="chat-demo-badge"><span></span><strong id="journal-chat-count">24件の日誌を対象</strong><small>外部送信なし</small></div>
+          </div>
+
+          <section class="chat-disclosure" role="note">
+            <span aria-hidden="true">i</span>
+            <p><strong>答えは判断ではありません。</strong> このデモは質問に関係する日誌を整理して表示します。必ず根拠の日誌、本人・家族の意向、専門職の見立てを確認してください。</p>
+          </section>
+
+          <section class="journal-chat-shell" aria-label="日誌について質問する">
+            <div class="journal-chat-rail">
+              <p class="eyebrow">TRY ASKING</p>
+              <h3>たとえば、<br />こんな質問から。</h3>
+              <p>質問を選ぶか、日誌で確かめたいことを自由に入力してください。</p>
+              <div class="chat-suggestions" id="journal-chat-suggestions"></div>
+              <button class="text-button subtle chat-clear" id="clear-journal-chat" type="button">会話をリセット</button>
+            </div>
+            <div class="journal-chat-main">
+              <div class="journal-chat-thread" id="journal-chat-thread" aria-live="polite"></div>
+              <form id="journal-chat-form" class="journal-chat-form">
+                <label class="sr-only" for="journal-chat-input">日誌についての質問</label>
+                <input id="journal-chat-input" maxlength="240" autocomplete="off" placeholder="例：友だちとの関わりで、うまくいった支援は？" />
+                <button class="primary-button" type="submit">日誌に聞く <span aria-hidden="true">→</span></button>
+              </form>
+              <p class="chat-input-note">このデモの回答は、ブラウザ内のAさんの仮名日誌だけを使います。</p>
+            </div>
           </section>
         </section>
 

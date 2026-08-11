@@ -22,6 +22,7 @@ import {
   reconcileRecordDrafts,
   sanitizePlainText
 } from "./record-workflow.js";
+import { createJournalChatReply, JOURNAL_CHAT_SUGGESTIONS } from "./journal-chat.js";
 import { isValidIsoDate, toCsvCell, toLocalIsoDate } from "./utils.js";
 
 const STORAGE_KEY = "michi-note-demo-v1";
@@ -30,6 +31,7 @@ const VIEW_TITLES = {
   compose: { title: "日誌を書く", breadcrumb: "記録 / 用途別の下書き" },
   journals: { title: "児童・日誌", breadcrumb: "日誌 / 観察記録" },
   analysis: { title: "日誌をふり返る", breadcrumb: "モニタリング / 計画書づくりのヒント" },
+  chat: { title: "日誌に聞く", breadcrumb: "日誌 / 記録チャット（デモ）" },
   plan: { title: "個別支援計画", breadcrumb: "計画作成 / 見直し原案" },
   family: { title: "保護者への共有", breadcrumb: "放課後のあゆみ / 共有確認" }
 };
@@ -45,6 +47,7 @@ let toastTimer;
 let saveTimer;
 let loadWarning = "";
 let composeDirty = false;
+let activeSpeechRecognition;
 
 function localDateFromIso(value) {
   if (!isValidIsoDate(value)) return null;
@@ -112,6 +115,7 @@ function createInitialState() {
     filters: { search: "", domain: "all", month: "all" },
     activeView: "dashboard",
     planMode: "edit",
+    chatMessages: [],
     planStale: false,
     updatedAt: new Date().toISOString()
   };
@@ -189,6 +193,30 @@ function sanitizeSavedPlanValue(value, depth = 0) {
   return null;
 }
 
+function normalizeChatMessages(messages, journals) {
+  const availableIds = new Set(journals.map((journal) => journal.id));
+  if (!Array.isArray(messages)) return [];
+  return messages.slice(-12).flatMap((message) => {
+    if (!message || typeof message !== "object" || typeof message.question !== "string" || typeof message.answer !== "string") return [];
+    const evidence = Array.isArray(message.evidence)
+      ? message.evidence.filter((item) => item && availableIds.has(item.id)).slice(0, 4).map((item) => ({
+          id: item.id,
+          date: typeof item.date === "string" ? item.date.slice(0, 10) : "",
+          activity: typeof item.activity === "string" ? item.activity.slice(0, 80) : "",
+          observation: typeof item.observation === "string" ? item.observation.slice(0, 140) : "",
+          support: typeof item.support === "string" ? item.support.slice(0, 140) : "",
+          response: typeof item.response === "string" ? item.response.slice(0, 160) : ""
+        }))
+      : [];
+    return [{
+      question: sanitizePlainText(message.question).slice(0, 240),
+      answer: sanitizePlainText(message.answer).slice(0, 800),
+      topic: typeof message.topic === "string" ? sanitizePlainText(message.topic).slice(0, 80) : "日誌の確認",
+      evidence
+    }];
+  });
+}
+
 function loadState() {
   try {
     const raw = localStorage.getItem(STORAGE_KEY);
@@ -261,6 +289,7 @@ function loadState() {
       filters,
       analysisRange,
       plan,
+      chatMessages: normalizeChatMessages(saved.chatMessages, journals),
       planStale: !isPlanSourceFresh(plan, sourceJournals),
       selectedJournalId: journals.some((journal) => journal.id === saved.selectedJournalId)
         ? saved.selectedJournalId
@@ -432,6 +461,7 @@ function navigate(view, { preserveScroll = false, focusHeading = true } = {}) {
   if (view === "compose") renderCompose();
   if (view === "journals") renderJournals();
   if (view === "analysis") renderAnalysis();
+  if (view === "chat") renderJournalChat();
   if (view === "plan") renderPlan();
   if (view === "family") renderFamily();
   if (!preserveScroll) window.scrollTo({ top: 0, behavior: "smooth" });
@@ -941,6 +971,92 @@ function renderAnalysis() {
         <p class="domain-analysis-summary">${escapeHtml(domain.count ? domain.summary : "この期間の日誌には、関連付けられた記録がありません。追加アセスメントで確認してください。")}</p>
       </div>`)
     .join("");
+}
+
+function renderJournalChat() {
+  const suggestions = $("#journal-chat-suggestions");
+  suggestions.innerHTML = JOURNAL_CHAT_SUGGESTIONS
+    .map((question) => `<button class="chat-suggestion" type="button" data-chat-suggestion="${escapeAttribute(question)}">${escapeHtml(question)}</button>`)
+    .join("");
+
+  const thread = $("#journal-chat-thread");
+  const messages = state.chatMessages ?? [];
+  thread.innerHTML = messages.length
+    ? messages.map((message) => `
+      <article class="chat-turn">
+        <div class="chat-question"><span>あなた</span><p>${escapeHtml(message.question)}</p></div>
+        <div class="chat-answer">
+          <div class="chat-answer-head"><span class="chat-orbit" aria-hidden="true">◎</span><div><span class="eyebrow">日誌の根拠から整理</span><strong>${escapeHtml(message.topic)}</strong></div></div>
+          <p>${escapeHtml(message.answer)}</p>
+          <div class="chat-evidence" aria-label="根拠になった日誌">
+            <span>根拠の日誌</span>
+            ${message.evidence.length ? message.evidence.map((journal) => `
+              <button type="button" data-evidence-journal-id="${escapeAttribute(journal.id)}">
+                <strong>${escapeHtml(formatDateJP(journal.date, { withYear: false, withWeekday: true }))}</strong>
+                <span>${escapeHtml(journal.activity)}</span><i aria-hidden="true">→</i>
+              </button>`).join("") : "<em>該当する日誌はありません</em>"}
+          </div>
+        </div>
+      </article>`).join("")
+    : `<article class="chat-welcome">
+        <div class="chat-orbit large" aria-hidden="true">◎</div>
+        <div><p class="eyebrow">JOURNAL Q&A / DEMO</p><h3>日誌の言葉から、<br />確認の手がかりを探します。</h3><p>質問に関連するAさんの日誌を整理し、根拠の記録を表示します。回答をそのまま判断や計画書に使わず、必ず元の日誌を確認してください。</p></div>
+      </article>`;
+  $("#journal-chat-count").textContent = `${state.journals.length}件の日誌を対象`;
+}
+
+function askJournalChat(question) {
+  const reply = createJournalChatReply(question, state.journals);
+  if (!reply) {
+    showToast("日誌について知りたいことを入力してください。");
+    return;
+  }
+  state.chatMessages = [...(state.chatMessages ?? []), reply].slice(-12);
+  $("#journal-chat-input").value = "";
+  renderJournalChat();
+  saveState();
+  announce("日誌をもとにした回答と根拠日誌を表示しました。");
+  window.requestAnimationFrame(() => $("#journal-chat-thread").lastElementChild?.scrollIntoView({ behavior: "smooth", block: "nearest" }));
+}
+
+function startVoiceInput(targetId) {
+  const Recognition = window.SpeechRecognition || window.webkitSpeechRecognition;
+  const target = document.getElementById(targetId);
+  if (!target) return;
+  if (!Recognition) {
+    showToast("このブラウザでは音声入力に対応していません。キーボード入力をご利用ください。");
+    target.focus();
+    return;
+  }
+  activeSpeechRecognition?.abort();
+  const recognition = new Recognition();
+  activeSpeechRecognition = recognition;
+  recognition.lang = "ja-JP";
+  recognition.interimResults = false;
+  recognition.continuous = false;
+  const button = $(`[data-voice-input="${targetId}"]`);
+  button?.classList.add("is-listening");
+  if (button) button.textContent = "● 聞き取り中…";
+  recognition.onresult = (event) => {
+    const spoken = Array.from(event.results).map((result) => result[0]?.transcript ?? "").join("").trim();
+    if (!spoken) return;
+    target.value = `${target.value.trim()}${target.value.trim() ? "\n" : ""}${spoken}`.slice(0, Number(target.maxLength) || 1000);
+    target.dispatchEvent(new Event("input", { bubbles: true }));
+    showToast("音声を文字として入力しました。内容を確認して保存してください。");
+  };
+  recognition.onerror = (event) => {
+    if (event.error !== "aborted") showToast("音声を認識できませんでした。マイクの許可と周囲の音を確認してください。");
+  };
+  recognition.onend = () => {
+    if (activeSpeechRecognition === recognition) activeSpeechRecognition = undefined;
+    button?.classList.remove("is-listening");
+    if (button) button.textContent = "● 音声入力";
+  };
+  try {
+    recognition.start();
+  } catch {
+    showToast("音声入力を開始できませんでした。少し待ってからもう一度お試しください。");
+  }
 }
 
 function planInput(path, label, value, type = "text", extra = "") {
@@ -1963,6 +2079,7 @@ function renderAll() {
   renderCompose();
   renderJournals();
   renderAnalysis();
+  renderJournalChat();
   renderPlan();
   renderFamily();
 }
@@ -2059,6 +2176,18 @@ function initializeStaticControls() {
     const patternPlanButton = event.target.closest("[data-edit-pattern-plan]");
     if (patternPlanButton) {
       openPatternPlanDialog(patternPlanButton.dataset.editPatternPlan);
+      return;
+    }
+
+    const chatSuggestion = event.target.closest("[data-chat-suggestion]");
+    if (chatSuggestion) {
+      askJournalChat(chatSuggestion.dataset.chatSuggestion);
+      return;
+    }
+
+    const voiceButton = event.target.closest("[data-voice-input]");
+    if (voiceButton) {
+      startVoiceInput(voiceButton.dataset.voiceInput);
     }
   });
 
@@ -2077,6 +2206,16 @@ function initializeStaticControls() {
     saveState({ quiet: true });
   });
   $("#apply-analysis-range").addEventListener("click", applyAnalysisRange);
+  $("#journal-chat-form").addEventListener("submit", (event) => {
+    event.preventDefault();
+    askJournalChat($("#journal-chat-input").value);
+  });
+  $("#clear-journal-chat").addEventListener("click", () => {
+    state.chatMessages = [];
+    renderJournalChat();
+    saveState({ quiet: true });
+    announce("日誌チャットの会話をリセットしました。");
+  });
 
   $("#compose-journal-select").addEventListener("change", (event) => {
     if (!confirmDiscardComposeChanges()) {
