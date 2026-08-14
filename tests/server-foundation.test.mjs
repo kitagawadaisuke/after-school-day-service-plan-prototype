@@ -19,6 +19,7 @@ function testConfig(overrides = {}) {
     host: "127.0.0.1",
     port: 0,
     appBaseUrl: "http://127.0.0.1",
+    publicSaasUi: false,
     databaseUrl: undefined,
     databaseSsl: false,
     dbPoolMax: 2,

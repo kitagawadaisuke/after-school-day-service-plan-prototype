@@ -16,6 +16,9 @@ const configSchema = z
     HOST: z.string().default("127.0.0.1"),
     PORT: z.coerce.number().int().min(1).max(65535).default(8015),
     APP_BASE_URL: optionalUrl.default("http://127.0.0.1:8015"),
+    // Allows the authenticated SaaS shell to be demonstrated at the root URL
+    // without weakening the production-only Cognito requirement.
+    PUBLIC_SAAS_UI: z.enum(["true", "false"]).default("false").transform((value) => value === "true"),
     DATABASE_URL: optionalString,
     DATABASE_HOST: optionalString,
     DATABASE_PORT: z.coerce.number().int().min(1).max(65535).default(5432),
@@ -178,6 +181,7 @@ export function loadConfig(env = process.env) {
     host: value.HOST,
     port: value.PORT,
     appBaseUrl: value.APP_BASE_URL,
+    publicSaasUi: value.PUBLIC_SAAS_UI,
     databaseUrl: value.DATABASE_URL,
     databaseHost: value.DATABASE_HOST,
     databasePort: value.DATABASE_PORT,

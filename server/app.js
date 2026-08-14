@@ -67,7 +67,8 @@ function publicDatabaseError(error) {
 function registerStaticRoutes(app, projectRoot, config) {
   // Keep the local prototype available during development while making the
   // authenticated SaaS shell the only root document in Cognito/production.
-  const useSaasShell = config.nodeEnv === "production" || config.authMode === "cognito";
+  // PUBLIC_SAAS_UI is intentionally opt-in for the shared development demo.
+  const useSaasShell = config.nodeEnv === "production" || config.authMode === "cognito" || config.publicSaasUi === true;
   const entryFile = useSaasShell ? "saas.html" : "index.html";
   const staticFiles = {
     "/": [entryFile, "text/html; charset=utf-8"],
