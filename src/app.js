@@ -1,4 +1,4 @@
-import { cloneDemoData, DOMAIN_META, INDICATOR_META } from "./demo-data.js";
+import { cloneDemoCases, cloneDemoData, DOMAIN_META, INDICATOR_META } from "./demo-data.js";
 import {
   MAX_ANALYSIS_DAYS,
   analyzeJournals,
@@ -14,9 +14,13 @@ import { isValidIsoDate, toCsvCell, toLocalIsoDate } from "./utils.js";
 
 const STORAGE_KEY = "michi-note-demo-v1";
 const VIEW_TITLES = {
+  childProfile: { title: "利用児情報", breadcrumb: "利用児 / 基本情報・利用情報" },
+  consultation: { title: "サービス等利用計画案", breadcrumb: "相談支援 / サービス等利用計画案" },
+  contactBook: { title: "連絡帳", breadcrumb: "日々の連携 / 保護者との連絡帳" },
   dashboard: { title: "支援サマリー", breadcrumb: "支援サマリー" },
   journals: { title: "日誌を確認", breadcrumb: "日誌 / 観察記録" },
-  analysis: { title: "計画書づくりのヒント", breadcrumb: "モニタリング / 計画書づくりのヒント" },
+  analysis: { title: "モニタリング", breadcrumb: "モニタリング / 日誌のふり返り" },
+  assessment: { title: "アセスメント", breadcrumb: "アセスメント / 支援の見立て" },
   plan: { title: "個別支援計画書", breadcrumb: "計画作成 / 見直し原案" }
 };
 
@@ -65,13 +69,36 @@ function journalsInRange(journals, range) {
 
 function createInitialState() {
   const { profile, journals } = cloneDemoData();
+  const workspace = createChildWorkspace(profile, journals);
+  return {
+    schemaVersion: 3,
+    activeChildId: profile.id,
+    childWorkspaces: createDefaultChildWorkspaces(),
+    ...workspace
+  };
+}
+
+function createChildWorkspace(profile, journals, { isDemo = true } = {}) {
   const analysisRange = getDefaultAnalysisRange(journals);
   const sourceJournals = journalsInRange(journals, analysisRange);
+  const monitoringDraft = createMonitoringDraft(profile, sourceJournals);
+  const consultationPlanDraft = createConsultationPlanDraft(profile);
+  const contactBookEntries = isDemo ? createContactBookEntries(profile) : [];
   return {
-    schemaVersion: 1,
     profile,
     journals,
-    plan: generatePlan(profile, sourceJournals),
+    plan: {
+      ...generatePlan(profile, sourceJournals),
+      consultationPlanReference: {
+        agencyName: consultationPlanDraft.agencyName,
+        preparedDate: consultationPlanDraft.preparedDate,
+        overallGoal: consultationPlanDraft.overallGoal
+      }
+    },
+    consultationPlanDraft,
+    contactBookEntries,
+    monitoringDraft,
+    assessmentDraft: createAssessmentDraft(profile, monitoringDraft, consultationPlanDraft),
     analysisRange,
     selectedJournalId: journals.at(-1)?.id ?? "",
     filters: { search: "", domain: "all", month: "all" },
@@ -80,6 +107,24 @@ function createInitialState() {
     planStale: false,
     updatedAt: new Date().toISOString()
   };
+}
+
+function createDefaultChildWorkspaces() {
+  return Object.fromEntries(
+    cloneDemoCases().map(({ profile, journals }) => [profile.id, createChildWorkspace(profile, journals)])
+  );
+}
+
+const WORKSPACE_KEYS = ["profile", "journals", "plan", "consultationPlanDraft", "contactBookEntries", "monitoringDraft", "assessmentDraft", "analysisRange", "selectedJournalId", "filters", "activeView", "planMode", "planStale", "updatedAt"];
+
+function currentWorkspace() {
+  return Object.fromEntries(WORKSPACE_KEYS.map((key) => [key, structuredClone(state[key])]));
+}
+
+function syncActiveWorkspace() {
+  if (!state.activeChildId) return;
+  state.childWorkspaces ??= {};
+  state.childWorkspaces[state.activeChildId] = currentWorkspace();
 }
 
 function normalizeSavedJournal(journal) {
@@ -142,12 +187,37 @@ function sanitizeSavedPlanValue(value, depth = 0) {
   return null;
 }
 
+function sanitizeDraft(savedDraft, fallbackDraft) {
+  if (!savedDraft || typeof savedDraft !== "object") return fallbackDraft;
+  return Object.fromEntries(
+    Object.entries(fallbackDraft).map(([key, fallbackValue]) => {
+      const savedValue = savedDraft[key];
+      return [key, typeof fallbackValue === "string" && typeof savedValue === "string" ? savedValue.slice(0, 2000) : fallbackValue];
+    })
+  );
+}
+
+function sanitizeContactBookEntries(entries, fallbackEntries) {
+  if (!Array.isArray(entries)) return fallbackEntries;
+  return entries.slice(0, 100).map((entry, index) => {
+    const fallback = fallbackEntries[index] ?? fallbackEntries[0];
+    return {
+      id: typeof entry?.id === "string" ? entry.id.slice(0, 80) : `${fallback.id}-${index}`,
+      date: isValidIsoDate(entry?.date) ? entry.date : fallback.date,
+      familyMessage: typeof entry?.familyMessage === "string" ? entry.familyMessage.slice(0, 2000) : fallback.familyMessage,
+      serviceReply: typeof entry?.serviceReply === "string" ? entry.serviceReply.slice(0, 2000) : fallback.serviceReply,
+      request: typeof entry?.request === "string" ? entry.request.slice(0, 1000) : fallback.request,
+      reflected: Boolean(entry?.reflected)
+    };
+  });
+}
+
 function loadState() {
   try {
     const raw = localStorage.getItem(STORAGE_KEY);
     if (!raw) return createInitialState();
     const saved = JSON.parse(raw);
-    if (saved?.schemaVersion !== 1 || !saved.profile || !Array.isArray(saved.journals)) {
+    if (![1, 2, 3].includes(saved?.schemaVersion) || !saved.profile || !Array.isArray(saved.journals)) {
       throw new Error("保存形式が現在のデモと一致しません");
     }
     const fallback = createInitialState();
@@ -164,6 +234,10 @@ function loadState() {
     const analysisRange = isUsableAnalysisRange(candidateRange) ? candidateRange : getDefaultAnalysisRange(journals);
     const sourceJournals = journalsInRange(journals, analysisRange);
     const generatedPlan = generatePlan(profile, sourceJournals);
+    const generatedMonitoringDraft = createMonitoringDraft(profile, sourceJournals);
+    const generatedConsultationPlanDraft = createConsultationPlanDraft(profile);
+    const generatedContactBookEntries = createContactBookEntries(profile);
+    const generatedAssessmentDraft = createAssessmentDraft(profile, generatedMonitoringDraft, generatedConsultationPlanDraft);
     const savedPlan = sanitizeSavedPlanValue(saved.plan);
     const filters = {
       search: typeof saved.filters?.search === "string" ? saved.filters.search.slice(0, 200) : "",
@@ -194,21 +268,43 @@ function loadState() {
           }))
         }
       : generatedPlan;
+    plan.consultationPlanReference ??= {
+      agencyName: generatedConsultationPlanDraft.agencyName,
+      preparedDate: generatedConsultationPlanDraft.preparedDate,
+      overallGoal: generatedConsultationPlanDraft.overallGoal
+    };
     plan.child.ageLabel = calculateAgeLabel(plan.child.birthDate, plan.planStart) || plan.child.ageLabel || "";
-    return {
-      ...fallback,
-      ...saved,
+    const activeChildId = typeof saved.activeChildId === "string" && profile.id === saved.activeChildId ? saved.activeChildId : profile.id;
+    const childWorkspaces = {
+      ...createDefaultChildWorkspaces(),
+      ...(saved.childWorkspaces && typeof saved.childWorkspaces === "object" ? saved.childWorkspaces : {})
+    };
+    const activeWorkspace = {
       profile,
       journals,
       filters,
       analysisRange,
       plan,
+      consultationPlanDraft: sanitizeDraft(saved.consultationPlanDraft, generatedConsultationPlanDraft),
+      contactBookEntries: sanitizeContactBookEntries(saved.contactBookEntries, generatedContactBookEntries),
+      monitoringDraft: sanitizeDraft(saved.monitoringDraft, generatedMonitoringDraft),
+      assessmentDraft: sanitizeDraft(saved.assessmentDraft, generatedAssessmentDraft),
       planStale: !isPlanSourceFresh(plan, sourceJournals),
       selectedJournalId: journals.some((journal) => journal.id === saved.selectedJournalId)
         ? saved.selectedJournalId
         : journals.at(-1)?.id || "",
       activeView: VIEW_TITLES[saved.activeView] ? saved.activeView : "dashboard",
-      planMode: saved.planMode === "preview" ? "preview" : "edit"
+      planMode: saved.planMode === "preview" ? "preview" : "edit",
+      updatedAt: saved.updatedAt
+    };
+    childWorkspaces[activeChildId] = activeWorkspace;
+    return {
+      ...fallback,
+      ...saved,
+      schemaVersion: 3,
+      activeChildId,
+      childWorkspaces,
+      ...activeWorkspace
     };
   } catch (error) {
     loadWarning = `保存データを読み込めなかったため、デモを初期状態で開きました（${error.message}）。`;
@@ -220,6 +316,178 @@ let state = loadState();
 
 function getAnalysisJournals() {
   return journalsInRange(state.journals, state.analysisRange);
+}
+
+function createConsultationPlanDraft(profile) {
+  return {
+    agencyName: "相談支援事業所 ひなた（デモ）",
+    preparedDate: "2026-05-20",
+    period: `${formatDateJP(profile.planStart)}〜${formatDateJP(profile.planEnd)}`,
+    serviceCategory: `障害児通所支援 / ${profile.serviceType}`,
+    personWish: profile.personWish,
+    guardianWish: profile.familyWish,
+    overallGoal: "安心して放課後の時間を過ごし、好きな活動や友だちとの関わりを通して、自分でできることを少しずつ増やす。",
+    oneYearVision: "見通しが持てる場面では、自分で選んだ活動に取り組み、困ったときには自分に合う方法で助けを求められる。家庭・学校・事業所で安心して過ごす時間を増やす。",
+    currentSituation: `${profile.strengths[0]}。一方で、活動の切り替えや集団参加の場面では、見通しや伝え方の工夫が必要なことがあります。運動・移動・健康面・社会参加の状態は、日々の様子と本人・家族の実感を合わせて確認します。`,
+    serviceNeed: "見通しを持てる環境と、本人が選んで伝えられる機会を整えながら、集団の中で安心して参加できる経験を重ねる。",
+    dayServiceRole: "放課後等デイサービスでは、視覚的な見通し・選択肢・必要な休憩を用意し、本人の成功体験を日々の記録で確かめる。",
+    selfCareRole: "本人が選べる場面をつくり、カード・言葉・身振りなど本人に合う方法で希望や困りごとを伝える。",
+    familyRole: "家庭での様子や本人の変化を共有し、本人が安心して取り組めた関わり方を事業所・学校と一緒に確認する。",
+    communityRole: "学校、相談支援事業所、必要に応じた地域資源と情報を共有し、本人にとって一貫した支援となるよう調整する。",
+    assessmentProcess: "本人・家族から希望や困りごとを聴き取り、学校・事業所での様子と日誌の記録を確認する。",
+    draftProcess: "相談支援専門員と事業所の支援者が、生活目標と必要なサービス・役割分担を調整して原案を作成する。",
+    consentProcess: "本人・家族へ内容を説明し、意向を確認したうえで同意・交付の記録を残して支援を開始する。",
+    considerations: "本人・家族の意向を優先し、学校や相談支援事業所と必要な情報を共有する。内容は関係者で確認して決定する。"
+  };
+}
+
+function createContactBookEntries(profile) {
+  return [
+    {
+      id: "CB-20260414",
+      date: "2026-04-14",
+      familyMessage: "家庭でも予定が分かると安心して準備できています。事業所でも次の活動を前もって伝えてもらえると助かります。",
+      serviceReply: "活動の前に予定カードで流れを確認し、切り替え前には個別に声をかけます。日誌で本人の反応も確認します。",
+      request: "見通しの伝え方を家庭・事業所でそろえたい。",
+      reflected: false
+    },
+    {
+      id: "CB-20260508",
+      date: "2026-05-08",
+      familyMessage: `${profile.displayName}が家で学校の出来事を話す場面が少し増えました。事業所で楽しかったことも、伝えるきっかけがあるとよさそうです。`,
+      serviceReply: "帰りの会で『今日よかったこと』をカードとことばで選ぶ機会をつくり、家庭への共有につなげます。",
+      request: "本人が一日の出来事を伝える機会を増やしたい。",
+      reflected: false
+    },
+    {
+      id: "CB-20260527",
+      date: "2026-05-27",
+      familyMessage: "疲れている日は、無理をしないで少し休めるようにしてほしいです。",
+      serviceReply: "来所時の様子を確認し、必要に応じて静かな場所での休憩や活動量の調整を行います。",
+      request: "体調や疲れに合わせて活動量を調整したい。",
+      reflected: false
+    }
+  ];
+}
+
+function createMonitoringDraft(profile, journals) {
+  const analysis = analyzeJournals(journals);
+  const confirmedPatterns = analysis.patterns.filter((pattern) => pattern.isConfirmed);
+  const patternNames = confirmedPatterns.map((pattern) => pattern.title);
+  const sourcePeriod = journals.length ? `${formatDateJP(analysis.startDate)}〜${formatDateJP(analysis.endDate)}の${journals.length}件の日誌` : "対象となる日誌";
+  const indicatorChanges = Object.values(analysis.indicators)
+    .filter((item) => Number.isFinite(item.delta) && Math.abs(item.delta) >= 0.05)
+    .map((item) => `${item.name}は後半${item.delta > 0 ? "で高く" : "で低く"}記録されています`);
+  return {
+    sourcePeriod,
+    summary: `${sourcePeriod}をふり返り、日誌に繰り返し見られた場面と、支援後の本人の反応を整理した下書きです。`,
+    progress: indicatorChanges.length ? `${indicatorChanges.join("。 ")}。数値だけで結論づけず、元の日誌と本人・家族の実感を確認します。` : "指標の比較だけでは判断せず、元の日誌と本人・家族の実感を確認します。",
+    effectiveSupport: patternNames.length ? `繰り返し確認できた場面は「${patternNames.join("」「")}」です。これらの場面で行った支援と本人の反応を読み返し、続けたい工夫を確認します。` : "繰り返し確認できた場面はまだ十分ではありません。日誌を追加しながら、本人に合う関わり方を確認します。",
+    reviewPoints: `次回は、${patternNames.length ? patternNames.join("、") : "日々の活動"}について、本人の感じ方、家庭での様子、場面による違いを確認します。`,
+    nextStep: "本人・家族との面談内容や支援者の観察を加え、アセスメントの下書きとして支援の方向を整理します。"
+  };
+}
+
+function createAssessmentDraft(profile, monitoringDraft, consultationPlanDraft = createConsultationPlanDraft(profile)) {
+  return {
+    sourcePeriod: monitoringDraft.sourcePeriod,
+    consultationAgency: consultationPlanDraft.agencyName,
+    consultationGoal: consultationPlanDraft.overallGoal,
+    personWish: consultationPlanDraft.personWish || profile.personWish,
+    familyWish: consultationPlanDraft.guardianWish || profile.familyWish,
+    strengths: profile.strengths.join("。 "),
+    needs: `${monitoringDraft.reviewPoints} 日誌で確認できた内容と、面談で把握した本人・家族の意向を合わせて、生活上の課題を整理します。`,
+    supportDirection: `${consultationPlanDraft.dayServiceRole}\n\n${monitoringDraft.effectiveSupport} 本人が選びやすい方法や安心して参加できる環境を一緒に確かめ、支援内容は本人・家族と確認して決めます。`,
+    planningNote: `相談支援事業所のサービス等利用計画案の目標「${consultationPlanDraft.overallGoal}」を踏まえ、個別支援会議等で目標・支援方法・担当・評価方法を具体化し、個別支援計画の原案へ反映します。`
+  };
+}
+
+function draftTextarea(root, path, label, value, rows = 3, hint = "") {
+  return `<label class="draft-field"><span>${escapeHtml(label)}</span>${hint ? `<small>${escapeHtml(hint)}</small>` : ""}<textarea data-draft-root="${escapeAttribute(root)}" data-draft-path="${escapeAttribute(path)}" rows="${rows}" maxlength="2000">${escapeHtml(value ?? "")}</textarea></label>`;
+}
+
+function renderMonitoringDraft() {
+  const draft = state.monitoringDraft;
+  $("#monitoring-source-status").textContent = draft.sourcePeriod;
+  $("#monitoring-draft-fields").innerHTML = [
+    draftTextarea("monitoringDraft", "summary", "モニタリングの概要", draft.summary, 3),
+    draftTextarea("monitoringDraft", "progress", "本人の変化・できたこと", draft.progress, 3, "日誌で確認した事実をもとに、本人・家族と確かめます。"),
+    draftTextarea("monitoringDraft", "effectiveSupport", "続けたい支援・役立った工夫", draft.effectiveSupport, 4),
+    draftTextarea("monitoringDraft", "reviewPoints", "見直したいこと・追加で確認したいこと", draft.reviewPoints, 3),
+    draftTextarea("monitoringDraft", "nextStep", "次のアセスメントへの申し送り", draft.nextStep, 2)
+  ].join("");
+}
+
+function renderConsultationDraft() {
+  const draft = state.consultationPlanDraft;
+  $("#consultation-source-status").textContent = `${draft.agencyName} / ${formatDateJP(draft.preparedDate)}作成`;
+  $("#consultation-period").textContent = draft.period;
+  $("#consultation-profile-strip").innerHTML = `
+    <article><span>利用児</span><strong>${escapeHtml(state.profile.displayName)}</strong><small>${escapeHtml(state.profile.grade)}</small></article>
+    <article><span>支給決定・利用サービス</span><strong>${escapeHtml(draft.serviceCategory)}</strong><small>受給者証番号 ${escapeHtml(state.profile.recipientNumber)}</small></article>
+    <article><span>作成日</span><strong>${escapeHtml(formatDateJP(draft.preparedDate))}</strong><small>${escapeHtml(draft.agencyName)}</small></article>`;
+  const section = (number, title, description, fields) => `
+    <section class="consultation-section">
+      <div class="consultation-section-heading"><span>${number}</span><div><h4>${title}</h4><p>${description}</p></div></div>
+      <div class="draft-fields consultation-fields">${fields.join("")}</div>
+    </section>`;
+  $("#consultation-draft-fields").innerHTML = [
+    section("01", "生活目標", "本人や家族が希望する毎日と、1年後に目指す生活のイメージです。", [
+      draftTextarea("consultationPlanDraft", "personWish", "本人が希望する1日", draft.personWish, 3),
+      draftTextarea("consultationPlanDraft", "guardianWish", "家族が希望する暮らし", draft.guardianWish, 3),
+      draftTextarea("consultationPlanDraft", "overallGoal", "総合的な目標", draft.overallGoal, 4),
+      draftTextarea("consultationPlanDraft", "oneYearVision", "1年後の生活イメージ", draft.oneYearVision, 4)
+    ]),
+    section("02", "現在の状況と課題", "運動・移動・健康管理・社会参加などを、本人の強みも含めて確認します。", [
+      draftTextarea("consultationPlanDraft", "currentSituation", "現在の状況・課題", draft.currentSituation, 5),
+      draftTextarea("consultationPlanDraft", "serviceNeed", "必要な支援の方向", draft.serviceNeed, 4)
+    ]),
+    section("03", "具体的な支援と役割分担", "フォーマルサービスだけでなく、本人・家族・地域の役割も一緒に整理します。", [
+      draftTextarea("consultationPlanDraft", "dayServiceRole", "放課後等デイサービスの役割", draft.dayServiceRole, 4),
+      draftTextarea("consultationPlanDraft", "selfCareRole", "本人・セルフケアの役割", draft.selfCareRole, 3),
+      draftTextarea("consultationPlanDraft", "familyRole", "家族の協力", draft.familyRole, 3),
+      draftTextarea("consultationPlanDraft", "communityRole", "学校・地域・相談支援との連携", draft.communityRole, 3),
+      draftTextarea("consultationPlanDraft", "considerations", "配慮・連携事項", draft.considerations, 3)
+    ]),
+    section("04", "作成から同意・交付まで", "自動作成できない、本人・家族と支援者が確認して進める工程です。", [
+      draftTextarea("consultationPlanDraft", "assessmentProcess", "情報収集（アセスメント）", draft.assessmentProcess, 3),
+      draftTextarea("consultationPlanDraft", "draftProcess", "原案の作成", draft.draftProcess, 3),
+      draftTextarea("consultationPlanDraft", "consentProcess", "同意と交付", draft.consentProcess, 3)
+    ])
+  ].join("");
+}
+
+function renderContactBook() {
+  const entries = [...state.contactBookEntries].sort((a, b) => b.date.localeCompare(a.date));
+  $("#nav-contact-count").textContent = String(entries.length);
+  $("#contact-book-status").textContent = `${entries.filter((entry) => entry.reflected).length}件を支援の検討へ反映`;
+  $("#contact-book-list").innerHTML = entries.length
+    ? entries.map((entry) => `
+      <article class="contact-book-entry ${entry.reflected ? "is-reflected" : ""}">
+        <div class="contact-book-date"><strong>${escapeHtml(formatDateJP(entry.date, { withYear: false }))}</strong><span>${entry.reflected ? "反映済み" : "要確認"}</span></div>
+        <div class="contact-book-message"><span>保護者から</span><p>${escapeHtml(entry.familyMessage)}</p></div>
+        <div class="contact-book-reply"><span>事業所の対応</span><p>${escapeHtml(entry.serviceReply)}</p></div>
+        <div class="contact-book-request"><strong>支援へ組み込む要望</strong><p>${escapeHtml(entry.request)}</p><button class="inline-link" type="button" data-apply-contact-entry="${escapeAttribute(entry.id)}" ${entry.reflected ? "disabled" : ""}>${entry.reflected ? "アセスメントへ反映済み" : "アセスメントの検討事項へ反映 →"}</button></div>
+      </article>`).join("")
+    : `<div class="empty-state"><div><strong>連絡帳の記録はまだありません</strong><p>保護者とのやりとりを追加すると、次の支援を考える際の確認事項として残せます。</p></div></div>`;
+}
+
+function renderAssessmentDraft() {
+  const draft = state.assessmentDraft;
+  $("#assessment-source-status").textContent = `${draft.sourcePeriod}の日誌・モニタリング + 相談支援案`;
+  $("#assessment-profile-strip").innerHTML = `
+    <article><span>本人</span><strong>${escapeHtml(state.profile.displayName)}さん</strong><small>${escapeHtml(state.profile.grade)}・${escapeHtml(state.profile.serviceType)}</small></article>
+    <article><span>日誌の根拠</span><strong>${escapeHtml(draft.sourcePeriod)}</strong><small>日誌だけで結論は出しません</small></article>
+    <article><span>次の工程</span><strong>個別支援計画の原案</strong><small>本人・家族・支援者で確認して決定</small></article>`;
+  $("#assessment-consultation-link").innerHTML = `<strong>相談支援案から引き継ぐ目標</strong><span>${escapeHtml(draft.consultationGoal || "相談支援事業所の案を確認してください。")} </span><button class="inline-link" type="button" data-view-target="consultation">相談支援案を確認する →</button>`;
+  $("#assessment-draft-fields").innerHTML = [
+    draftTextarea("assessmentDraft", "personWish", "本人の意向", draft.personWish, 3),
+    draftTextarea("assessmentDraft", "familyWish", "家族の意向", draft.familyWish, 3),
+    draftTextarea("assessmentDraft", "strengths", "本人の強み・活かせること", draft.strengths, 3),
+    draftTextarea("assessmentDraft", "needs", "生活上の課題・支援の必要性", draft.needs, 4),
+    draftTextarea("assessmentDraft", "supportDirection", "支援の方向性", draft.supportDirection, 4),
+    draftTextarea("assessmentDraft", "planningNote", "計画書へ引き継ぐこと", draft.planningNote, 3)
+  ].join("");
 }
 
 function refreshPlanStale() {
@@ -262,6 +530,7 @@ function setByPath(target, path, value) {
 
 function saveState({ quiet = false } = {}) {
   state.updatedAt = new Date().toISOString();
+  syncActiveWorkspace();
   const status = $("#save-status");
   if (!quiet && status) {
     status.classList.add("is-saving");
@@ -337,7 +606,11 @@ function navigate(view, { preserveScroll = false, focusHeading = true } = {}) {
   $("#breadcrumb-current").textContent = VIEW_TITLES[view].breadcrumb;
 
   if (view === "journals") renderJournals();
+  if (view === "childProfile") renderChildProfile();
+  if (view === "consultation") renderConsultationDraft();
+  if (view === "contactBook") renderContactBook();
   if (view === "analysis") renderAnalysis();
+  if (view === "assessment") renderAssessmentDraft();
   if (view === "plan") renderPlan();
   if (!preserveScroll) window.scrollTo({ top: 0, behavior: "smooth" });
   if (focusHeading) {
@@ -354,7 +627,108 @@ function navigate(view, { preserveScroll = false, focusHeading = true } = {}) {
 function renderSidebar() {
   $("#sidebar-child-name").innerHTML = `${escapeHtml(state.profile.displayName)} <small>（仮名）</small>`;
   $("#sidebar-child-meta").textContent = `${state.profile.grade}・利用週3回`;
+  $("#sidebar-child-avatar").textContent = state.profile.displayName.slice(0, 1);
   $("#nav-journal-count").textContent = String(state.journals.length);
+  $("#nav-contact-count").textContent = String(state.contactBookEntries?.length ?? 0);
+  const children = Object.values(state.childWorkspaces)
+    .map((workspace) => workspace.profile)
+    .filter((profile) => profile?.id && profile?.displayName)
+    .sort((a, b) => a.id.localeCompare(b.id));
+  $("#child-switcher-options").innerHTML = children
+    .map((profile) => `
+      <button class="child-switch-option ${profile.id === state.activeChildId ? "is-active" : ""}" type="button" data-child-id="${escapeAttribute(profile.id)}" aria-pressed="${profile.id === state.activeChildId}">
+        <span>${escapeHtml(profile.displayName.slice(0, 1))}</span><strong>${escapeHtml(profile.displayName)}</strong><small>${escapeHtml(profile.grade)}</small>
+      </button>`)
+    .join("");
+}
+
+function profileInput(path, label, value, type = "text", extra = "") {
+  const lengthLimit = type === "text" ? 'maxlength="200"' : "";
+  return `<label><span>${escapeHtml(label)}</span><input type="${type}" data-profile-path="${escapeAttribute(path)}" value="${escapeAttribute(value ?? "")}" ${lengthLimit} ${extra} /></label>`;
+}
+
+function profileTextarea(path, label, value, rows = 3) {
+  return `<label class="full-width"><span>${escapeHtml(label)}</span><textarea data-profile-path="${escapeAttribute(path)}" rows="${rows}" maxlength="2000">${escapeHtml(value ?? "")}</textarea></label>`;
+}
+
+function renderChildProfileSummary() {
+  const profile = state.profile;
+  $("#child-profile-summary").innerHTML = `
+    <div class="profile-identity"><span class="profile-avatar">${escapeHtml(profile.displayName.slice(0, 1) || "？")}</span><div><p class="eyebrow">現在選択中の利用児</p><h3>${escapeHtml(profile.displayName || "未登録")}</h3><p>${escapeHtml(profile.legalName || "帳票用氏名は未入力")} ・ ${escapeHtml(profile.grade || "学年未入力")}</p></div></div>
+    <dl class="profile-overview-list">
+      <div><dt>生年月日</dt><dd>${escapeHtml(profile.birthDate ? formatDateJP(profile.birthDate) : "未入力")}</dd></div>
+      <div><dt>保護者氏名</dt><dd>${escapeHtml(profile.guardianName || "未入力")}</dd></div>
+      <div><dt>受給者証番号</dt><dd>${escapeHtml(profile.recipientNumber || "未入力")}</dd></div>
+      <div><dt>利用サービス</dt><dd>${escapeHtml(profile.serviceType || "未入力")}</dd></div>
+      <div><dt>利用予定</dt><dd>${escapeHtml(profile.usePattern || "未入力")}</dd></div>
+      <div><dt>日誌の件数</dt><dd>${state.journals.length}件</dd></div>
+    </dl>`;
+}
+
+function renderChildProfile() {
+  const profile = state.profile;
+  renderChildProfileSummary();
+  $("#child-profile-fields").innerHTML = [
+    profileInput("displayName", "表示名（画面上の呼び名）", profile.displayName),
+    profileInput("legalName", "利用児氏名（帳票用）", profile.legalName),
+    profileInput("birthDate", "生年月日", profile.birthDate, "date"),
+    profileInput("grade", "学年", profile.grade),
+    profileInput("guardianName", "保護者氏名", profile.guardianName),
+    profileInput("recipientNumber", "受給者証番号", profile.recipientNumber),
+    profileInput("serviceType", "利用サービス", profile.serviceType),
+    profileInput("serviceName", "事業所名", profile.serviceName),
+    profileInput("usePattern", "利用予定", profile.usePattern),
+    profileInput("standardSchedule", "標準的な利用時間", profile.standardSchedule),
+    profileInput("managerName", "児童発達支援管理責任者", profile.managerName),
+    profileTextarea("personWish", "本人の希望・大切にしたいこと", profile.personWish, 3),
+    profileTextarea("familyWish", "家族の希望・心配ごと", profile.familyWish, 3),
+    profileTextarea("currentPlanContext", "現在の支援状況・引き継ぎ事項", profile.currentPlanContext, 3)
+  ].join("");
+}
+
+function syncProfileToPlan() {
+  const profile = state.profile;
+  if (!state.plan) return;
+  state.plan.child.name = profile.legalName || profile.displayName;
+  state.plan.child.guardianName = profile.guardianName;
+  state.plan.child.birthDate = profile.birthDate;
+  state.plan.child.grade = profile.grade;
+  state.plan.child.recipientNumber = profile.recipientNumber;
+  state.plan.child.ageLabel = calculateAgeLabel(profile.birthDate, state.plan.planStart) || profile.ageLabel || "";
+  state.plan.service.name = profile.serviceName;
+  state.plan.service.type = profile.serviceType;
+  state.plan.service.managerName = profile.managerName;
+  state.plan.service.usePattern = profile.usePattern;
+  state.plan.service.standardSchedule = profile.standardSchedule;
+}
+
+function updateProfileAfterInput(input) {
+  const path = input.dataset.profilePath;
+  if (!path) return;
+  setByPath(state.profile, path, input.value);
+  syncProfileToPlan();
+  saveState({ quiet: true });
+  renderSidebar();
+  renderChildProfileSummary();
+}
+
+function switchChild(childId) {
+  if (!state.childWorkspaces?.[childId] || childId === state.activeChildId) return;
+  syncActiveWorkspace();
+  const nextWorkspace = structuredClone(state.childWorkspaces[childId]);
+  state = {
+    ...state,
+    ...nextWorkspace,
+    activeChildId: childId,
+    childWorkspaces: state.childWorkspaces
+  };
+  state.consultationPlanDraft ??= createConsultationPlanDraft(state.profile);
+  state.contactBookEntries ??= createContactBookEntries(state.profile);
+  state.assessmentDraft ??= createAssessmentDraft(state.profile, state.monitoringDraft, state.consultationPlanDraft);
+  renderAll();
+  navigate(state.activeView, { preserveScroll: true, focusHeading: false });
+  saveState();
+  showToast(`${state.profile.displayName}のデモに切り替えました。日誌から各下書きまで、児童ごとの内容を確認できます。`);
 }
 
 function renderDashboard() {
@@ -610,6 +984,7 @@ function renderAnalysis() {
         <p class="domain-analysis-summary">${escapeHtml(domain.count ? domain.summary : "この期間の日誌には、関連付けられた記録がありません。追加アセスメントで確認してください。")}</p>
       </div>`)
     .join("");
+  renderMonitoringDraft();
 }
 
 function planInput(path, label, value, type = "text", extra = "") {
@@ -1000,7 +1375,11 @@ function renderPlan() {
   const sourceSummary = sourceJournals.length
     ? `${formatDateJP(state.plan.sourceStartDate)}〜${formatDateJP(state.plan.sourceEndDate)}の${state.plan.sourceCount}件の日誌から、本人支援の候補と根拠日誌を表示しています。`
     : "対象となる日誌がないため、本人支援の候補は作成していません。";
-  $("#plan-source-summary").textContent = sourceSummary;
+ $("#plan-source-summary").textContent = sourceSummary;
+  const consultationReference = state.plan.consultationPlanReference ?? state.consultationPlanDraft;
+  $("#plan-origin-note").innerHTML = consultationReference
+    ? `<strong>相談支援案を起点にしています</strong><span>${escapeHtml(consultationReference.agencyName)}の目標「${escapeHtml(consultationReference.overallGoal)}」を、事業所のアセスメントで確認し、日誌の根拠と合わせて計画書へ反映します。</span><button class="inline-link" type="button" data-view-target="consultation">相談支援案を見る →</button>`
+    : "";
   renderPlanEditor();
   renderAudit();
   renderPlanSummary();
@@ -1357,10 +1736,13 @@ function applyAnalysisRange() {
   }
   state.analysisRange = nextRange;
   refreshPlanStale();
+  state.monitoringDraft = createMonitoringDraft(state.profile, getAnalysisJournals());
+  state.assessmentDraft = createAssessmentDraft(state.profile, state.monitoringDraft, state.consultationPlanDraft);
   saveState();
   renderAnalysis();
+  renderAssessmentDraft();
   renderPlan();
-  showToast(`${days}日間・${getAnalysisJournals().length}件の日誌をふり返ります。計画案は再作成してください。`);
+  showToast(`${days}日間・${getAnalysisJournals().length}件の日誌からモニタリングとアセスメントの下書きを更新しました。計画案は再作成してください。`);
 }
 
 function regeneratePlan() {
@@ -1369,15 +1751,152 @@ function regeneratePlan() {
     : "計画案を現在の日誌から作り直します。手編集した内容は上書きされます。続けますか？";
   if (!window.confirm(message)) return;
   const sourceJournals = getAnalysisJournals();
-  state.plan = generatePlan(state.profile, sourceJournals);
+  state.plan = {
+    ...generatePlan(state.profile, sourceJournals),
+    consultationPlanReference: {
+      agencyName: state.consultationPlanDraft.agencyName,
+      preparedDate: state.consultationPlanDraft.preparedDate,
+      overallGoal: state.consultationPlanDraft.overallGoal
+    }
+  };
   state.planStale = false;
   saveState();
   renderPlan();
   showToast(`${formatDateJP(state.analysisRange.start)}〜${formatDateJP(state.analysisRange.end)}の${sourceJournals.length}件から計画案を再作成しました。`);
 }
 
+function refreshMonitoringDraft() {
+  if (!window.confirm("日誌からモニタリング下書きを作り直します。手編集したモニタリングとアセスメントの内容は上書きされます。続けますか？")) return;
+  const sourceJournals = getAnalysisJournals();
+  state.monitoringDraft = createMonitoringDraft(state.profile, sourceJournals);
+  state.assessmentDraft = createAssessmentDraft(state.profile, state.monitoringDraft, state.consultationPlanDraft);
+  saveState();
+  renderAnalysis();
+  renderAssessmentDraft();
+  showToast(`${sourceJournals.length}件の日誌からモニタリングとアセスメントの下書きを作り直しました。`);
+}
+
+function refreshAssessmentDraft() {
+  if (!window.confirm("現在のモニタリング下書きからアセスメントを作り直します。手編集したアセスメントの内容は上書きされます。続けますか？")) return;
+  state.assessmentDraft = createAssessmentDraft(state.profile, state.monitoringDraft, state.consultationPlanDraft);
+  saveState();
+  renderAssessmentDraft();
+  showToast("モニタリング下書きからアセスメントを作り直しました。");
+}
+
+function updateDraftAfterInput(input) {
+  const root = input.dataset.draftRoot;
+  const path = input.dataset.draftPath;
+  if (!root || !path || !state[root]) return;
+  setByPath(state[root], path, input.value);
+  saveState({ quiet: true });
+}
+
+function applyAssessmentToPlan() {
+  const draft = state.assessmentDraft;
+  state.plan.personWish = draft.personWish;
+  state.plan.familyWish = draft.familyWish;
+  state.plan.qualityOfLifeNeeds = draft.needs;
+  state.plan.comprehensivePolicy = draft.supportDirection;
+  state.plan.status = "draft";
+  saveState();
+  renderPlan();
+  navigate("plan");
+  showToast("アセスメントの下書きを計画書の基本項目へ反映しました。目標・支援内容・担当は続けて確認してください。");
+}
+
+function applyConsultationToAssessment() {
+  const consultation = state.consultationPlanDraft;
+  state.assessmentDraft = createAssessmentDraft(state.profile, state.monitoringDraft, consultation);
+  state.plan.consultationPlanReference = {
+    agencyName: consultation.agencyName,
+    preparedDate: consultation.preparedDate,
+    overallGoal: consultation.overallGoal
+  };
+  saveState();
+  renderAssessmentDraft();
+  renderPlan();
+  navigate("assessment");
+  showToast("サービス等利用計画案の内容を、事業所のアセスメント下書きへ反映しました。");
+}
+
+function applyContactBookEntry(entryId) {
+  const entry = state.contactBookEntries.find((item) => item.id === entryId);
+  if (!entry || entry.reflected) return;
+  const prefix = state.assessmentDraft.needs.trim() ? "\n\n" : "";
+  state.assessmentDraft.needs += `${prefix}【連絡帳からの要望】${entry.request}\n家庭での様子：${entry.familyMessage}\n事業所の対応案：${entry.serviceReply}`;
+  state.assessmentDraft.planningNote += `\n\n連絡帳（${formatDateJP(entry.date)}）の要望を、次の個別支援計画の検討事項として確認する。`;
+  entry.reflected = true;
+  saveState();
+  renderContactBook();
+  renderAssessmentDraft();
+  showToast("連絡帳の要望をアセスメントの検討事項へ反映しました。本人・家族と確認して計画へ進めてください。");
+}
+
+function openChildDialog() {
+  const form = $("#child-form");
+  form.reset();
+  form.elements.serviceType.value = "放課後等デイサービス";
+  $("#child-dialog").showModal();
+  window.setTimeout(() => form.elements.displayName.focus(), 20);
+}
+
+function createRegisteredChildProfile(data) {
+  const today = new Date();
+  const planStart = toLocalIsoDate(today);
+  const planEndDate = new Date(today.getFullYear(), today.getMonth() + 6, today.getDate() - 1);
+  const displayName = String(data.get("displayName") ?? "").trim();
+  const legalName = String(data.get("legalName") ?? "").trim() || displayName;
+  return {
+    id: `child-${Date.now()}-${Math.random().toString(36).slice(2, 7)}`,
+    displayName,
+    legalName,
+    grade: String(data.get("grade") ?? "").trim(),
+    ageLabel: "",
+    birthDate: String(data.get("birthDate") ?? ""),
+    recipientNumber: String(data.get("recipientNumber") ?? "").trim(),
+    guardianName: String(data.get("guardianName") ?? "").trim(),
+    serviceName: "みらいステップ（登録事業所）",
+    serviceType: String(data.get("serviceType") ?? "").trim() || "放課後等デイサービス",
+    managerName: "未入力",
+    usePattern: String(data.get("usePattern") ?? "").trim(),
+    standardSchedule: "未入力",
+    planStart,
+    planEnd: toLocalIsoDate(planEndDate),
+    reviewDate: toLocalIsoDate(planEndDate),
+    createdDate: planStart,
+    assessmentDate: planStart,
+    currentPlanContext: "新規登録後、本人・家族・相談支援事業所からの情報を確認して支援の方向性を整理します。",
+    interests: [],
+    strengths: [],
+    personWish: String(data.get("personWish") ?? "").trim(),
+    familyWish: String(data.get("familyWish") ?? "").trim(),
+    caveat: "登録内容は下書きです。本人・家族・関係者との確認後に、必要な情報を整えてください。"
+  };
+}
+
+function handleChildSubmit(event) {
+  event.preventDefault();
+  const form = event.currentTarget;
+  if (!form.reportValidity()) return;
+  const profile = createRegisteredChildProfile(new FormData(form));
+  const workspace = createChildWorkspace(profile, [], { isDemo: false });
+  state.childWorkspaces[profile.id] = workspace;
+  state = {
+    ...state,
+    ...workspace,
+    activeChildId: profile.id,
+    childWorkspaces: state.childWorkspaces
+  };
+  $("#child-dialog").close();
+  saveState();
+  renderAll();
+  navigate("childProfile");
+  showToast(`${profile.displayName}さんを登録しました。利用児情報から内容を続けて確認・編集できます。`);
+}
+
 function resetDemo() {
-  if (!window.confirm("追加・編集した内容をすべて破棄し、Aさんのデモを初期状態へ戻しますか？")) return;
+  if (!window.confirm("追加・編集した内容をすべて破棄し、4人分のデモを初期状態へ戻しますか？")) return;
   state = createInitialState();
   localStorage.removeItem(STORAGE_KEY);
   saveState({ quiet: true });
@@ -1389,15 +1908,39 @@ function resetDemo() {
 function renderAll() {
   renderSidebar();
   renderDashboard();
+  renderChildProfile();
   renderJournals();
+  renderConsultationDraft();
+  renderContactBook();
   renderAnalysis();
+  renderAssessmentDraft();
   renderPlan();
 }
 
 function initializeStaticControls() {
   $("#journal-domain-options").innerHTML = renderDomainToggles("journalDomains");
 
+  $("#open-child-dialog").addEventListener("click", openChildDialog);
+  $("#open-child-dialog-from-profile").addEventListener("click", openChildDialog);
+  $("#child-form").addEventListener("submit", handleChildSubmit);
+  $$('[data-close-child-dialog]').forEach((button) => button.addEventListener("click", () => $("#child-dialog").close()));
+  $("#child-profile-fields").addEventListener("input", (event) => {
+    if (event.target.matches("[data-profile-path]")) updateProfileAfterInput(event.target);
+  });
+
   document.addEventListener("click", (event) => {
+    const childButton = event.target.closest("[data-child-id]");
+    if (childButton) {
+      switchChild(childButton.dataset.childId);
+      return;
+    }
+
+    const contactEntryButton = event.target.closest("[data-apply-contact-entry]");
+    if (contactEntryButton) {
+      applyContactBookEntry(contactEntryButton.dataset.applyContactEntry);
+      return;
+    }
+
     const viewButton = event.target.closest("[data-view-target]");
     if (viewButton) {
       navigate(viewButton.dataset.viewTarget);
@@ -1468,6 +2011,21 @@ function initializeStaticControls() {
     saveState({ quiet: true });
   });
   $("#apply-analysis-range").addEventListener("click", applyAnalysisRange);
+  $("#monitoring-draft-fields").addEventListener("input", (event) => {
+    if (event.target.matches("[data-draft-root='monitoringDraft']")) updateDraftAfterInput(event.target);
+  });
+  $("#assessment-draft-fields").addEventListener("input", (event) => {
+    if (event.target.matches("[data-draft-root='assessmentDraft']")) updateDraftAfterInput(event.target);
+  });
+  $("#consultation-draft-fields").addEventListener("input", (event) => {
+    if (event.target.matches("[data-draft-root='consultationPlanDraft']")) updateDraftAfterInput(event.target);
+  });
+  $("#refresh-monitoring-draft").addEventListener("click", refreshMonitoringDraft);
+  $("#refresh-assessment-draft").addEventListener("click", refreshAssessmentDraft);
+  $("#apply-consultation-to-assessment").addEventListener("click", applyConsultationToAssessment);
+  $("#apply-consultation-to-assessment-bottom").addEventListener("click", applyConsultationToAssessment);
+  $("#apply-assessment-to-plan").addEventListener("click", applyAssessmentToPlan);
+  $("#apply-assessment-to-plan-bottom").addEventListener("click", applyAssessmentToPlan);
 
   $("#add-journal").addEventListener("click", () => openJournalDialog());
   $("#export-journals").addEventListener("click", exportJournalsCsv);

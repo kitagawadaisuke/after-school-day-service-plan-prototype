@@ -82,8 +82,76 @@ try {
   await page.keyboard.press("Tab");
   await page.screenshot({ path: artifactPath("michi-dashboard.png"), fullPage: true });
 
+  assert.equal(await page.locator("[data-child-id]").count(), 4, "4人分のデモ利用児を切り替えられません");
+  await page.locator('[data-child-id="demo-b"]').click();
+  assert.match((await page.locator("#sidebar-child-name").textContent()) ?? "", /Bさん/, "Bさんのデモへ切り替わりません");
+  await page.locator('.main-nav [data-view-target="assessment"]').click();
+  await assertVisible(page.locator("#assessment-draft-fields"), "切替後のアセスメント下書きが表示されません");
+  assert.match((await page.locator("#assessment-profile-strip").textContent()) ?? "", /Bさん/);
+  assert.match((await page.locator("#assessment-draft-fields").textContent()) ?? "", /電車や音楽/);
+  await page.locator('[data-child-id="demo-a"]').click();
+  assert.match((await page.locator("#sidebar-child-name").textContent()) ?? "", /Aさん/, "Aさんのデモへ戻れません");
+
+  await page.locator("#open-child-dialog").click();
+  await assertVisible(page.locator("#child-dialog"), "利用児登録ダイアログが開きません");
+  await page.locator('#child-form [name="displayName"]').fill("登録テスト児");
+  await page.locator('#child-form [name="legalName"]').fill("登録 テスト児");
+  await page.locator('#child-form [name="grade"]').fill("小学1年生");
+  await page.locator('#child-form [name="guardianName"]').fill("テスト保護者");
+  await page.locator('#child-form [name="recipientNumber"]').fill("TEST-0001");
+  await page.locator("#child-form button[type='submit']").click();
+  await assertVisible(page.locator("#child-profile-fields"), "登録後に利用児情報画面が表示されません");
+  assert.match((await page.locator("#child-profile-summary").textContent()) ?? "", /登録テスト児/);
+  assert.equal((await page.locator("#nav-journal-count").textContent())?.trim(), "0", "新規登録した利用児の日誌は空で開始されません");
+  await page.locator('[data-profile-path="usePattern"]').fill("火・木の週2回");
+  await page.locator('[data-child-id="demo-a"]').click();
+  await page.locator('[data-child-id^="child-"]').click();
+  assert.equal(await page.locator('[data-profile-path="usePattern"]').inputValue(), "火・木の週2回", "利用児情報が利用児ごとに保存されません");
+  await page.locator('[data-child-id="demo-a"]').click();
+
+  await page.locator('.main-nav [data-view-target="consultation"]').click();
+  await assertVisible(page.locator("#consultation-draft-fields"), "サービス等利用計画案が表示されません");
+  assert.match((await page.locator("#consultation-profile-strip").textContent()) ?? "", /支給決定・利用サービス/);
+  const consultationGoal = "好きな活動を選び、安心して放課後を過ごせるようにする。";
+  await page.locator('[data-draft-root="consultationPlanDraft"][data-draft-path="overallGoal"]').fill(consultationGoal);
+  await page.locator("#apply-consultation-to-assessment").click();
+  await assertVisible(page.locator("#assessment-consultation-link"), "相談支援案からアセスメントへの引継ぎが表示されません");
+  assert.match((await page.locator("#assessment-consultation-link").textContent()) ?? "", /好きな活動を選び/);
+
+  await page.locator('.main-nav [data-view-target="contactBook"]').click();
+  await assertVisible(page.locator("#contact-book-list"), "連絡帳が表示されません");
+  assert.equal(await page.locator("[data-apply-contact-entry]").count(), 3, "連絡帳のデモ記録が表示されません");
+  await page.locator("[data-apply-contact-entry]").first().click();
+  await page.locator('.main-nav [data-view-target="assessment"]').click();
+  assert.match((await page.locator('[data-draft-root="assessmentDraft"][data-draft-path="needs"]').inputValue()), /連絡帳からの要望/);
+
+  await page.locator('.main-nav [data-view-target="analysis"]').click();
+  await assertVisible(page.locator("#monitoring-draft-fields"), "モニタリング下書きが表示されません");
+  assert.match((await page.locator("#monitoring-draft-fields").textContent()) ?? "", /続けたい支援/);
+  await page.locator('.main-nav [data-view-target="assessment"]').click();
+  await assertVisible(page.locator("#assessment-draft-fields"), "アセスメント下書きが表示されません");
+  const assessmentNeed = "日誌と面談で確認した困りごとを、次の支援目標へつなげる。";
+  await page.locator('[data-draft-root="assessmentDraft"][data-draft-path="needs"]').fill(assessmentNeed);
+  await page.locator("#apply-assessment-to-plan").click();
+  await assertVisible(page.locator("#plan-editor"), "アセスメントから計画書へ移動しません");
+  assert.equal(await page.locator('[data-plan-path="qualityOfLifeNeeds"]').inputValue(), assessmentNeed, "アセスメントの課題が計画書へ反映されません");
+
   await page.locator('.main-nav [data-view-target="plan"]').click();
   await assertVisible(page.locator("#plan-editor"), "初期デモの計画編集画面が表示されません");
+  assert.match((await page.locator("#plan-origin-note").textContent()) ?? "", /相談支援案を起点/);
+  await page.setViewportSize({ width: 1280, height: 900 });
+  const originNoteLayout = await page.locator("#plan-origin-note").evaluate((element) => {
+    const detail = element.querySelector("span");
+    const link = element.querySelector("button");
+    return {
+      detailWidth: detail?.getBoundingClientRect().width ?? 0,
+      linkTop: link?.getBoundingClientRect().top ?? 0,
+      detailTop: detail?.getBoundingClientRect().top ?? 0
+    };
+  });
+  assert.ok(originNoteLayout.detailWidth > 250, "狭い画面幅で相談支援案の本文が極端に縮みます");
+  assert.ok(originNoteLayout.linkTop > originNoteLayout.detailTop, "狭い画面幅では案内リンクを本文の次の行へ配置します");
+  await page.setViewportSize({ width: 1440, height: 1000 });
   assert.equal(await page.locator("#print-plan").isDisabled(), false, "初期デモ計画を印刷できません");
   assert.equal((await page.evaluate(() => window.michiNote.getState().plan?.sourceCount)), 24);
   await page.locator('[data-plan-mode="preview"]').click();

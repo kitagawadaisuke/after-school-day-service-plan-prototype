@@ -1,0 +1,91 @@
+{
+  "AWSTemplateFormatVersion": "2010-09-09",
+  "Description": "Ephemeral Michi-note database migration task. Delete this stack after the controlled one-off run.",
+  "Parameters": {
+    "ContainerImage": { "Type": "String", "Description": "The same reviewed immutable application image digest used by the web service." },
+    "TaskCpuArchitecture": { "Type": "String", "Default": "ARM64", "AllowedValues": ["ARM64", "X86_64"] },
+    "DatabaseHost": { "Type": "String", "MinLength": 1 },
+    "DatabasePort": { "Type": "Number", "Default": 5432, "MinValue": 1, "MaxValue": 65535 },
+    "DatabaseName": { "Type": "String", "Default": "michinote", "AllowedPattern": "^[a-z][a-z0-9_]{0,62}$" },
+    "DatabaseMasterSecretArn": { "Type": "String", "AllowedPattern": "^arn:[^:]+:secretsmanager:[^:]+:[0-9]{12}:secret:.+$" },
+    "DatabaseRuntimeSecretArn": { "Type": "String", "AllowedPattern": "^arn:[^:]+:secretsmanager:[^:]+:[0-9]{12}:secret:.+$" },
+    "DatabaseProvisionerSecretArn": { "Type": "String", "AllowedPattern": "^arn:[^:]+:secretsmanager:[^:]+:[0-9]{12}:secret:.+$" },
+    "PdfFinalizationSecretArn": { "Type": "String", "AllowedPattern": "^arn:[^:]+:secretsmanager:[^:]+:[0-9]{12}:secret:.+$" },
+    "DataKeyArn": { "Type": "String", "AllowedPattern": "^arn:[^:]+:kms:[^:]+:[0-9]{12}:key/.+$" },
+    "ApplicationLogGroupName": { "Type": "String", "MinLength": 1 }
+  },
+  "Resources": {
+    "MigrationTaskExecutionRole": {
+      "Type": "AWS::IAM::Role",
+      "Properties": {
+        "AssumeRolePolicyDocument": { "Version": "2012-10-17", "Statement": [{ "Effect": "Allow", "Principal": { "Service": "ecs-tasks.amazonaws.com" }, "Action": "sts:AssumeRole" }] },
+        "ManagedPolicyArns": [{ "Fn::Sub": "arn:${AWS::Partition}:iam::aws:policy/service-role/AmazonECSTaskExecutionRolePolicy" }],
+        "Policies": [{
+          "PolicyName": "ReadMigrationSecretsOnce",
+          "PolicyDocument": {
+            "Version": "2012-10-17",
+            "Statement": [
+              { "Effect": "Allow", "Action": "secretsmanager:GetSecretValue", "Resource": [{ "Ref": "DatabaseMasterSecretArn" }, { "Ref": "DatabaseRuntimeSecretArn" }, { "Ref": "DatabaseProvisionerSecretArn" }, { "Ref": "PdfFinalizationSecretArn" }] },
+              { "Effect": "Allow", "Action": "kms:Decrypt", "Resource": { "Ref": "DataKeyArn" } }
+            ]
+          }
+        }]
+      }
+    },
+    "MigrationTaskRole": {
+      "Type": "AWS::IAM::Role",
+      "Properties": {
+        "AssumeRolePolicyDocument": { "Version": "2012-10-17", "Statement": [{ "Effect": "Allow", "Principal": { "Service": "ecs-tasks.amazonaws.com" }, "Action": "sts:AssumeRole" }] }
+      }
+    },
+    "MigrationTaskDefinition": {
+      "Type": "AWS::ECS::TaskDefinition",
+      "Properties": {
+        "ContainerDefinitions": [{
+          "Name": "migration",
+          "Image": { "Ref": "ContainerImage" },
+          "Command": ["node", "scripts/migrate.mjs"],
+          "Essential": true,
+          "ReadonlyRootFilesystem": true,
+          "LinuxParameters": { "InitProcessEnabled": true },
+          "Environment": [
+            { "Name": "NODE_ENV", "Value": "production" },
+            { "Name": "MIGRATION_DATABASE_HOST", "Value": { "Ref": "DatabaseHost" } },
+            { "Name": "MIGRATION_DATABASE_PORT", "Value": { "Fn::Sub": "${DatabasePort}" } },
+            { "Name": "MIGRATION_DATABASE_NAME", "Value": { "Ref": "DatabaseName" } },
+            { "Name": "MIGRATION_DATABASE_SSL", "Value": "require" },
+            { "Name": "MIGRATION_DATABASE_CA_FILE", "Value": "/opt/michinote/certs/aws-rds-ap-northeast-3-bundle.pem" }
+          ],
+          "Secrets": [
+            { "Name": "MIGRATION_DATABASE_USER", "ValueFrom": { "Fn::Join": ["", [{ "Ref": "DatabaseMasterSecretArn" }, ":username::"]] } },
+            { "Name": "MIGRATION_DATABASE_PASSWORD", "ValueFrom": { "Fn::Join": ["", [{ "Ref": "DatabaseMasterSecretArn" }, ":password::"]] } },
+            { "Name": "RUNTIME_DATABASE_USER", "ValueFrom": { "Fn::Join": ["", [{ "Ref": "DatabaseRuntimeSecretArn" }, ":username::"]] } },
+            { "Name": "RUNTIME_DATABASE_PASSWORD", "ValueFrom": { "Fn::Join": ["", [{ "Ref": "DatabaseRuntimeSecretArn" }, ":password::"]] } },
+            { "Name": "PDF_FINALIZATION_SECRET", "ValueFrom": { "Fn::Join": ["", [{ "Ref": "PdfFinalizationSecretArn" }, ":key::"]] } },
+            { "Name": "PROVISION_DATABASE_USER", "ValueFrom": { "Fn::Join": ["", [{ "Ref": "DatabaseProvisionerSecretArn" }, ":username::"]] } },
+            { "Name": "PROVISION_DATABASE_PASSWORD", "ValueFrom": { "Fn::Join": ["", [{ "Ref": "DatabaseProvisionerSecretArn" }, ":password::"]] } }
+          ],
+          "LogConfiguration": {
+            "LogDriver": "awslogs",
+            "Options": {
+              "awslogs-group": { "Ref": "ApplicationLogGroupName" },
+              "awslogs-region": { "Ref": "AWS::Region" },
+              "awslogs-stream-prefix": "migration"
+            }
+          }
+        }],
+        "Cpu": "256",
+        "Memory": "512",
+        "ExecutionRoleArn": { "Fn::GetAtt": ["MigrationTaskExecutionRole", "Arn"] },
+        "Family": { "Fn::Sub": "${AWS::StackName}-migration" },
+        "NetworkMode": "awsvpc",
+        "RequiresCompatibilities": ["FARGATE"],
+        "RuntimePlatform": { "CpuArchitecture": { "Ref": "TaskCpuArchitecture" }, "OperatingSystemFamily": "LINUX" },
+        "TaskRoleArn": { "Fn::GetAtt": ["MigrationTaskRole", "Arn"] }
+      }
+    }
+  },
+  "Outputs": {
+    "MigrationTaskDefinitionArn": { "Value": { "Ref": "MigrationTaskDefinition" } }
+  }
+}

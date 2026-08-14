@@ -29,24 +29,42 @@
         <div class="demo-ribbon"><span></span>デモ環境・仮名データ</div>
 
         <nav class="main-nav">
+          <button class="nav-item" type="button" data-view-target="consultation">
+            <span class="nav-index">01</span><span>相談支援案</span>
+          </button>
           <button class="nav-item is-active" type="button" data-view-target="dashboard" aria-current="page">
-            <span class="nav-index">01</span><span>概要</span>
+            <span class="nav-index">02</span><span>概要</span>
+          </button>
+          <button class="nav-item" type="button" data-view-target="childProfile">
+            <span class="nav-index">03</span><span>利用児情報</span>
           </button>
           <button class="nav-item" type="button" data-view-target="journals">
-            <span class="nav-index">02</span><span>日誌を確認</span><span class="nav-count" id="nav-journal-count">0</span>
+            <span class="nav-index">04</span><span>日誌を確認</span><span class="nav-count" id="nav-journal-count">0</span>
+          </button>
+          <button class="nav-item" type="button" data-view-target="contactBook">
+            <span class="nav-index">05</span><span>連絡帳</span><span class="nav-count" id="nav-contact-count">0</span>
           </button>
           <button class="nav-item" type="button" data-view-target="analysis">
-            <span class="nav-index">03</span><span>計画書のヒント</span>
+            <span class="nav-index">06</span><span>モニタリング</span>
+          </button>
+          <button class="nav-item" type="button" data-view-target="assessment">
+            <span class="nav-index">07</span><span>アセスメント</span>
           </button>
           <button class="nav-item" type="button" data-view-target="plan">
-            <span class="nav-index">04</span><span>計画書をつくる</span>
+            <span class="nav-index">08</span><span>計画書をつくる</span>
           </button>
         </nav>
 
         <div class="sidebar-spacer"></div>
 
+        <section class="child-switcher" aria-labelledby="child-switcher-heading">
+          <div class="child-switcher-heading"><p class="eyebrow" id="child-switcher-heading">デモ利用児を切り替える</p><small>入力内容は児童ごとに保存</small></div>
+          <div class="child-switcher-options" id="child-switcher-options" role="group" aria-label="デモ利用児の切り替え"></div>
+          <button class="add-child-button" id="open-child-dialog" type="button">＋ 利用児を登録</button>
+        </section>
+
         <section class="child-mini-card" aria-labelledby="child-mini-title">
-          <div class="avatar" aria-hidden="true">A</div>
+          <div class="avatar" id="sidebar-child-avatar" aria-hidden="true">A</div>
           <div>
             <p class="eyebrow" id="child-mini-title">対象児童</p>
             <p class="child-name" id="sidebar-child-name">Aさん <small>（仮名）</small></p>
@@ -76,17 +94,17 @@
         <section class="view is-active" id="view-dashboard" data-view="dashboard" aria-labelledby="dashboard-heading">
           <div class="hero-panel reveal">
             <div class="hero-copy">
-              <p class="section-kicker">OBSERVATION → PLAN</p>
-              <h2 id="dashboard-heading">観察から、<br /><em>次の一歩</em>へ。</h2>
+              <p class="section-kicker">JOURNAL → MONITORING → ASSESSMENT → PLAN</p>
+              <h2 id="dashboard-heading">日々の記録を、<br /><em>次の支援</em>へ。</h2>
               <p class="hero-lead">
-                2か月分の日誌を、支援の5つの観点（5領域）と成長の変化で整理。<br />
-                記録の根拠を残したまま、個別支援計画の案にまとめます。
+                日誌からモニタリングとアセスメントの下書きを作成。<br />
+                根拠を残したまま、個別支援計画の原案につなげます。
               </p>
               <div class="hero-actions">
                 <button class="primary-button" type="button" data-view-target="journals">
                   日誌から確認する <span aria-hidden="true">→</span>
                 </button>
-                <button class="ghost-button" type="button" data-view-target="plan">作成済みの計画案を見る</button>
+                <button class="ghost-button" type="button" data-view-target="analysis">モニタリングを見る</button>
               </div>
             </div>
             <div class="hero-visual" aria-hidden="true">
@@ -117,17 +135,34 @@
               </li>
               <li>
                 <span class="workflow-number">02</span>
-                <div><strong>日誌をふり返る</strong><p>うまくいった関わり方や、支援が必要な場面を確認します。</p><button class="workflow-link" type="button" data-view-target="analysis">支援のヒントを見る →</button></div>
+                <div><strong>モニタリングの下書きを作る</strong><p>日誌をふり返り、できたこと・続けたい支援・見直したいことを整理します。</p><button class="workflow-link" type="button" data-view-target="analysis">モニタリングを見る →</button></div>
               </li>
               <li>
                 <span class="workflow-number">03</span>
-                <div><strong>計画書の候補をつくる</strong><p>日誌を根拠に、本人支援の候補と根拠日誌をつなぎます。</p><button class="workflow-link" type="button" data-view-target="plan">候補を見る →</button></div>
+                <div><strong>アセスメントを整える</strong><p>モニタリングの内容に、本人・家族の意向や強みを重ねて支援の方向を考えます。</p><button class="workflow-link" type="button" data-view-target="assessment">アセスメントを見る →</button></div>
               </li>
               <li>
                 <span class="workflow-number">04</span>
-                <div><strong>人が編集・確認してPDFへ</strong><p>内容を自由に直し、説明・同意後に帳票をPDF保存します。</p><button class="workflow-link" type="button" data-view-target="plan">計画書を整える →</button></div>
+                <div><strong>計画書に反映して、日誌で確かめる</strong><p>計画を人が確認・決定し、その後の日誌で支援が役立っているかを確かめます。</p><button class="workflow-link" type="button" data-view-target="plan">計画書を整える →</button></div>
               </li>
             </ol>
+          </section>
+
+          <section class="service-flow-board reveal delay-2" aria-labelledby="service-flow-heading">
+            <div class="service-flow-heading"><div><p class="eyebrow">HOW SUPPORT FLOWS</p><h3 id="service-flow-heading">相談から、次の計画の見直しまで</h3></div><p>「誰が、いつ、何を確認するか」をデモでたどれるようにしています。</p></div>
+            <ol class="service-flow-steps">
+              <li><span>1</span><div><strong>相談支援員へ相談</strong><p>利用先を探し、本人・家族の希望を伝えます。</p><button class="workflow-link" type="button" data-view-target="consultation">相談支援案を見る →</button></div></li>
+              <li><span>2</span><div><strong>全体の支援計画を作成</strong><p>相談支援員が面談し、サービス等利用計画案をまとめます。</p><button class="workflow-link" type="button" data-view-target="consultation">計画案を確認 →</button></div></li>
+              <li><span>3</span><div><strong>事業所でアセスメント</strong><p>紹介先の事業所で支援の方向性と進め方を確認します。</p><button class="workflow-link" type="button" data-view-target="assessment">アセスメントへ →</button></div></li>
+              <li><span>4</span><div><strong>個別支援計画を決定</strong><p>本人・家族・支援者で目標と具体的な支援を決めます。</p><button class="workflow-link" type="button" data-view-target="plan">計画書を見る →</button></div></li>
+              <li><span>5</span><div><strong>日誌・連絡帳を蓄積</strong><p>実施した支援と本人の反応、家庭からの声を記録します。</p><div class="service-flow-links"><button class="workflow-link" type="button" data-view-target="journals">日誌 →</button><button class="workflow-link" type="button" data-view-target="contactBook">連絡帳 →</button></div></div></li>
+              <li><span>6</span><div><strong>半年ごとにモニタリング</strong><p>この半年間を振り返り、次のアセスメントと計画の見直しへつなげます。</p><button class="workflow-link" type="button" data-view-target="analysis">モニタリングへ →</button></div></li>
+            </ol>
+          </section>
+
+          <section class="consultation-dashboard-note reveal delay-2" aria-label="相談支援案からの流れ">
+            <div><p class="eyebrow">相談支援の案から始まる支援の循環</p><strong>サービス等利用計画案で本人・家族の希望を共有し、事業所の個別支援計画を整えます。</strong><span>その後は日誌 → モニタリング → アセスメント → 次の計画書へ。日誌は、計画どおりの支援が本人に役立っているかを確かめるための根拠になります。</span></div>
+            <button class="primary-button" type="button" data-view-target="consultation">相談支援案を見る <span aria-hidden="true">→</span></button>
           </section>
 
           <div class="metric-grid reveal delay-2" id="dashboard-metrics"></div>
@@ -149,17 +184,17 @@
                 </li>
                 <li class="is-complete">
                   <span class="journey-number">02</span>
-                  <div><strong>日誌をふり返る</strong><small>繰り返しの場面と変化を確認</small></div>
-                  <span class="journey-status">確認済み</span>
+                  <div><strong>モニタリングを下書きする</strong><small>できたこと・続けたい支援・見直しを整理</small></div>
+                  <span class="journey-status">下書きあり</span>
                 </li>
                 <li class="is-complete">
                   <span class="journey-number">03</span>
-                  <div><strong>計画書の候補をつくる</strong><small>根拠日誌をつないで下書き</small></div>
-                  <span class="journey-status">原案あり</span>
+                  <div><strong>アセスメントを整える</strong><small>意向・強み・課題を支援の方向へまとめる</small></div>
+                  <span class="journey-status">下書きあり</span>
                 </li>
                 <li class="is-current">
                   <span class="journey-number">04</span>
-                  <div><strong>人が編集・確認する</strong><small>説明・同意を経てPDF保存・交付</small></div>
+                  <div><strong>計画書を編集・確認する</strong><small>説明・同意を経てPDF保存・交付</small></div>
                   <span class="journey-status">要確認</span>
                 </li>
               </ol>
@@ -200,6 +235,49 @@
               </dl>
             </aside>
             <div class="domain-strip" id="dashboard-domains"></div>
+          </section>
+        </section>
+
+        <section class="view" id="view-childProfile" data-view="childProfile" aria-labelledby="child-profile-heading" hidden>
+          <div class="section-intro child-profile-intro">
+            <div>
+              <p class="section-kicker">CHILD PROFILE · BASIC INFORMATION</p>
+              <h2 id="child-profile-heading">利用児の情報を、<br />支援の土台として確認する。</h2>
+              <p>ここで登録した情報は、この利用児の日誌、連絡帳、相談支援案、アセスメント、個別支援計画に引き継がれます。変更内容はこのブラウザ内に自動保存されます。</p>
+            </div>
+            <button class="primary-button" id="open-child-dialog-from-profile" type="button">＋ 新しい利用児を登録</button>
+          </div>
+          <section class="child-profile-summary paper-card" id="child-profile-summary" aria-label="利用児の登録情報の概要"></section>
+          <section class="child-profile-form-card paper-card" aria-labelledby="child-profile-fields-heading">
+            <div class="card-heading-row"><div><p class="eyebrow">登録情報</p><h3 id="child-profile-fields-heading">基本情報・利用情報</h3></div><span class="card-tag">入力すると自動保存</span></div>
+            <p class="child-profile-caution">氏名や受給者証番号などの個人情報は、実運用ではアクセス権限・保存先・取扱規程を確認してください。このデモではブラウザ内だけに保存されます。</p>
+            <div class="child-profile-fields" id="child-profile-fields"></div>
+          </section>
+        </section>
+
+        <section class="view" id="view-consultation" data-view="consultation" aria-labelledby="consultation-heading" hidden>
+          <div class="section-intro consultation-intro">
+            <div>
+              <p class="section-kicker">CONSULTATION SUPPORT · DEMO DRAFT</p>
+              <h2 id="consultation-heading">相談支援の案を、<br />事業所の支援へつなぐ。</h2>
+              <p>これは相談支援事業所から共有された想定の「サービス等利用計画案」です。本人・家族が望む暮らしと、放課後等デイサービスに期待する役割を、事業所のアセスメントの出発点として確認します。</p>
+            </div>
+            <button class="primary-button" id="apply-consultation-to-assessment" type="button">アセスメントへ引き継ぐ <span aria-hidden="true">→</span></button>
+          </div>
+
+          <section class="consultation-loop" aria-label="書類と日誌の循環">
+            <span class="is-source">相談支援案</span><i aria-hidden="true">→</i><span>アセスメント</span><i aria-hidden="true">→</i><span>個別支援計画</span><i aria-hidden="true">→</i><span>日誌</span><i aria-hidden="true">→</i><span>モニタリング</span><i aria-hidden="true">→</i><strong>次の計画</strong>
+          </section>
+
+          <section class="consultation-workspace paper-card" aria-labelledby="consultation-draft-heading">
+            <div class="draft-workspace-heading">
+              <div><p class="eyebrow">相談支援事業所が作成する案（デモ）</p><h3 id="consultation-draft-heading">サービス等利用計画案</h3></div>
+              <span class="draft-source" id="consultation-source-status"></span>
+            </div>
+            <div class="consultation-meta"><span>計画期間</span><strong id="consultation-period"></strong><span>この画面の内容は説明用の架空データです。正式な計画案は相談支援事業所と本人・家族が確認します。</span></div>
+            <div class="consultation-profile-strip" id="consultation-profile-strip"></div>
+            <div class="draft-fields" id="consultation-draft-fields"></div>
+            <div class="draft-actions"><button class="ghost-button" type="button" data-view-target="dashboard">全体の流れを見る</button><button class="primary-button" id="apply-consultation-to-assessment-bottom" type="button">アセスメントへ引き継ぐ <span aria-hidden="true">→</span></button></div>
           </section>
         </section>
 
@@ -248,15 +326,43 @@
           </div>
         </section>
 
+        <section class="view" id="view-contactBook" data-view="contactBook" aria-labelledby="contact-book-heading" hidden>
+          <div class="section-intro contact-book-intro">
+            <div>
+              <p class="section-kicker">FAMILY COMMUNICATION · CONTACT BOOK</p>
+              <h2 id="contact-book-heading">保護者の声を、<br />日々の支援へつなぐ。</h2>
+              <p>連絡帳は、家庭での様子や要望を事業所と共有する場所です。必要な内容はアセスメントと次の個別支援計画の検討事項へ引き継ぎ、日誌で実施と本人の反応を確かめます。</p>
+            </div>
+            <button class="primary-button" type="button" data-view-target="journals">日誌で確認する <span aria-hidden="true">→</span></button>
+          </div>
+          <section class="contact-book-flow" aria-label="連絡帳の活用">
+            <span>保護者の要望</span><i aria-hidden="true">→</i><span>事業所の返答・支援</span><i aria-hidden="true">→</i><strong>アセスメント・次の計画で検討</strong><i aria-hidden="true">→</i><span>日誌で確認</span>
+          </section>
+          <section class="contact-book-board paper-card" aria-labelledby="contact-book-list-heading">
+            <div class="card-heading-row"><div><p class="eyebrow">保護者との連絡帳（デモ）</p><h3 id="contact-book-list-heading">共有された要望と事業所の対応</h3></div><span class="card-tag" id="contact-book-status"></span></div>
+            <div class="contact-book-list" id="contact-book-list"></div>
+          </section>
+        </section>
+
         <section class="view" id="view-analysis" data-view="analysis" aria-labelledby="analysis-heading" hidden>
           <div class="section-intro">
             <div>
-              <p class="section-kicker">JOURNAL REVIEW</p>
-              <h2 id="analysis-heading">計画書づくりの<br />ヒントを探す。</h2>
-              <p>日誌を見比べ、子どもの変化と支援が役立った場面を確認します。見つけたヒントは、言葉を整えて計画書の本人支援へ反映できます。</p>
+              <p class="section-kicker">MONITORING DRAFT</p>
+              <h2 id="analysis-heading">日誌から、<br />モニタリングを下書きする。</h2>
+              <p>日誌を見比べ、できたこと、続けたい支援、次に確認したいことを整理します。これは職員が内容を確認・編集するための下書きです。</p>
             </div>
-            <button class="primary-button" type="button" data-view-target="plan">計画案を確認する <span aria-hidden="true">→</span></button>
+            <button class="primary-button" type="button" data-view-target="assessment">アセスメントへ進む <span aria-hidden="true">→</span></button>
           </div>
+
+          <section class="draft-workspace paper-card" aria-labelledby="monitoring-draft-heading">
+            <div class="draft-workspace-heading">
+              <div><p class="eyebrow">日誌から作成した下書き</p><h3 id="monitoring-draft-heading">モニタリング結果（下書き）</h3></div>
+              <span class="draft-source" id="monitoring-source-status"></span>
+            </div>
+            <p class="draft-caution">日誌だけでは判断できない内容があります。本人・家族の意向や面談で確認した内容を加え、必要に応じて書き換えてください。</p>
+            <div class="draft-fields" id="monitoring-draft-fields"></div>
+            <div class="draft-actions"><button class="ghost-button" id="refresh-monitoring-draft" type="button">日誌から下書きを作り直す</button><button class="primary-button" type="button" data-view-target="assessment">この内容をもとにアセスメントへ <span aria-hidden="true">→</span></button></div>
+          </section>
 
           <section class="analysis-guide" aria-labelledby="analysis-guide-heading">
             <div class="analysis-guide-intro">
@@ -324,6 +430,33 @@
           </section>
         </section>
 
+        <section class="view" id="view-assessment" data-view="assessment" aria-labelledby="assessment-heading" hidden>
+          <div class="section-intro">
+            <div>
+              <p class="section-kicker">ASSESSMENT DRAFT</p>
+              <h2 id="assessment-heading">モニタリングを、<br />支援の見立てへ。</h2>
+              <p>日誌からのモニタリングに、本人・家族の意向や強みを重ね、次の個別支援計画を考えるためのアセスメント下書きを作ります。</p>
+            </div>
+            <button class="primary-button" id="apply-assessment-to-plan" type="button">計画書の下書きへ反映 <span aria-hidden="true">→</span></button>
+          </div>
+
+          <section class="assessment-flow-note" aria-label="書類のつながり">
+            <span>日誌</span><i aria-hidden="true">→</i><span>モニタリング下書き</span><i aria-hidden="true">→</i><strong>アセスメント下書き</strong><i aria-hidden="true">→</i><span>個別支援計画</span>
+          </section>
+
+          <section class="draft-workspace assessment-workspace paper-card" aria-labelledby="assessment-draft-heading">
+            <div class="draft-workspace-heading">
+              <div><p class="eyebrow">モニタリングをもとに作成</p><h3 id="assessment-draft-heading">アセスメント（下書き）</h3></div>
+              <span class="draft-source" id="assessment-source-status"></span>
+            </div>
+            <p class="draft-caution">下書きは専門的な見立てや診断を代替しません。面談・観察・関係者との確認を踏まえて、本人に合った表現へ整えてください。</p>
+            <div class="assessment-profile-strip" id="assessment-profile-strip"></div>
+            <div class="assessment-consultation-link" id="assessment-consultation-link"></div>
+            <div class="draft-fields" id="assessment-draft-fields"></div>
+            <div class="draft-actions"><button class="ghost-button" id="refresh-assessment-draft" type="button">モニタリングから下書きを作り直す</button><button class="primary-button" id="apply-assessment-to-plan-bottom" type="button">計画書の下書きへ反映 <span aria-hidden="true">→</span></button></div>
+          </section>
+        </section>
+
         <section class="view" id="view-plan" data-view="plan" aria-labelledby="plan-heading" hidden>
           <div class="section-intro plan-intro">
             <div>
@@ -347,6 +480,7 @@
               <p class="eyebrow">日誌からの自動作成</p>
               <h3 id="plan-source-guide-heading">自動で入るのは、日誌に根拠を持てる候補だけです</h3>
               <p id="plan-source-summary" aria-live="polite"></p>
+              <div class="plan-origin-note" id="plan-origin-note"></div>
             </div>
             <div class="plan-source-columns">
               <article class="plan-source-card is-journal">
@@ -442,6 +576,31 @@
           <button class="text-button subtle" type="button" data-close-dialog>キャンセル</button>
           <button class="primary-button" type="submit">日誌を保存</button>
         </div>
+      </form>
+    </dialog>
+
+    <dialog class="child-dialog" id="child-dialog" aria-labelledby="child-dialog-title">
+      <form id="child-form">
+        <div class="dialog-heading">
+          <div><p class="eyebrow">NEW CHILD REGISTRATION</p><h2 id="child-dialog-title">利用児を登録</h2></div>
+          <button class="icon-button" type="button" data-close-child-dialog aria-label="閉じる">×</button>
+        </div>
+        <p class="dialog-guidance">登録後、この利用児専用の日誌・連絡帳・相談支援案・アセスメント・個別支援計画の作業スペースを作成します。最初は日誌と連絡帳が空の状態です。</p>
+        <div class="form-grid">
+          <label><span>表示名 <b>必須</b></span><input name="displayName" type="text" maxlength="80" required placeholder="例：山田 花子" /></label>
+          <label><span>利用児氏名（帳票用）</span><input name="legalName" type="text" maxlength="100" placeholder="例：山田 花子" /></label>
+          <label><span>生年月日</span><input name="birthDate" type="date" /></label>
+          <label><span>学年</span><input name="grade" type="text" maxlength="80" placeholder="例：小学4年生" /></label>
+          <label><span>保護者氏名</span><input name="guardianName" type="text" maxlength="100" placeholder="例：山田 太郎" /></label>
+          <label><span>受給者証番号</span><input name="recipientNumber" type="text" maxlength="100" placeholder="例：1234567890" /></label>
+          <label><span>利用サービス</span><input name="serviceType" type="text" maxlength="100" value="放課後等デイサービス" /></label>
+          <label><span>利用予定</span><input name="usePattern" type="text" maxlength="100" placeholder="例：月・水・金の週3回" /></label>
+        </div>
+        <div class="form-stack">
+          <label><span>本人の希望・大切にしたいこと</span><textarea name="personWish" rows="3" maxlength="2000" placeholder="例：好きな活動を選び、安心して過ごしたい"></textarea></label>
+          <label><span>家族の希望・心配ごと</span><textarea name="familyWish" rows="3" maxlength="2000" placeholder="例：家庭・学校・事業所で安心して過ごせるようにしたい"></textarea></label>
+        </div>
+        <div class="dialog-actions"><button class="text-button subtle" type="button" data-close-child-dialog>キャンセル</button><button class="primary-button" type="submit">登録して利用児情報へ <span aria-hidden="true">→</span></button></div>
       </form>
     </dialog>
 

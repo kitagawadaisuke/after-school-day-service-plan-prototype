@@ -1,14 +1,34 @@
 {
-  "name": "michi-note-demo",
+  "name": "michinote-saas",
   "version": "1.0.0",
   "private": true,
   "type": "module",
   "scripts": {
-    "serve": "python3 scripts/serve.py",
-    "test": "node --test tests/plan-engine.test.mjs",
+    "start": "node server/start.js",
+    "serve": "node server/start.js",
+    "serve:legacy-demo": "python3 scripts/serve.py",
+    "migrate": "node scripts/migrate.mjs",
+    "provision:tenant": "node scripts/provision-tenant.mjs",
+    "test": "node scripts/run-tests.mjs",
+    "test:node-runner": "node --test --test-isolation=none tests/plan-engine.test.mjs tests/permissions.test.mjs tests/server-foundation.test.mjs tests/database-schema.test.mjs tests/infra-contract.test.mjs tests/initial-onboarding.test.mjs tests/saas-frontend.test.mjs",
+    "test:saas-ui": "node scripts/verify-saas-ui.mjs",
     "test:e2e": "node scripts/run-e2e.mjs"
   },
   "devDependencies": {
-    "playwright": "1.62.1"
+    "@electric-sql/pglite": "^0.5.5"
+  },
+  "dependencies": {
+    "@aws-sdk/client-cognito-identity-provider": "^3.1110.0",
+    "@aws-sdk/client-kms": "^3.1110.0",
+    "@aws-sdk/client-s3": "^3.1110.0",
+    "@fastify/cookie": "^11.1.2",
+    "@fastify/helmet": "^13.1.0",
+    "@fastify/rate-limit": "^11.2.0",
+    "aws-jwt-verify": "^5.2.1",
+    "fastify": "^5.12.0",
+    "pg": "^8.23.0",
+    "playwright": "1.62.1",
+    "uuid": "^14.0.1",
+    "zod": "^4.4.3"
   }
 }
