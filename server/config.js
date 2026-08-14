@@ -58,6 +58,7 @@ const configSchema = z
     SESSION_TTL_HOURS: z.coerce.number().int().min(1).max(168).default(12),
     DEV_USER_ID: z.string().uuid().default("018f1db5-c170-7c35-a784-3cfc6f98c201"),
     DEV_TENANT_ID: z.string().uuid().default("018f1db5-c170-7c35-a784-3cfc6f98c101"),
+    DEV_TENANT_NAME: z.string().min(1).max(200).default("開発用デモ法人"),
     DEV_FACILITY_ID: z.string().uuid().default("018f1db5-c170-7c35-a784-3cfc6f98c301"),
     DEV_ROLE: z
       .enum(["tenant_admin", "facility_admin", "plan_approver", "support_staff", "viewer", "auditor"])
@@ -218,6 +219,7 @@ export function loadConfig(env = process.env) {
     devActor: {
       userId: value.DEV_USER_ID,
       tenantId: value.DEV_TENANT_ID,
+      tenantName: value.DEV_TENANT_NAME,
       facilityIds: [value.DEV_FACILITY_ID],
       role: value.DEV_ROLE,
       displayName: "開発用 管理者",
