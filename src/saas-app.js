@@ -1398,9 +1398,10 @@ function expandContactDraft() {
     showFormError(form, $("#contact-error"), "家庭からの連絡・要望の要点・返信のいずれかを入力してから、文章を整えてください。", ["familyMessage", "requestSummary", "facilityReply"]);
     return;
   }
+  const quotedFamilyMessage = familyMessage.replace(/[。．！？!?]+$/u, "");
 
   const draft = [
-    familyMessage ? `ご連絡ありがとうございます。${familyMessage}とのこと、承知しました。` : "",
+    familyMessage ? `ご連絡ありがとうございます。「${quotedFamilyMessage}」とのご連絡を確認しました。` : "",
     requestSummary ? `ご要望の要点は「${requestSummary}」と受け止めています。` : "",
     existingReply ? existingReply : "当日の様子を確認し、必要な配慮についてご連絡します。",
     reflectedInSupport ? "支援内容への反映についても確認します。" : "",
