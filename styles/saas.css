@@ -1488,6 +1488,122 @@ main {
   .date-stamp { display: none; }
 }
 
+/* Readability is a functional requirement: this service is used by staff of all ages. */
+:root { font-size: 17px; }
+
+.eyebrow,
+.brand span:last-child,
+.current-child span:last-child,
+.workspace-context label,
+.staff-context span,
+.save-status,
+.logout-button,
+.sidebar-note,
+.primary-nav button span,
+.admin-nav strong,
+.admin-nav small { font-size: 13px; }
+
+.button,
+.section-tabs button,
+.usage-action,
+.primary-nav button,
+.admin-nav { font-size: 14px; }
+
+.button { min-height: 48px; padding-inline: 19px; }
+.section-tabs button { min-height: 46px; padding-inline: 19px; }
+.logout-button { min-height: 46px; padding-inline: 16px; }
+
+.section-heading > p,
+.subsection-heading p:last-child,
+.workflow-list p,
+.overview-card > p:last-child,
+.page-heading h1 + p,
+.schedule-lane > header p,
+.schedule-summary,
+.muted-copy,
+.empty-state p,
+.document-lane-heading p,
+.readiness-copy,
+.document-item p,
+.pdf-panel-heading p,
+.pdf-error,
+.pdf-empty,
+.generation-evidence > p,
+.review-warning,
+.admin-principle p,
+.dialog-heading h2 + p,
+.form-error { font-size: 14px; }
+
+.workflow-list li { min-height: 242px; }
+.workflow-list li > span,
+.schedule-lane > header span,
+.schedule-meta,
+.schedule-item-list li,
+.schedule-item-list li > span:last-child,
+.summary-grid small,
+.document-lane-heading > span,
+.status-chip,
+.evaluation-chip,
+.evidence-counts dt,
+.evidence-source { font-size: 12px; }
+
+.usage-action { font-size: 14px; }
+.subsection-heading h2,
+.schedule-lane h2 { font-size: 26px; }
+.guardian-heading h3 { font-size: 19px; }
+.guardian-heading > span,
+.primary-contact-chip,
+.guardian-card dl { font-size: 14px; }
+.primary-contact-chip { padding: 5px 9px; }
+
+.detail-grid dt { font-size: 12px; }
+.detail-grid dd { font-size: 17px; }
+.detail-grid dd.is-empty { font-size: 14px; }
+
+.summary-grid strong { font-size: 15px; }
+.record-date { font-size: 14px; }
+.record-date strong { font-size: 18px; }
+.record-body h2 { font-size: 21px; }
+.record-body dl { font-size: 15px; }
+.tag-list li { padding: 5px 9px; font-size: 12px; }
+
+.document-lane-heading { min-height: 260px; }
+.document-lane h2 { font-size: 28px; }
+.document-item strong,
+.pdf-panel-heading h3 { font-size: 17px; }
+.document-actions .button,
+.pdf-create-button { min-height: 42px; font-size: 13px; }
+.pdf-snapshot-list strong,
+.pdf-snapshot-list div > span,
+.pdf-snapshot-list a,
+.monitoring-result-list strong,
+.monitoring-result-list .button { font-size: 13px; }
+.monitoring-result-list .button { min-height: 40px; }
+
+.field > span,
+.checkbox-field legend,
+.schedule-items-fieldset legend,
+.facility-checks legend { font-size: 14px; }
+.field em,
+.field small,
+.schedule-items-fieldset > p,
+.facility-checks label,
+.checkbox-field label,
+.check-line,
+.picker-option small,
+.picker-empty,
+.conflict-detail { font-size: 13px; }
+.field input,
+.field select,
+.field textarea { min-height: 48px; font-size: 16px; }
+
+.staff-card p,
+.staff-identity a,
+.staff-role > strong,
+.staff-card .invitation-warning,
+.audit-list table,
+.workflow-events li { font-size: 13px; }
+
 @media (prefers-reduced-motion: reduce) {
   html { scroll-behavior: auto; }
   *, *::before, *::after { scroll-behavior: auto !important; animation-duration: .01ms !important; animation-iteration-count: 1 !important; transition-duration: .01ms !important; }
