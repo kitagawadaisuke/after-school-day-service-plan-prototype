@@ -693,6 +693,15 @@ main {
 .overview-card h2 { margin-top: 6px; font-size: 21px; }
 .overview-card > p:last-child { margin-top: 14px; color: var(--ink-soft); font-size: 12px; line-height: 1.8; }
 
+.overview-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+  margin-top: 24px;
+  padding-top: 20px;
+  border-top: 1px solid var(--line);
+}
+
 .accent-card {
   border-color: #d8b8a7;
   background:
