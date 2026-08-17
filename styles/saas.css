@@ -1489,7 +1489,7 @@ main {
 }
 
 /* Readability is a functional requirement: this service is used by staff of all ages. */
-:root { font-size: 17px; }
+:root { font-size: 18px; }
 
 .eyebrow,
 .brand span:last-child,
@@ -1501,17 +1501,17 @@ main {
 .sidebar-note,
 .primary-nav button span,
 .admin-nav strong,
-.admin-nav small { font-size: 13px; }
+.admin-nav small { font-size: 14px; }
 
 .button,
 .section-tabs button,
 .usage-action,
 .primary-nav button,
-.admin-nav { font-size: 14px; }
+.admin-nav { font-size: 15px; }
 
-.button { min-height: 48px; padding-inline: 19px; }
-.section-tabs button { min-height: 46px; padding-inline: 19px; }
-.logout-button { min-height: 46px; padding-inline: 16px; }
+.button { min-height: 50px; padding-inline: 20px; }
+.section-tabs button { min-height: 48px; padding-inline: 20px; }
+.logout-button { min-height: 48px; padding-inline: 17px; }
 
 .section-heading > p,
 .subsection-heading p:last-child,
@@ -1532,7 +1532,7 @@ main {
 .review-warning,
 .admin-principle p,
 .dialog-heading h2 + p,
-.form-error { font-size: 14px; }
+.form-error { font-size: 15px; }
 
 .workflow-list li { min-height: 242px; }
 .workflow-list li > span,
@@ -1547,24 +1547,24 @@ main {
 .evidence-counts dt,
 .evidence-source { font-size: 12px; }
 
-.usage-action { font-size: 14px; }
+.usage-action { font-size: 15px; }
 .subsection-heading h2,
 .schedule-lane h2 { font-size: 26px; }
 .guardian-heading h3 { font-size: 19px; }
 .guardian-heading > span,
 .primary-contact-chip,
-.guardian-card dl { font-size: 14px; }
+.guardian-card dl { font-size: 15px; }
 .primary-contact-chip { padding: 5px 9px; }
 
 .detail-grid dt { font-size: 12px; }
-.detail-grid dd { font-size: 17px; }
-.detail-grid dd.is-empty { font-size: 14px; }
+.detail-grid dd { font-size: 18px; }
+.detail-grid dd.is-empty { font-size: 15px; }
 
 .summary-grid strong { font-size: 15px; }
 .record-date { font-size: 14px; }
 .record-date strong { font-size: 18px; }
 .record-body h2 { font-size: 21px; }
-.record-body dl { font-size: 15px; }
+.record-body dl { font-size: 16px; }
 .tag-list li { padding: 5px 9px; font-size: 12px; }
 
 .document-lane-heading { min-height: 260px; }
@@ -1595,7 +1595,7 @@ main {
 .conflict-detail { font-size: 13px; }
 .field input,
 .field select,
-.field textarea { min-height: 48px; font-size: 16px; }
+.field textarea { min-height: 50px; font-size: 17px; }
 
 .staff-card p,
 .staff-identity a,
