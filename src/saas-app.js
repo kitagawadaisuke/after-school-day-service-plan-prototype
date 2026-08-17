@@ -1322,6 +1322,50 @@ function openJournalDialog(trigger) {
   openDialog($("#journal-dialog"), trigger);
 }
 
+const JOURNAL_FIELD_LABELS = Object.freeze({
+  observation: "観察した事実",
+  supportProvided: "行った支援",
+  childResponse: "本人の反応",
+  healthNote: "健康上の連絡",
+});
+
+function journalBulletLines(value) {
+  return String(value || "")
+    .replace(/\r\n?/g, "\n")
+    .split("\n")
+    .map((line) => line.trim().replace(/^(?:[-*・●▪︎]|\d+[.)、])\s*/u, "").trim())
+    .filter(Boolean);
+}
+
+function completeJapaneseSentence(value) {
+  const normalized = value.replace(/\s+/g, " ").replace(/[。．！？!?]+$/u, "").trim();
+  return normalized ? `${normalized}。` : "";
+}
+
+function expandJournalField(fieldName) {
+  const form = $("#journal-form");
+  const field = form.elements[fieldName];
+  const lines = journalBulletLines(field.value);
+  if (!lines.length) {
+    showFormError(form, $("#journal-error"), `「${JOURNAL_FIELD_LABELS[fieldName]}」に箇条書きの事実を入力してから、文章を整えてください。`, [fieldName]);
+    return;
+  }
+  const target = Number($(`[data-journal-length="${fieldName}"]`, form)?.value || 200);
+  const sentences = lines.map(completeJapaneseSentence);
+  const lead = `${JOURNAL_FIELD_LABELS[fieldName]}として、`;
+  const draft = lines.length === 1
+    ? `${lead}${sentences[0]}`
+    : `${lead}${sentences[0]}${sentences.slice(1).map((sentence) => `また、${sentence}`).join("")}`;
+
+  field.value = draft;
+  field.dispatchEvent(new Event("input", { bubbles: true }));
+  clearFormError(form, $("#journal-error"));
+  const lengthNote = draft.length > target
+    ? `事実を削らないため、目安の${target}字を超えています。`
+    : `目安の${target}字に合わせて文章を整えました。`;
+  announce(`${JOURNAL_FIELD_LABELS[fieldName]}を整えました。${lengthNote} 保存前に確認してください。`);
+}
+
 async function submitJournal(event) {
   event.preventDefault();
   const form = event.currentTarget;
@@ -2080,6 +2124,7 @@ function setupEvents() {
   $("#open-child-register")?.addEventListener("click", (event) => openChildRegistration(event.currentTarget));
   $("#edit-child-button")?.addEventListener("click", (event) => openChildEdit(event.currentTarget));
   $("#create-journal-button")?.addEventListener("click", (event) => openJournalDialog(event.currentTarget));
+  $$('[data-expand-journal-field]').forEach((button) => button.addEventListener("click", () => expandJournalField(button.dataset.expandJournalField)));
   $("#create-contact-button")?.addEventListener("click", (event) => openContactDialog(event.currentTarget));
   $("#expand-contact-draft")?.addEventListener("click", expandContactDraft);
   $("#create-guardian-button")?.addEventListener("click", (event) => openGuardianDialog(event.currentTarget));

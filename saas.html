@@ -261,10 +261,23 @@
         <div class="field-grid">
           <label class="field"><span>日時 <em>必須</em></span><input name="occurredAt" type="datetime-local" required></label>
           <label class="field"><span>活動 <em>必須</em></span><input name="activity" required maxlength="500"></label>
-          <label class="field field-wide"><span>観察した事実 <em>必須</em></span><textarea name="observation" required maxlength="4000" rows="4"></textarea></label>
-          <label class="field field-wide"><span>行った支援 <em>必須</em></span><textarea name="supportProvided" required maxlength="4000" rows="4"></textarea></label>
-          <label class="field field-wide"><span>本人の反応 <em>必須</em></span><textarea name="childResponse" required maxlength="4000" rows="4"></textarea></label>
-          <label class="field field-wide"><span>健康上の連絡</span><textarea name="healthNote" maxlength="2000" rows="3"></textarea></label>
+          <div class="field field-wide journal-writing-field">
+            <label for="journal-observation"><span>観察した事実 <em>必須</em></span></label><textarea id="journal-observation" name="observation" required maxlength="4000" rows="4"></textarea>
+            <div class="journal-writing-tools"><label>目安の文字数 <select data-journal-length="observation"><option value="100">100字</option><option value="200" selected>200字</option><option value="300">300字</option><option value="400">400字</option></select></label><button class="button button-quiet" type="button" data-expand-journal-field="observation">箇条書きを整える</button></div>
+          </div>
+          <div class="field field-wide journal-writing-field">
+            <label for="journal-support"><span>行った支援 <em>必須</em></span></label><textarea id="journal-support" name="supportProvided" required maxlength="4000" rows="4"></textarea>
+            <div class="journal-writing-tools"><label>目安の文字数 <select data-journal-length="supportProvided"><option value="100">100字</option><option value="200" selected>200字</option><option value="300">300字</option><option value="400">400字</option></select></label><button class="button button-quiet" type="button" data-expand-journal-field="supportProvided">箇条書きを整える</button></div>
+          </div>
+          <div class="field field-wide journal-writing-field">
+            <label for="journal-response"><span>本人の反応 <em>必須</em></span></label><textarea id="journal-response" name="childResponse" required maxlength="4000" rows="4"></textarea>
+            <div class="journal-writing-tools"><label>目安の文字数 <select data-journal-length="childResponse"><option value="100">100字</option><option value="200" selected>200字</option><option value="300">300字</option><option value="400">400字</option></select></label><button class="button button-quiet" type="button" data-expand-journal-field="childResponse">箇条書きを整える</button></div>
+          </div>
+          <div class="field field-wide journal-writing-field">
+            <label for="journal-health"><span>健康上の連絡</span></label><textarea id="journal-health" name="healthNote" maxlength="2000" rows="3"></textarea>
+            <div class="journal-writing-tools"><label>目安の文字数 <select data-journal-length="healthNote"><option value="80">80字</option><option value="150" selected>150字</option><option value="250">250字</option></select></label><button class="button button-quiet" type="button" data-expand-journal-field="healthNote">箇条書きを整える</button></div>
+          </div>
+          <p class="journal-writing-note field-wide">箇条書きの事実を文章に整えます。事実は追加・削除しないため、目安の文字数を超える場合があります。保存前に必ず確認・編集してください。</p>
           <fieldset class="field-wide checkbox-field"><legend>関連する5領域</legend><div>
             <label><input type="checkbox" name="fiveDomains" value="health_life">健康・生活</label>
             <label><input type="checkbox" name="fiveDomains" value="motor_sensory">運動・感覚</label>
