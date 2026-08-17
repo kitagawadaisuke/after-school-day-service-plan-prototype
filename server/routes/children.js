@@ -3,7 +3,15 @@ import { auditContextFromRequest, writeAuditEvent } from "../audit.js";
 import { PERMISSIONS, requirePermission } from "../auth/permissions.js";
 import { withTenantTransaction } from "../db/tenant-transaction.js";
 import { applyIdempotencyReply, withIdempotentTenantTransaction } from "../db/idempotency.js";
-import { createChild, getChild, listChildren, updateChild } from "../repositories/children.js";
+import {
+  createChild,
+  getChild,
+  getChildProfilePhoto,
+  listChildren,
+  removeChildProfilePhoto,
+  updateChild,
+  updateChildProfilePhoto,
+} from "../repositories/children.js";
 import { AppError } from "../errors.js";
 import {
   addressSchema,
@@ -72,6 +80,36 @@ const listQuerySchema = z
     limit: z.coerce.number().int().min(1).max(100).default(30),
   })
   .strict();
+
+const profilePhotoSchema = z.object({
+  dataUrl: z.string().trim().min(32).max(960_000),
+}).strict();
+
+const profilePhotoMimeTypes = new Set(["image/jpeg", "image/png", "image/webp"]);
+const maxProfilePhotoBytes = 700 * 1024;
+
+function hasExpectedImageSignature(contentType, bytes) {
+  if (contentType === "image/jpeg") return bytes.length >= 3 && bytes[0] === 0xff && bytes[1] === 0xd8 && bytes[2] === 0xff;
+  if (contentType === "image/png") {
+    return bytes.length >= 8
+      && bytes.subarray(0, 8).equals(Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a]));
+  }
+  return bytes.length >= 12
+    && bytes.subarray(0, 4).toString("ascii") === "RIFF"
+    && bytes.subarray(8, 12).toString("ascii") === "WEBP";
+}
+
+function decodeProfilePhoto(dataUrl) {
+  const match = /^data:(image\/(?:jpeg|png|webp));base64,([A-Za-z0-9+/]+={0,2})$/.exec(dataUrl);
+  if (!match || !profilePhotoMimeTypes.has(match[1])) {
+    throw new AppError(422, "INVALID_PROFILE_PHOTO", "JPEG、PNG、WebP形式の写真を選択してください。");
+  }
+  const bytes = Buffer.from(match[2], "base64");
+  if (!bytes.length || bytes.byteLength > maxProfilePhotoBytes || !hasExpectedImageSignature(match[1], bytes)) {
+    throw new AppError(422, "INVALID_PROFILE_PHOTO", "写真は700KB以下のJPEG、PNG、WebPを選択してください。");
+  }
+  return { contentType: match[1], bytes };
+}
 
 async function protectCertificateNumber(app, actor, input) {
   if (!Object.hasOwn(input, "recipientCertificateNumber")) return input;
@@ -173,6 +211,63 @@ export async function childRoutes(app) {
         resourceType: "child",
         resourceId: childId,
         changedFields,
+      });
+      return updated;
+    });
+    return setVersionEtag(reply, child);
+  });
+
+  app.get("/children/:childId/profile-photo", async (request, reply) => {
+    requirePermission(request.actor, PERMISSIONS.VIEW_CLIENTS);
+    const { childId } = parseInput(z.object({ childId: uuidSchema }).strict(), request.params);
+    const photo = await withTenantTransaction(app.db, request.actor, (client) =>
+      getChildProfilePhoto(client, request.actor.tenantId, childId),
+    );
+    if (!photo) throw new AppError(404, "PROFILE_PHOTO_NOT_FOUND", "顔写真は登録されていません。");
+    reply.header("Cache-Control", "private, no-store");
+    reply.header("X-Content-Type-Options", "nosniff");
+    return reply.type(photo.contentType).send(photo.bytes);
+  });
+
+  app.put("/children/:childId/profile-photo", async (request, reply) => {
+    requirePermission(request.actor, PERMISSIONS.EDIT_CLIENTS);
+    const { childId } = parseInput(z.object({ childId: uuidSchema }).strict(), request.params);
+    const input = decodeProfilePhoto(parseInput(profilePhotoSchema, request.body).dataUrl);
+    const expectedVersion = parseIfMatch(request);
+    const audit = auditContextFromRequest(request, app.config);
+    const child = await withTenantTransaction(app.db, request.actor, async (client) => {
+      const updated = await updateChildProfilePhoto(client, request.actor, childId, expectedVersion, input);
+      await writeAuditEvent(client, {
+        ...audit,
+        tenantId: request.actor.tenantId,
+        facilityId: updated.facilityId,
+        actorUserId: request.actor.userId,
+        action: "child.profile_photo_updated",
+        resourceType: "child",
+        resourceId: childId,
+        changedFields: ["profilePhoto"],
+      });
+      return updated;
+    });
+    return setVersionEtag(reply, child);
+  });
+
+  app.delete("/children/:childId/profile-photo", async (request, reply) => {
+    requirePermission(request.actor, PERMISSIONS.EDIT_CLIENTS);
+    const { childId } = parseInput(z.object({ childId: uuidSchema }).strict(), request.params);
+    const expectedVersion = parseIfMatch(request);
+    const audit = auditContextFromRequest(request, app.config);
+    const child = await withTenantTransaction(app.db, request.actor, async (client) => {
+      const updated = await removeChildProfilePhoto(client, request.actor, childId, expectedVersion);
+      await writeAuditEvent(client, {
+        ...audit,
+        tenantId: request.actor.tenantId,
+        facilityId: updated.facilityId,
+        actorUserId: request.actor.userId,
+        action: "child.profile_photo_removed",
+        resourceType: "child",
+        resourceId: childId,
+        changedFields: ["profilePhoto"],
       });
       return updated;
     });

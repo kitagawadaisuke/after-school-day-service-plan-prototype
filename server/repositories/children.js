@@ -21,6 +21,7 @@ const CHILD_SELECT = `
     recipient_certificate_last4,
     certificate_valid_from,
     certificate_valid_to,
+    profile_photo_updated_at,
     status,
     updated_at,
     row_version
@@ -53,6 +54,9 @@ function serializeChild(row) {
     recipientCertificateMasked: row.recipient_certificate_last4 ? `••••${row.recipient_certificate_last4}` : null,
     certificateValidFrom: dateOnly(row.certificate_valid_from),
     certificateValidTo: dateOnly(row.certificate_valid_to),
+    profilePhotoUpdatedAt: row.profile_photo_updated_at instanceof Date
+      ? row.profile_photo_updated_at.toISOString()
+      : row.profile_photo_updated_at || null,
     status: row.status,
     updatedAt: row.updated_at instanceof Date ? row.updated_at.toISOString() : row.updated_at,
     rowVersion: Number(row.row_version),
@@ -207,6 +211,89 @@ export async function updateChild(client, actor, childId, expectedVersion, chang
     parameters,
   );
 
+  if (result.rows[0]) return serializeChild(result.rows[0]);
+
+  const current = await client.query(
+    "select row_version, updated_at, updated_by from public.children where tenant_id = $1 and id = $2 and deleted_at is null",
+    [actor.tenantId, childId],
+  );
+  if (!current.rows[0]) throw notFound("利用児が見つかりません。");
+  throw conflict("EDIT_CONFLICT", "別の職員が利用児情報を更新しました。最新内容を確認してください。", {
+    currentVersion: Number(current.rows[0].row_version),
+    updatedAt: current.rows[0].updated_at,
+    updatedBy: current.rows[0].updated_by,
+  });
+}
+
+export async function getChildProfilePhoto(client, tenantId, childId) {
+  const result = await client.query(
+    `select profile_photo, profile_photo_content_type, profile_photo_updated_at
+       from public.children
+      where tenant_id = $1 and id = $2 and deleted_at is null`,
+    [tenantId, childId],
+  );
+  const row = result.rows[0];
+  if (!row) throw notFound("利用児が見つかりません。");
+  if (!row.profile_photo || !row.profile_photo_content_type) return null;
+  return {
+    bytes: Buffer.from(row.profile_photo),
+    contentType: row.profile_photo_content_type,
+    updatedAt: row.profile_photo_updated_at instanceof Date
+      ? row.profile_photo_updated_at.toISOString()
+      : row.profile_photo_updated_at,
+  };
+}
+
+export async function updateChildProfilePhoto(client, actor, childId, expectedVersion, photo) {
+  const result = await client.query(
+    `update public.children
+        set profile_photo = $4,
+            profile_photo_content_type = $5,
+            profile_photo_byte_size = $6,
+            profile_photo_updated_at = now(),
+            updated_by = $7,
+            updated_at = now(),
+            row_version = row_version + 1
+      where tenant_id = $1 and id = $2 and row_version = $3 and deleted_at is null
+      returning *`,
+    [
+      actor.tenantId,
+      childId,
+      expectedVersion,
+      photo.bytes,
+      photo.contentType,
+      photo.bytes.byteLength,
+      actor.userId,
+    ],
+  );
+  if (result.rows[0]) return serializeChild(result.rows[0]);
+
+  const current = await client.query(
+    "select row_version, updated_at, updated_by from public.children where tenant_id = $1 and id = $2 and deleted_at is null",
+    [actor.tenantId, childId],
+  );
+  if (!current.rows[0]) throw notFound("利用児が見つかりません。");
+  throw conflict("EDIT_CONFLICT", "別の職員が利用児情報を更新しました。最新内容を確認してください。", {
+    currentVersion: Number(current.rows[0].row_version),
+    updatedAt: current.rows[0].updated_at,
+    updatedBy: current.rows[0].updated_by,
+  });
+}
+
+export async function removeChildProfilePhoto(client, actor, childId, expectedVersion) {
+  const result = await client.query(
+    `update public.children
+        set profile_photo = null,
+            profile_photo_content_type = null,
+            profile_photo_byte_size = null,
+            profile_photo_updated_at = null,
+            updated_by = $4,
+            updated_at = now(),
+            row_version = row_version + 1
+      where tenant_id = $1 and id = $2 and row_version = $3 and deleted_at is null
+      returning *`,
+    [actor.tenantId, childId, expectedVersion, actor.userId],
+  );
   if (result.rows[0]) return serializeChild(result.rows[0]);
 
   const current = await client.query(

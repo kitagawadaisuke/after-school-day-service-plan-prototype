@@ -97,8 +97,16 @@
         <main id="main-content" tabindex="-1">
           <section id="view-child" class="page-view is-active" data-page-view="child" aria-labelledby="child-title">
             <header class="page-heading">
-              <div><p class="eyebrow">利用児台帳</p><h1 id="child-title">利用児情報</h1><p>本人・保護者・一週間の生活を、同じ利用児の情報として確認します。</p></div>
-              <button id="edit-child-button" class="button button-secondary permission-edit-clients" type="button" hidden>基本情報を編集</button>
+              <div class="child-heading-content">
+                <div id="child-profile-photo" class="child-profile-photo" aria-label="利用児の顔写真"></div>
+                <div><p class="eyebrow">利用児台帳</p><h1 id="child-title">利用児情報</h1><p>本人・保護者・一週間の生活を、同じ利用児の情報として確認します。</p></div>
+              </div>
+              <div class="child-heading-actions">
+                <input id="child-photo-input" type="file" accept="image/jpeg,image/png,image/webp" hidden>
+                <button id="change-child-photo-button" class="button button-secondary permission-edit-clients" type="button" hidden>写真を登録</button>
+                <button id="remove-child-photo-button" class="button button-quiet permission-edit-clients" type="button" hidden>写真を削除</button>
+                <button id="edit-child-button" class="button button-secondary permission-edit-clients" type="button" hidden>基本情報を編集</button>
+              </div>
             </header>
             <div class="section-tabs" role="tablist" aria-label="利用児情報の種類">
               <button id="child-tab-basic" type="button" role="tab" aria-selected="true" aria-controls="child-panel-basic" data-child-panel="basic">基本情報</button>

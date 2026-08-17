@@ -172,7 +172,8 @@ export async function buildApp(options = {}) {
         defaultSrc: ["'self'"],
         scriptSrc: ["'self'"],
         styleSrc: ["'self'", "'unsafe-inline'"],
-        imgSrc: ["'self'", "data:"],
+        // Image resizing for an explicitly selected profile photo uses a short-lived blob URL.
+        imgSrc: ["'self'", "data:", "blob:"],
         objectSrc: ["'none'"],
         baseUri: ["'none'"],
         formAction: ["'self'"],

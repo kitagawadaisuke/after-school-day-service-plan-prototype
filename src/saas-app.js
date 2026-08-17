@@ -368,6 +368,32 @@ function renderFacilities() {
   }
 }
 
+function profilePhotoUrl(child) {
+  if (!child?.profilePhotoUpdatedAt) return null;
+  return `${API_BASE}/children/${encodeURIComponent(child.id)}/profile-photo?v=${encodeURIComponent(child.profilePhotoUpdatedAt)}`;
+}
+
+function renderProfilePhoto(container, child, className = "") {
+  if (!container) return;
+  container.replaceChildren();
+  container.className = ["child-profile-photo", className].filter(Boolean).join(" ");
+  const imageUrl = profilePhotoUrl(child);
+  if (imageUrl) {
+    const image = element("img", {
+      attributes: {
+        src: imageUrl,
+        alt: `${child.displayName}さんの顔写真`,
+      },
+    });
+    image.addEventListener("error", () => {
+      container.replaceChildren(element("span", { text: child.displayName.slice(0, 1), attributes: { "aria-hidden": "true" } }));
+    }, { once: true });
+    container.append(image);
+    return;
+  }
+  container.append(element("span", { text: child?.displayName?.slice(0, 1) || "児", attributes: { "aria-hidden": "true" } }));
+}
+
 function renderChildPicker() {
   const container = $("#child-picker-results");
   const query = $("#child-search-input").value.trim().toLocaleLowerCase("ja");
@@ -383,7 +409,8 @@ function renderChildPicker() {
   for (const child of children) {
     const listItem = element("div", { attributes: { role: "listitem" } });
     const button = element("button", { className: "picker-option", attributes: { type: "button" } });
-    const avatar = element("span", { className: "picker-avatar", text: child.displayName.slice(0, 1), attributes: { "aria-hidden": "true" } });
+    const avatar = element("span", { className: "picker-avatar" });
+    renderProfilePhoto(avatar, child, "picker-avatar");
     const copy = element("span");
     copy.append(
       element("strong", { text: child.displayName }),
@@ -405,10 +432,24 @@ function updateSelectedChildChrome() {
   renderChildDetail();
 }
 
+function renderChildProfilePhoto() {
+  const child = state.selectedChild;
+  renderProfilePhoto($("#child-profile-photo"), child);
+  const canEdit = Boolean(child) && can("clients.edit");
+  const changeButton = $("#change-child-photo-button");
+  const removeButton = $("#remove-child-photo-button");
+  if (changeButton) {
+    changeButton.hidden = !canEdit;
+    changeButton.textContent = child?.profilePhotoUpdatedAt ? "写真を変更" : "写真を登録";
+  }
+  if (removeButton) removeButton.hidden = !canEdit || !child?.profilePhotoUpdatedAt;
+}
+
 function renderChildDetail() {
   const container = $("#child-detail");
   const editButton = $("#edit-child-button");
   if (editButton) editButton.hidden = state.childPanel !== "basic" || !state.selectedChild || !can("clients.edit");
+  renderChildProfilePhoto();
   container.replaceChildren();
   const child = state.selectedChild;
   if (!child) {
@@ -1181,6 +1222,94 @@ function openChildEdit(trigger) {
   form.elements.recipientCertificateNumber.value = "";
   clearFormError(form, $("#child-edit-error"));
   openDialog($("#child-edit-dialog"), trigger);
+}
+
+function readBlobAsDataUrl(blob) {
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.addEventListener("load", () => resolve(reader.result));
+    reader.addEventListener("error", () => reject(new Error("写真を読み込めませんでした。")));
+    reader.readAsDataURL(blob);
+  });
+}
+
+async function optimizeChildProfilePhoto(file) {
+  if (!["image/jpeg", "image/png", "image/webp"].includes(file.type)) {
+    throw new Error("JPEG、PNG、WebP形式の写真を選択してください。");
+  }
+  if (file.size > 10 * 1024 * 1024) throw new Error("写真は10MB以下のファイルを選択してください。");
+
+  const objectUrl = URL.createObjectURL(file);
+  try {
+    const image = await new Promise((resolve, reject) => {
+      const source = new Image();
+      source.addEventListener("load", () => resolve(source), { once: true });
+      source.addEventListener("error", () => reject(new Error("写真を読み込めませんでした。")), { once: true });
+      source.src = objectUrl;
+    });
+    const longestSide = Math.max(image.naturalWidth, image.naturalHeight);
+    const scale = Math.min(1, 640 / longestSide);
+    const canvas = document.createElement("canvas");
+    canvas.width = Math.max(1, Math.round(image.naturalWidth * scale));
+    canvas.height = Math.max(1, Math.round(image.naturalHeight * scale));
+    canvas.getContext("2d", { alpha: false }).drawImage(image, 0, 0, canvas.width, canvas.height);
+    const blob = await new Promise((resolve) => canvas.toBlob(resolve, "image/jpeg", 0.84));
+    if (!blob || blob.size > 700 * 1024) throw new Error("写真を小さくできませんでした。別の写真を選択してください。");
+    return readBlobAsDataUrl(blob);
+  } finally {
+    URL.revokeObjectURL(objectUrl);
+  }
+}
+
+function replaceSelectedChild(updated, etag) {
+  state.selectedChild = updated;
+  state.selectedChildEtag = etag || `"${updated.rowVersion}"`;
+  state.children = state.children.map((child) => child.id === updated.id ? updated : child);
+  renderChildPicker();
+  updateSelectedChildChrome();
+}
+
+async function submitChildProfilePhoto(file) {
+  if (!state.selectedChild || !file) return;
+  const input = $("#child-photo-input");
+  const button = $("#change-child-photo-button");
+  button.disabled = true;
+  button.setAttribute("aria-busy", "true");
+  try {
+    const dataUrl = await optimizeChildProfilePhoto(file);
+    const { data, etag } = await api(`/children/${encodeURIComponent(state.selectedChild.id)}/profile-photo`, {
+      method: "PUT",
+      etag: state.selectedChildEtag,
+      body: { dataUrl },
+    });
+    replaceSelectedChild(data, etag);
+    announce("顔写真を登録しました。");
+  } catch (error) {
+    if (error.status !== 409) announce(errorMessage(error));
+  } finally {
+    input.value = "";
+    button.disabled = false;
+    button.removeAttribute("aria-busy");
+  }
+}
+
+async function deleteChildProfilePhoto() {
+  if (!state.selectedChild?.profilePhotoUpdatedAt) return;
+  const button = $("#remove-child-photo-button");
+  if (!window.confirm("登録済みの顔写真を削除しますか？")) return;
+  button.disabled = true;
+  try {
+    const { data, etag } = await api(`/children/${encodeURIComponent(state.selectedChild.id)}/profile-photo`, {
+      method: "DELETE",
+      etag: state.selectedChildEtag,
+    });
+    replaceSelectedChild(data, etag);
+    announce("顔写真を削除しました。");
+  } catch (error) {
+    if (error.status !== 409) announce(errorMessage(error));
+  } finally {
+    button.disabled = false;
+  }
 }
 
 function childBodyFromForm(form, includeFacility = false) {
@@ -2123,6 +2252,14 @@ function setupEvents() {
   $("#child-search-input").addEventListener("input", renderChildPicker);
   $("#open-child-register")?.addEventListener("click", (event) => openChildRegistration(event.currentTarget));
   $("#edit-child-button")?.addEventListener("click", (event) => openChildEdit(event.currentTarget));
+  $("#change-child-photo-button")?.addEventListener("click", () => $("#child-photo-input")?.click());
+  $("#child-photo-input")?.addEventListener("change", (event) => {
+    // `currentTarget` is cleared after this listener returns. Capture the file
+    // before handing the asynchronous upload to the shared error handler.
+    const file = event.currentTarget?.files?.[0];
+    runAsync(() => submitChildProfilePhoto(file));
+  });
+  $("#remove-child-photo-button")?.addEventListener("click", () => runAsync(deleteChildProfilePhoto));
   $("#create-journal-button")?.addEventListener("click", (event) => openJournalDialog(event.currentTarget));
   $$('[data-expand-journal-field]').forEach((button) => button.addEventListener("click", () => expandJournalField(button.dataset.expandJournalField)));
   $("#create-contact-button")?.addEventListener("click", (event) => openContactDialog(event.currentTarget));

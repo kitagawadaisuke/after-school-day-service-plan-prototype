@@ -144,6 +144,30 @@ test("保護者情報を利用児に紐づけ、主たる保護者の切替と�
       plaintext: "9999000012",
     }]);
 
+    const photoDataUrl = "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAusB9Y9J6o8AAAAASUVORK5CYII=";
+    const savedPhoto = await app.inject({
+      method: "PUT",
+      url: `/api/v1/children/${IDS.child}/profile-photo`,
+      headers: { "if-match": protectedCertificate.headers.etag },
+      payload: { dataUrl: photoDataUrl },
+    });
+    assert.equal(savedPhoto.statusCode, 200);
+    assert.equal(typeof savedPhoto.json().profilePhotoUpdatedAt, "string");
+    assert.equal(savedPhoto.body.includes("data:image"), false);
+
+    const fetchedPhoto = await app.inject({ method: "GET", url: `/api/v1/children/${IDS.child}/profile-photo` });
+    assert.equal(fetchedPhoto.statusCode, 200);
+    assert.equal(fetchedPhoto.headers["content-type"], "image/png");
+    assert.match(fetchedPhoto.headers["cache-control"], /no-store/);
+
+    const removedPhoto = await app.inject({
+      method: "DELETE",
+      url: `/api/v1/children/${IDS.child}/profile-photo`,
+      headers: { "if-match": savedPhoto.headers.etag },
+    });
+    assert.equal(removedPhoto.statusCode, 200);
+    assert.equal(removedPhoto.json().profilePhotoUpdatedAt, null);
+
     const first = await app.inject({
       method: "POST",
       url: `/api/v1/children/${IDS.child}/guardians`,
