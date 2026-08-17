@@ -869,15 +869,44 @@ main {
 }
 
 .detail-grid > div {
+  display: flex;
   min-height: 106px;
+  flex-direction: column;
   padding: 18px;
   border-right: 1px solid var(--line);
   border-bottom: 1px solid var(--line);
+  background: linear-gradient(180deg, rgb(220 232 226 / 28%), transparent 42%);
 }
 
 .detail-grid > .wide { grid-column: span 3; }
-.detail-grid dt { color: var(--ink-soft); font-size: 10px; font-weight: 700; }
-.detail-grid dd { margin: 10px 0 0; font-size: 13px; line-height: 1.8; white-space: pre-wrap; }
+.detail-grid dt {
+  width: fit-content;
+  padding: 3px 7px;
+  border-radius: 4px;
+  color: #476866;
+  font-family: "BIZ UDPGothic", "Yu Gothic", sans-serif;
+  font-size: 10px;
+  font-weight: 800;
+  letter-spacing: .06em;
+  line-height: 1.35;
+  background: rgb(220 232 226 / 68%);
+}
+
+.detail-grid dd {
+  margin: 13px 0 0;
+  color: var(--forest-deep);
+  font-size: 15px;
+  font-weight: 650;
+  letter-spacing: .015em;
+  line-height: 1.65;
+  white-space: pre-wrap;
+}
+
+.detail-grid dd.is-empty {
+  color: #7e8d8b;
+  font-size: 12px;
+  font-weight: 500;
+}
 
 .empty-state {
   display: grid;

@@ -133,7 +133,12 @@ function element(tagName, options = {}) {
 
 function appendDefinition(list, label, value, options = {}) {
   const wrapper = element("div", { className: options.wide ? "wide" : "" });
-  wrapper.append(element("dt", { text: label }), element("dd", { text: value || "未入力" }));
+  const displayValue = value === undefined || value === null || value === "" ? "未入力" : value;
+  const isEmpty = displayValue === "未入力";
+  wrapper.append(
+    element("dt", { text: label }),
+    element("dd", { className: isEmpty ? "is-empty" : "", text: displayValue }),
+  );
   list.append(wrapper);
 }
 
