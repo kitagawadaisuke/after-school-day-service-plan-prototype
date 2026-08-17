@@ -2069,6 +2069,11 @@ function setupEvents() {
     renderChildPicker();
     openDialog($("#child-picker-dialog"), event.currentTarget);
   });
+  $$('[data-open-child-picker]').forEach((button) => button.addEventListener("click", (event) => {
+    $("#child-search-input").value = "";
+    renderChildPicker();
+    openDialog($("#child-picker-dialog"), event.currentTarget);
+  }));
   $("#child-search-input").addEventListener("input", renderChildPicker);
   $("#open-child-register")?.addEventListener("click", (event) => openChildRegistration(event.currentTarget));
   $("#edit-child-button")?.addEventListener("click", (event) => openChildEdit(event.currentTarget));

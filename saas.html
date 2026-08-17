@@ -110,39 +110,41 @@
               </div>
             </header>
 
-            <section class="workflow-panel" aria-labelledby="workflow-title">
+            <section class="workflow-panel usage-panel" aria-labelledby="workflow-title">
               <div class="section-heading">
                 <div>
                   <p class="eyebrow">はじめて使う方へ</p>
-                  <h2 id="workflow-title">どの情報が、何につながるか</h2>
+                  <h2 id="workflow-title">まずはこの順番で使います</h2>
                 </div>
-                <p>相談支援事業者の計画と、事業所が作る個別支援計画は別の書類として管理します。</p>
+                <p>利用児を選んでから、基本情報・日誌・連絡帳・計画書の順に必要な情報を入力します。</p>
               </div>
-              <ol class="workflow-list">
+              <ol class="workflow-list usage-steps">
                 <li>
-                  <span>起点</span>
-                  <strong>相談支援計画を受け取る</strong>
-                  <p>本人・家族の希望と、暮らし全体の支援方針を登録します。</p>
+                  <span>最初に</span>
+                  <strong>利用児を選ぶ・登録する</strong>
+                  <p>左側の「現在の利用児」から選びます。登録がない場合は、ここから新しく登録します。</p>
+                  <button class="usage-action" type="button" data-open-child-picker>利用児を選ぶ・登録する <span aria-hidden="true">→</span></button>
                 </li>
                 <li>
-                  <span>方針</span>
-                  <strong>事業所でアセスメント</strong>
-                  <p>面談と観察から、事業所で取り組む課題を整理します。</p>
+                  <span>利用開始時</span>
+                  <strong>基本情報を整える</strong>
+                  <p>本人・保護者・連絡先を登録し、必要に応じて現在の週間予定も入力します。</p>
+                  <button class="usage-action" type="button" data-view="child">基本情報を開く <span aria-hidden="true">→</span></button>
                 </li>
                 <li>
-                  <span>計画</span>
-                  <strong>個別支援計画を作る</strong>
-                  <p>具体的な目標・支援内容・担当・評価方法を決めます。</p>
+                  <span>支援のたびに</span>
+                  <strong>日誌と連絡帳を残す</strong>
+                  <p>支援後の事実は日誌へ。家庭からの要望や返信は連絡帳へ、必要な範囲で残します。</p>
+                  <div class="usage-actions">
+                    <button class="usage-action" type="button" data-view="journals">日誌を開く <span aria-hidden="true">→</span></button>
+                    <button class="usage-action" type="button" data-view="contact">連絡帳を開く <span aria-hidden="true">→</span></button>
+                  </div>
                 </li>
                 <li>
-                  <span>実践</span>
-                  <strong>日誌と連絡帳に残す</strong>
-                  <p>行った支援、本人の反応、家庭からの要望を事実で記録します。</p>
-                </li>
-                <li>
-                  <span>更新</span>
-                  <strong>モニタリングして次へ</strong>
-                  <p>計画どおり進んだかを評価し、次期計画へ根拠を引き継ぎます。</p>
+                  <span>見直すときに</span>
+                  <strong>計画書の下書きを作る</strong>
+                  <p>日誌・連絡帳を根拠に、アセスメント、個別支援計画、モニタリングを確認・編集します。</p>
+                  <button class="usage-action" type="button" data-view="documents">計画書を開く <span aria-hidden="true">→</span></button>
                 </li>
               </ol>
             </section>
