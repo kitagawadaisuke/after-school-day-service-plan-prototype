@@ -103,7 +103,7 @@ const state = {
   consentIntent: null,
   conflictReload: null,
   pendingCreationKeys: new Map(),
-  activeView: "overview",
+  activeView: "child",
   dialogTriggers: new Map(),
   conflictResumeDialog: null,
 };
@@ -402,35 +402,7 @@ function updateSelectedChildChrome() {
   $("#current-child-meta").textContent = child
     ? `${child.managementCode} ／ ${child.grade || "学年未入力"}`
     : "一覧から選んでください";
-  renderOverviewChild();
   renderChildDetail();
-}
-
-function renderOverviewChild() {
-  const container = $("#overview-child-summary");
-  container.replaceChildren();
-  const child = state.selectedChild;
-  if (!child) {
-    container.className = "empty-state compact";
-    container.append(
-      element("strong", { text: "利用児を選択してください" }),
-      element("p", { text: "基本情報・記録・計画書を同じ利用児にひも付けて表示します。" }),
-    );
-    return;
-  }
-  container.className = "";
-  container.append(element("h3", { text: child.displayName }));
-  const summary = element("div", { className: "summary-grid" });
-  for (const [label, value] of [
-    ["管理番号", child.managementCode],
-    ["学年", child.grade || "未入力"],
-    ["在籍状況", child.status === "active" ? "利用中" : "利用終了等"],
-  ]) {
-    const item = element("div");
-    item.append(element("small", { text: label }), element("strong", { text: value }));
-    summary.append(item);
-  }
-  container.append(summary);
 }
 
 function renderChildDetail() {
@@ -2171,16 +2143,8 @@ function setupEvents() {
   });
 }
 
-function renderToday() {
-  const today = new Date();
-  $("#today-month").textContent = new Intl.DateTimeFormat("ja-JP", { year: "numeric", month: "long" }).format(today);
-  $("#today-day").textContent = String(today.getDate()).padStart(2, "0");
-  $("#today-weekday").textContent = new Intl.DateTimeFormat("ja-JP", { weekday: "long" }).format(today);
-}
-
 async function initialize() {
   configureDialogs();
-  renderToday();
   try {
     const sessionResult = await api("/session");
     state.session = sessionResult.data;
