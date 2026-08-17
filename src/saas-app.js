@@ -1388,6 +1388,30 @@ function openContactDialog(trigger) {
   openDialog($("#contact-dialog"), trigger);
 }
 
+function expandContactDraft() {
+  const form = $("#contact-form");
+  const familyMessage = form.elements.familyMessage.value.trim();
+  const requestSummary = form.elements.requestSummary.value.trim();
+  const existingReply = form.elements.facilityReply.value.trim();
+  const reflectedInSupport = form.elements.reflectedInSupport.checked;
+  if (![familyMessage, requestSummary, existingReply].some(Boolean)) {
+    showFormError(form, $("#contact-error"), "家庭からの連絡・要望の要点・返信のいずれかを入力してから、文章を整えてください。", ["familyMessage", "requestSummary", "facilityReply"]);
+    return;
+  }
+
+  const draft = [
+    familyMessage ? `ご連絡ありがとうございます。${familyMessage}とのこと、承知しました。` : "",
+    requestSummary ? `ご要望の要点は「${requestSummary}」と受け止めています。` : "",
+    existingReply ? existingReply : "当日の様子を確認し、必要な配慮についてご連絡します。",
+    reflectedInSupport ? "支援内容への反映についても確認します。" : "",
+  ].filter(Boolean).join("\n\n");
+
+  form.elements.facilityReply.value = draft;
+  form.elements.facilityReply.dispatchEvent(new Event("input", { bubbles: true }));
+  clearFormError(form, $("#contact-error"));
+  announce("返信文の下書きを作成しました。保存前に内容を確認してください。");
+}
+
 async function submitContact(event) {
   event.preventDefault();
   const form = event.currentTarget;
@@ -2084,6 +2108,7 @@ function setupEvents() {
   $("#edit-child-button")?.addEventListener("click", (event) => openChildEdit(event.currentTarget));
   $("#create-journal-button")?.addEventListener("click", (event) => openJournalDialog(event.currentTarget));
   $("#create-contact-button")?.addEventListener("click", (event) => openContactDialog(event.currentTarget));
+  $("#expand-contact-draft")?.addEventListener("click", expandContactDraft);
   $("#create-guardian-button")?.addEventListener("click", (event) => openGuardianDialog(event.currentTarget));
   $("#add-schedule-item")?.addEventListener("click", () => addScheduleItem());
   $("#open-monitoring-generation")?.addEventListener("click", (event) => openMonitoringGeneration(event.currentTarget));

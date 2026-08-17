@@ -352,6 +352,11 @@
           <label class="field field-wide"><span>家庭からの連絡</span><textarea name="familyMessage" maxlength="4000" rows="4"></textarea></label>
           <label class="field field-wide"><span>事業所からの返信</span><textarea name="facilityReply" maxlength="4000" rows="4"></textarea></label>
           <label class="field field-wide"><span>要望の要点</span><textarea name="requestSummary" maxlength="2000" rows="3"></textarea></label>
+          <div class="draft-assist field-wide">
+            <div><strong>返信文の下書き</strong><p>入力した内容をもとに、事業所からの返信文を整えます。</p></div>
+            <button id="expand-contact-draft" class="button button-secondary" type="button">文章を整える</button>
+            <small>新しい具体的事実は追加しません。保存前に内容を確認してください。</small>
+          </div>
           <label class="check-line field-wide"><input name="reflectedInSupport" type="checkbox"><span>この要望を支援内容に反映した</span></label>
         </div>
         <div class="dialog-actions"><button class="button button-ghost" type="button" data-close-dialog="contact-dialog">キャンセル</button><button class="button button-primary" type="submit">連絡を保存</button></div>

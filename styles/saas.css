@@ -1243,6 +1243,25 @@ main {
 
 .field-wide { grid-column: 1 / -1; }
 
+.draft-assist {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 8px 18px;
+  align-items: center;
+  margin-top: 20px;
+  padding: 16px 18px;
+  border: 1px solid #b9cbc1;
+  border-radius: 12px;
+  background: linear-gradient(135deg, rgb(220 232 226 / 64%), rgb(252 250 244 / 92%));
+}
+
+.draft-assist strong,
+.draft-assist p,
+.draft-assist small { margin: 0; }
+.draft-assist strong { color: var(--forest); font-size: 15px; }
+.draft-assist p { margin-top: 4px; color: var(--ink-soft); font-size: 13px; line-height: 1.6; }
+.draft-assist small { grid-column: 1 / -1; color: var(--ink-soft); font-size: 12px; line-height: 1.55; }
+
 .checkbox-field {
   margin: 20px 0 0;
   padding: 0;
@@ -1597,6 +1616,9 @@ main {
 .field input,
 .field select,
 .field textarea { min-height: 50px; font-size: 17px; }
+.draft-assist strong { font-size: 16px; }
+.draft-assist p,
+.draft-assist small { font-size: 14px; }
 
 .staff-card p,
 .staff-identity a,
