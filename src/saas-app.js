@@ -484,7 +484,7 @@ function renderGuardians() {
   const container = $("#guardian-list");
   container.replaceChildren();
   if (!state.selectedChild) return renderListEmpty(container, "利用児を選択してください");
-  if (!state.guardians.length) return renderListEmpty(container, "保護者・連絡先はまだ登録されていません", "主連絡先を登録すると、連絡時に迷いません。");
+  if (!state.guardians.length) return renderListEmpty(container, "保護者・連絡先はまだ登録されていません");
   container.className = "guardian-list";
   for (const guardian of state.guardians) {
     const card = element("article", { className: `guardian-card${guardian.isPrimary ? " is-primary" : ""}` });
