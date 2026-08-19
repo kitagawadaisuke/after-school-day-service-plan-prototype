@@ -198,6 +198,37 @@ test("別施設のfacility_idと利用児を一つの記録へ関連付けられ
   }
 });
 
+test("日誌は下書き状態を保存でき、未完成の下書きは確定記録と区別する", async () => {
+  const db = await setupDatabase();
+  try {
+    await beginAs(db, IDS.tenantA, IDS.userA);
+    await db.query(
+      `insert into public.daily_logs (
+        id, tenant_id, facility_id, child_id, occurred_at, activity, observation,
+        support_provided, child_response, status, recorded_by, updated_by
+      ) values ($1, $2, $3, $4, now(), '活動途中', '', '', '', 'draft', $5, $5)`,
+      ["018f1db5-c170-7c35-a784-3cfc6f98c804", IDS.tenantA, IDS.facilityA, IDS.childA, IDS.userA],
+    );
+    const saved = await db.query(
+      "select status, observation from public.daily_logs where id = $1",
+      ["018f1db5-c170-7c35-a784-3cfc6f98c804"],
+    );
+    assert.deepEqual(saved.rows, [{ status: "draft", observation: "" }]);
+    await assert.rejects(
+      () => db.query(
+        `insert into public.daily_logs (
+          id, tenant_id, facility_id, child_id, occurred_at, activity, observation,
+          support_provided, child_response, status, recorded_by, updated_by
+        ) values ($1, $2, $3, $4, now(), '活動', '観察', '支援', '反応', 'unknown', $5, $5)`,
+        ["018f1db5-c170-7c35-a784-3cfc6f98c805", IDS.tenantA, IDS.facilityA, IDS.childA, IDS.userA],
+      ),
+      (error) => error.code === "23514",
+    );
+  } finally {
+    await rollbackAndClose(db);
+  }
+});
+
 test("確定文書の本文と目標は上書きできない", async () => {
   const db = await setupDatabase();
   try {

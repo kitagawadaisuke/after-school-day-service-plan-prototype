@@ -12,6 +12,7 @@ function serializeDailyLog(row) {
     supportProvided: row.support_provided,
     childResponse: row.child_response,
     healthNote: row.health_note,
+    status: row.status || "final",
     fiveDomains: row.five_domains || [],
     relatedGoalIds: row.related_goal_ids || [],
     recordedBy: row.recorded_by,
@@ -19,6 +20,17 @@ function serializeDailyLog(row) {
     updatedAt: row.updated_at instanceof Date ? row.updated_at.toISOString() : row.updated_at,
     rowVersion: Number(row.row_version),
   };
+}
+
+function assertFinalLogIsComplete(row) {
+  const required = [
+    ["活動・場面", row.activity],
+    ["観察した事実", row.observation],
+    ["行った支援", row.support_provided],
+    ["本人の反応", row.child_response],
+  ];
+  const missing = required.filter(([, value]) => !String(value || "").trim()).map(([label]) => label);
+  if (missing.length) throw badRequest("JOURNAL_INCOMPLETE", `記録を確定するには、${missing.join("、")}を入力してください。`);
 }
 
 export async function listDailyLogs(client, tenantId, childId, options = {}) {
@@ -64,10 +76,10 @@ export async function createDailyLog(client, actor, childId, input) {
   const result = await client.query(
     `insert into public.daily_logs (
       id, tenant_id, facility_id, child_id, occurred_at, activity, observation,
-      support_provided, child_response, health_note, five_domains, recorded_by, updated_by
+      support_provided, child_response, health_note, five_domains, status, recorded_by, updated_by
     ) values (
       $1, $2, $3, $4, $5, $6, $7,
-      $8, $9, $10, $11::text[], $12, $12
+      $8, $9, $10, $11::text[], $12, $13, $13
     ) returning *`,
     [
       id,
@@ -75,15 +87,17 @@ export async function createDailyLog(client, actor, childId, input) {
       child.rows[0].facility_id,
       childId,
       input.occurredAt,
-      input.activity,
-      input.observation,
-      input.supportProvided,
-      input.childResponse,
+      input.activity || "",
+      input.observation || "",
+      input.supportProvided || "",
+      input.childResponse || "",
       input.healthNote || null,
       input.fiveDomains || [],
+      input.status || "final",
       actor.userId,
     ],
   );
+  if (result.rows[0].status === "final") assertFinalLogIsComplete(result.rows[0]);
   if (input.relatedGoalIds?.length) {
     await client.query(
       `insert into public.daily_log_goals (tenant_id, daily_log_id, goal_id)
@@ -102,6 +116,7 @@ const PATCH_COLUMNS = Object.freeze({
   childResponse: "child_response",
   healthNote: "health_note",
   fiveDomains: "five_domains",
+  status: "status",
 });
 
 export async function updateDailyLog(client, actor, childId, logId, expectedVersion, changes) {
@@ -111,7 +126,7 @@ export async function updateDailyLog(client, actor, childId, logId, expectedVers
 
   const parameters = [actor.tenantId, childId, logId, expectedVersion];
   const assignments = entries.map(([key, value]) => {
-    parameters.push(value === "" ? null : value);
+    parameters.push(key === "healthNote" && value === "" ? null : value);
     const cast = key === "fiveDomains" ? "::text[]" : "";
     return `${PATCH_COLUMNS[key]} = $${parameters.length}${cast}`;
   });
@@ -126,6 +141,7 @@ export async function updateDailyLog(client, actor, childId, logId, expectedVers
     parameters,
   );
   if (result.rows[0]) {
+    if (result.rows[0].status === "final") assertFinalLogIsComplete(result.rows[0]);
     if (hasGoalChanges) {
       await client.query(
         "delete from public.daily_log_goals where tenant_id = $1 and daily_log_id = $2",

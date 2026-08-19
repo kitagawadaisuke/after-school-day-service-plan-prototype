@@ -1,7 +1,7 @@
 const API_BASE = "/api/v1";
 
 const ROLE_LABELS = Object.freeze({
-  tenant_admin: "法人管理者",
+  tenant_admin: "管理者",
   facility_admin: "事業所管理者",
   plan_approver: "計画承認者",
   support_staff: "支援員",
@@ -40,6 +40,56 @@ const SCHEDULE_STATUS_LABELS = Object.freeze({ draft: "編集中", finalized: "�
 const DAY_LABELS = Object.freeze(["日", "月", "火", "水", "木", "金", "土"]);
 const DRAFT_PDF_STATUSES = Object.freeze(["draft", "internal_review", "explanation_pending", "consented"]);
 const OFFICIAL_PDF_STATUSES = Object.freeze(["approved", "distributed", "active", "superseded", "closed"]);
+const EDITABLE_DOCUMENT_STATUSES = Object.freeze(["draft", "internal_review", "explanation_pending"]);
+const INDIVIDUAL_PLAN_PAYLOAD_FIELDS = Object.freeze([
+  ["userAndFamilyWishes", "本人・家族の意向"],
+  ["overallSupportPolicy", "総合的な支援の方針"],
+  ["consultationPlanBasis", "相談支援計画とのつながり"],
+  ["supportConsiderations", "支援上の留意事項"],
+  ["serviceDelivery", "標準的な支援方法"],
+  ["coordination", "家族・関係機関との連携"],
+  ["monitoringPlan", "モニタリングの時期・方法"],
+  ["explanationNotes", "説明・同意時の確認事項"],
+]);
+const INDIVIDUAL_PLAN_FIELD_LABELS = Object.freeze(Object.fromEntries(INDIVIDUAL_PLAN_PAYLOAD_FIELDS));
+const ASSESSMENT_EDITOR_FIELDS = Object.freeze([
+  ["childWishes", "personWish"],
+  ["familyWishes", "familyWish"],
+  ["concerns", null],
+  ["desiredLife", null],
+  ["healthManagement", null],
+  ["movementSensory", null],
+  ["cognitionBehavior", null],
+  ["languageCommunication", null],
+  ["relationshipsSocial", null],
+  ["familySituation", null],
+  ["strengths", "strengths"],
+  ["priorityNeeds", "needs"],
+  ["overallAssessment", null],
+  ["supportConsiderations", "supportDirection"],
+  ["medicalSafetyNotes", null],
+  ["supportNetwork", null],
+  ["planningNotes", "planningNotes"],
+]);
+const ASSESSMENT_FIELD_LABELS = Object.freeze({
+  childWishes: "本人の願い", familyWishes: "家族の願い", concerns: "困りごと・相談内容", desiredLife: "望む生活のイメージ",
+  healthManagement: "生活・健康", movementSensory: "運動・感覚", cognitionBehavior: "認知・行動", languageCommunication: "言語・コミュニケーション",
+  relationshipsSocial: "人間関係・社会性", familySituation: "家族・生活環境", strengths: "強み・好きなこと", priorityNeeds: "優先して支援する課題",
+  overallAssessment: "総合的なアセスメント", supportConsiderations: "支援で大切にすること", medicalSafetyNotes: "医療・安全上の留意事項",
+  supportNetwork: "連携先と役割", planningNotes: "個別支援計画へ引き継ぐこと",
+});
+const ASSESSMENT_CONTEXT_FIELDS = Object.freeze(ASSESSMENT_EDITOR_FIELDS.slice(0, 12).map(([fieldName]) => fieldName));
+const ASSESSMENT_SYNTHESIS_FIELDS = Object.freeze(new Set([
+  "overallAssessment", "supportConsiderations",
+]));
+const REFERENCE_PLAN_PAYLOAD_FIELDS = Object.freeze([
+  "childWish",
+  "guardianWish",
+  "overallPolicy",
+  "currentSituation",
+  "supportNeed",
+  "considerations",
+]);
 
 const WORKFLOW_ACTIONS = Object.freeze({
   submit: { label: "内部確認へ提出", description: "下書きを内部確認へ提出します。" },
@@ -346,7 +396,6 @@ function applyPermissions() {
 }
 
 function renderSession() {
-  $("#tenant-name").textContent = state.session.tenant?.name || "法人名未設定";
   $("#staff-name").textContent = state.session.user.displayName || "職員";
   $("#staff-role").textContent = ROLE_LABELS[state.session.user.role] || state.session.user.role;
 }
@@ -510,10 +559,17 @@ function renderGuardians() {
       element("dt", { text: "メール" }), element("dd", { text: guardian.email || "未入力" }),
     );
     card.append(heading, details);
-    if (!guardian.isPrimary && can("clients.edit")) {
+    if (can("clients.edit")) {
+      const actions = element("div", { className: "guardian-actions" });
+      const edit = element("button", { className: "button button-secondary", text: "編集", attributes: { type: "button" } });
+      edit.addEventListener("click", () => openGuardianEdit(guardian, edit));
+      actions.append(edit);
+      if (!guardian.isPrimary) {
       const button = element("button", { className: "button button-ghost", text: "主連絡先にする", attributes: { type: "button" } });
       button.addEventListener("click", () => runAsync(() => makePrimaryGuardian(guardian, button)));
-      card.append(button);
+        actions.append(button);
+      }
+      card.append(actions);
     }
     container.append(card);
   }
@@ -534,6 +590,26 @@ function openGuardianDialog(trigger) {
   if (!state.selectedChild) return announce("先に利用児を選択してください。");
   const form = $("#guardian-form");
   form.reset();
+  $("#guardian-form-title").textContent = "保護者・連絡先を登録";
+  $("#guardian-form-description").textContent = "連絡先は支援の確認に必要な範囲だけを登録してください。";
+  $("#guardian-save-button").textContent = "登録する";
+  clearFormError(form, $("#guardian-error"));
+  openDialog($("#guardian-dialog"), trigger);
+}
+
+function openGuardianEdit(guardian, trigger) {
+  const form = $("#guardian-form");
+  form.reset();
+  form.elements.guardianId.value = guardian.id;
+  form.elements.rowVersion.value = guardian.rowVersion;
+  form.elements.legalName.value = guardian.legalName || "";
+  form.elements.relationship.value = guardian.relationship || "";
+  form.elements.phone.value = guardian.phone || "";
+  form.elements.email.value = guardian.email || "";
+  form.elements.isPrimary.checked = Boolean(guardian.isPrimary);
+  $("#guardian-form-title").textContent = "保護者・連絡先を編集";
+  $("#guardian-form-description").textContent = "変更内容を保存すると、利用児情報の連絡先に反映されます。";
+  $("#guardian-save-button").textContent = "変更を保存";
   clearFormError(form, $("#guardian-error"));
   openDialog($("#guardian-dialog"), trigger);
 }
@@ -549,15 +625,27 @@ async function submitGuardian(event) {
     relationship: values.get("relationship").trim(),
     isPrimary: values.get("isPrimary") === "on",
   };
-  for (const field of ["phone", "email"]) {
-    const value = values.get(field)?.trim();
-    if (value) body[field] = value;
-  }
+  for (const field of ["phone", "email"]) body[field] = values.get(field)?.trim() || null;
+  const guardianId = values.get("guardianId");
   try {
-    await idempotentCreate(`/children/${encodeURIComponent(state.selectedChild.id)}/guardians`, body);
+    if (guardianId) {
+      state.conflictResumeDialog = $("#guardian-dialog");
+      state.conflictReload = loadGuardians;
+      await api(`/children/${encodeURIComponent(state.selectedChild.id)}/guardians/${encodeURIComponent(guardianId)}`, {
+        method: "PATCH",
+        etag: `"${values.get("rowVersion")}"`,
+        body,
+      });
+    } else {
+      const createBody = { ...body };
+      for (const field of ["phone", "email"]) if (!createBody[field]) delete createBody[field];
+      await idempotentCreate(`/children/${encodeURIComponent(state.selectedChild.id)}/guardians`, createBody);
+    }
     closeDialog($("#guardian-dialog"));
+    state.conflictResumeDialog = null;
+    state.conflictReload = null;
     await loadGuardians();
-    announce("保護者・連絡先を登録しました。");
+    announce(guardianId ? "保護者・連絡先を変更しました。" : "保護者・連絡先を登録しました。");
   } catch (error) {
     if (error.status !== 409) showFormError(form, errorContainer, errorMessage(error), []);
   }
@@ -629,7 +717,7 @@ function renderSchedule(kind) {
     edit.addEventListener("click", () => openScheduleDialog(kind, edit));
     actions.append(edit);
     if (schedule?.status === "draft" && can("documents.approve")) {
-      const finalize = element("button", { className: "button button-primary", text: "この版を確定", attributes: { type: "button" } });
+      const finalize = element("button", { className: "button button-primary", text: "この週間予定を確定", attributes: { type: "button" } });
       finalize.addEventListener("click", () => runAsync(() => finalizeSchedule(kind, finalize)));
       actions.append(finalize);
     }
@@ -663,7 +751,18 @@ async function loadSchedules() {
   if (state.activeView === "documents") renderDocuments();
 }
 
-function addScheduleItem(item = {}) {
+function scheduleItemFromRow(row) {
+  const endMinute = minutesFromTime(row.querySelector('[name="endTime"]').value);
+  return {
+    dayOfWeek: Number(row.querySelector('[name="dayOfWeek"]').value),
+    startMinute: minutesFromTime(row.querySelector('[name="startTime"]').value),
+    endMinute: endMinute + (row.querySelector('[name="endDay"]').value === "next" ? 1440 : 0),
+    activity: row.querySelector('[name="activity"]').value,
+    location: row.querySelector('[name="location"]').value,
+  };
+}
+
+function addScheduleItem(item = {}, previousRow = null) {
   const fragment = $("#schedule-item-template").content.cloneNode(true);
   const row = $(".schedule-item-row", fragment);
   row.querySelector('[name="dayOfWeek"]').value = String(item.dayOfWeek ?? 1);
@@ -672,11 +771,20 @@ function addScheduleItem(item = {}) {
   row.querySelector('[name="endTime"]').value = formatClock(item.endMinute ?? 1020);
   row.querySelector('[name="activity"]').value = item.activity || "";
   row.querySelector('[name="location"]').value = item.location || "";
+  row.querySelector(".duplicate-schedule-item").addEventListener("click", () => {
+    addScheduleItem(scheduleItemFromRow(row), row);
+    row.nextElementSibling?.querySelector('[name="dayOfWeek"]')?.focus();
+    announce("予定を複製しました。必要な箇所だけ変更して保存してください。");
+  });
   row.querySelector(".remove-schedule-item").addEventListener("click", () => {
     row.remove();
     announce("予定を入力欄から削除しました。保存するまで確定しません。");
   });
-  $("#schedule-item-rows").append(fragment);
+  if (previousRow?.parentElement === $("#schedule-item-rows")) {
+    previousRow.after(fragment);
+  } else {
+    $("#schedule-item-rows").append(fragment);
+  }
 }
 
 function openScheduleDialog(kind, trigger) {
@@ -751,6 +859,7 @@ async function submitSchedule(event) {
 async function finalizeSchedule(kind, button) {
   const schedule = state.schedules[kind];
   if (!schedule || schedule.status !== "draft") return;
+  if (!window.confirm("この週間予定を確定しますか？\n確定後は内容を直接編集できません。変更が必要な場合は、新しい版を作成します。")) return;
   button.disabled = true;
   state.conflictReload = loadSchedules;
   try {
@@ -774,7 +883,10 @@ function renderJournals() {
     const date = element("div", { className: "record-date", text: formatDate(journal.occurredAt, true) });
     date.append(element("strong", { text: journal.activity }));
     const body = element("div", { className: "record-body" });
-    body.append(element("h2", { text: "支援の記録" }));
+    body.append(element("h2", { text: journal.status === "draft" ? "下書き" : "支援の記録" }));
+    if (journal.status === "draft") {
+      body.append(element("p", { className: "record-draft-note", text: "入力途中の下書きです。内容を確認してから記録を保存してください。" }));
+    }
     const details = element("dl");
     for (const [label, value] of [["観察した事実", journal.observation], ["行った支援", journal.supportProvided], ["本人の反応", journal.childResponse], ["健康上の連絡", journal.healthNote || "なし"]]) {
       details.append(element("dt", { text: label }), element("dd", { text: value }));
@@ -784,6 +896,13 @@ function renderJournals() {
       const tags = element("ul", { className: "tag-list", attributes: { "aria-label": "関連する5領域" } });
       journal.fiveDomains.forEach((domain) => tags.append(element("li", { text: FIVE_DOMAIN_LABELS[domain] || domain })));
       body.append(tags);
+    }
+    if (can("journals.edit")) {
+      const actions = element("div", { className: "record-actions" });
+      const editButton = element("button", { className: "button button-quiet", text: journal.status === "draft" ? "続きを入力" : "編集", attributes: { type: "button" } });
+      editButton.addEventListener("click", () => openJournalDialog(editButton, journal));
+      actions.append(editButton);
+      body.append(actions);
     }
     item.append(date, body);
     container.append(item);
@@ -808,6 +927,13 @@ function renderContactEntries() {
       element("dt", { text: "事業所から" }), element("dd", { text: entry.facilityReply || "記載なし" }),
     );
     body.append(details);
+    if (can("journals.edit")) {
+      const actions = element("div", { className: "record-actions" });
+      const editButton = element("button", { className: "button button-quiet", text: "編集", attributes: { type: "button" } });
+      editButton.addEventListener("click", () => openContactDialog(editButton, entry));
+      actions.append(editButton);
+      body.append(actions);
+    }
     item.append(date, body);
     container.append(item);
   }
@@ -863,17 +989,18 @@ function renderPdfPanel(documentRecord) {
   const panelId = `pdf-panel-${documentRecord.id}`;
   panel.id = panelId;
   const heading = element("div", { className: "pdf-panel-heading" });
-  const title = element("h3", { text: "帳票PDF" });
+  const snapshotKind = pdfKindForStatus(documentRecord.status);
+  const isOfficial = snapshotKind === "official";
+  const title = element("h3", { text: isOfficial ? "正式PDF" : "確認用PDF" });
   const noteId = `pdf-note-${documentRecord.id}`;
-  const note = element("p", { text: "作成したPDFはその時点の内容を固定して保存し、後から上書きしません。", attributes: { id: noteId } });
+  const note = element("p", { text: isOfficial ? "作成時点の内容を固定して保存します。" : "保存済みの内容をPDFで確認できます。", attributes: { id: noteId } });
   heading.append(title, note);
   panel.append(heading);
 
-  const snapshotKind = pdfKindForStatus(documentRecord.status);
   if (snapshotKind) {
     const button = element("button", {
       className: `button ${snapshotKind === "official" ? "button-primary" : "button-secondary"} pdf-create-button`,
-      text: snapshotKind === "official" ? "正式PDFを作成" : "下書きPDFを作成",
+      text: snapshotKind === "official" ? "正式PDFを作成" : "確認用PDFを作成",
       attributes: { type: "button", "aria-describedby": noteId },
     });
     button.addEventListener("click", () => runAsync(() => createDocumentPdf(documentRecord, snapshotKind, button)));
@@ -893,7 +1020,7 @@ function renderPdfPanel(documentRecord) {
     const item = element("li");
     const copy = element("div");
     copy.append(
-      element("strong", { text: snapshot.snapshotKind === "official" ? "正式版" : "下書き（透かし入り）" }),
+      element("strong", { text: snapshot.snapshotKind === "official" ? "正式PDF" : "確認用PDF" }),
       element("span", { text: `${formatDate(snapshot.generatedAt, true)} ／ ${formatBytes(snapshot.byteSize)}` }),
     );
     const href = `${API_BASE}/children/${encodeURIComponent(state.selectedChild.id)}/documents/${encodeURIComponent(documentRecord.id)}/snapshots/${encodeURIComponent(snapshot.id)}/content`;
@@ -952,30 +1079,38 @@ function renderDocuments() {
   const assessmentButton = $('[data-generate-draft="basic_assessment"]');
   const individualButton = $('[data-generate-draft="individual_support_plan"]');
   const monitoringButton = $("#open-monitoring-generation");
-  if (assessmentButton) assessmentButton.disabled = !state.selectedChild || !consultation || !finalizedCurrent;
-  if (individualButton) individualButton.disabled = !state.selectedChild || !consultation || !assessment;
+  if (assessmentButton) assessmentButton.disabled = !state.selectedChild || !finalizedCurrent;
+  if (individualButton) individualButton.disabled = !state.selectedChild || !assessment;
   if (monitoringButton) monitoringButton.disabled = !state.selectedChild || !activePlan;
   $("#assessment-readiness").textContent = !state.selectedChild
     ? "利用児を選択してください。"
-    : !consultation ? "相談支援計画を先に登録してください。"
-      : !finalizedCurrent ? "「現在の生活」を登録し、計画承認者が確定してください。"
-        : "作成できます。面談で内容を確認してください。";
-  $("#individual-readiness").textContent = !consultation
-    ? "相談支援計画を先に登録してください。"
-    : !assessment ? "アセスメントを作成し、面談結果を確認してください。"
+    : !finalizedCurrent
+      ? state.schedules.current?.status === "draft" && !can("documents.approve")
+        ? "「現在の生活」は登録済みです。管理者に「この週間予定を確定」を依頼してください。"
+        : "「現在の生活」を登録後、「この週間予定を確定」を選んでください。"
+      : latestDocument("monitoring_record")
+        ? "作成できます。前回モニタリングの確認内容を下書きとして引き継ぎます。"
+        : consultation ? "作成できます。外部計画を参考情報として含めます。"
+          : "作成できます。面談で内容を確認してください。";
+  const currentScheduleButton = $("#open-current-schedule-from-assessment");
+  if (currentScheduleButton) {
+    currentScheduleButton.hidden = !state.selectedChild || Boolean(finalizedCurrent) || !can("documents.edit");
+  }
+  $("#individual-readiness").textContent = !assessment
+    ? "アセスメントを作成し、面談結果を確認してください。"
+    : consultation ? "作成できます。外部計画は参考情報として含めます。"
       : "作成できます。目標と支援内容は人が決定します。";
   $("#monitoring-readiness").textContent = activePlan
     ? "作成できます。日誌・連絡帳を集計後、人が評価します。"
     : "運用中の個別支援計画が必要です。";
-  $("#cycle-readiness").textContent = cycleReadinessText({ consultation, assessment, activePlan });
-  $$('[data-cycle-step]').forEach((step) => step.classList.remove("is-complete", "is-current"));
-  if (consultation) $('[data-cycle-step="consultation"]')?.classList.add("is-complete");
-  if (assessment) $('[data-cycle-step="assessment"]')?.classList.add("is-complete");
-  if (activePlan) $('[data-cycle-step="individual"]')?.classList.add("is-complete");
-  const nextStep = !consultation ? "consultation" : !assessment ? "assessment" : !activePlan ? "individual" : "records";
-  $(`[data-cycle-step="${nextStep}"]`)?.classList.add("is-current");
-  const generatedDetail = [...state.documentDetails.values()].map((entry) => entry.data).find((detail) => detail.payload?.generation);
-  renderGenerationEvidence(generatedDetail);
+}
+
+async function openCurrentScheduleFromAssessment(trigger) {
+  if (!state.selectedChild) return announce("先に利用児を選択してください。");
+  await switchView("child");
+  switchChildPanel("schedules");
+  $("#current-schedule").scrollIntoView({ behavior: "smooth", block: "start" });
+  trigger?.blur();
 }
 
 function renderDocumentLane(kind, container) {
@@ -988,20 +1123,27 @@ function renderDocumentLane(kind, container) {
     const item = element("article", { className: "document-item" });
     item.append(
       element("strong", { text: `${DOCUMENT_KIND_LABELS[kind]} 第${documentRecord.versionNumber}版` }),
-      element("span", { className: "status-chip", text: DOCUMENT_STATUS_LABELS[documentRecord.status] || documentRecord.status }),
+      element("span", { className: "status-chip", text: kind === "consultation_plan" ? "受領済み" : (DOCUMENT_STATUS_LABELS[documentRecord.status] || documentRecord.status) }),
       element("p", { text: `${formatDate(documentRecord.periodStart)} 〜 ${formatDate(documentRecord.periodEnd)} ／ 更新 ${formatDate(documentRecord.updatedAt, true)}` }),
     );
     const actions = element("div", { className: "document-actions" });
     const detail = state.documentDetails.get(documentRecord.id)?.data;
-    if (detail?.payload?.generation) {
-      const evidence = element("button", { className: "button button-ghost", text: "根拠を確認", attributes: { type: "button" } });
-      evidence.addEventListener("click", () => {
-        renderGenerationEvidence(detail);
-        $("#generation-evidence").scrollIntoView({ behavior: "smooth", block: "center" });
-      });
-      actions.append(evidence);
+    if (kind === "consultation_plan" && can("documents.edit") && EDITABLE_DOCUMENT_STATUSES.includes(documentRecord.status)) {
+      const editReference = element("button", { className: "button button-secondary", text: "参考情報を編集", attributes: { type: "button" } });
+      editReference.addEventListener("click", () => runAsync(() => openReferencePlanEditor(documentRecord, editReference)));
+      actions.append(editReference);
     }
-    if (["consultation_plan", "individual_support_plan"].includes(kind) && (can("documents.edit") || can("documents.approve"))) {
+    if (kind === "basic_assessment" && can("documents.edit") && EDITABLE_DOCUMENT_STATUSES.includes(documentRecord.status)) {
+      const edit = element("button", { className: "button button-primary", text: "アセスメントを編集", attributes: { type: "button" } });
+      edit.addEventListener("click", () => runAsync(() => openAssessmentEditor(documentRecord, edit)));
+      actions.append(edit);
+    }
+    if (kind === "individual_support_plan" && can("documents.edit") && EDITABLE_DOCUMENT_STATUSES.includes(documentRecord.status)) {
+      const edit = element("button", { className: "button button-primary", text: "計画書を編集", attributes: { type: "button" } });
+      edit.addEventListener("click", () => runAsync(() => openPlanEditor(documentRecord, edit)));
+      actions.append(edit);
+    }
+    if (kind === "individual_support_plan" && (can("documents.edit") || can("documents.approve"))) {
       const workflow = element("button", { className: "button button-secondary", text: "工程を確認", attributes: { type: "button" } });
       workflow.addEventListener("click", () => runAsync(() => openWorkflow(documentRecord, workflow)));
       actions.append(workflow);
@@ -1042,23 +1184,17 @@ function latestDocument(kind, predicate = () => true) {
     .sort((left, right) => right.versionNumber - left.versionNumber)[0] || null;
 }
 
-function cycleReadinessText({ consultation, assessment, activePlan }) {
-  if (!state.selectedChild) return "利用児を選択すると、次にできる作業を確認できます。";
-  if (!consultation) return "まず、相談支援事業者から受け取った相談支援計画を登録します。";
-  if (!assessment) return "次は、現在の生活を確定し、アセスメントの下書きを作ります。";
-  if (!activePlan) return "アセスメントを確認後、個別支援計画を作成して正式工程を進めます。";
-  return "個別支援計画に沿って日誌・連絡帳を蓄積し、期間ごとにモニタリングします。";
-}
-
 function renderGenerationEvidence(detail) {
   const container = $("#generation-evidence");
+  const evidenceDetails = $("#generation-evidence-details");
+  if (evidenceDetails) evidenceDetails.hidden = !detail?.payload?.generation;
   container.replaceChildren();
   const heading = element("div");
   heading.append(element("p", { className: "eyebrow", text: "自動作成の根拠" }), element("h2", { attributes: { id: "generation-evidence-title" }, text: detail ? `${DOCUMENT_KIND_LABELS[detail.documentKind]} 第${detail.versionNumber}版` : "人が確認するための下書きです" }));
   container.append(heading);
   const generation = detail?.payload?.generation;
   if (!generation) {
-    container.append(element("p", { text: "自動作成した書類の「根拠を確認」を選ぶと、参照件数と確認事項を表示します。" }));
+    container.append(element("p", { text: "書類の「根拠を確認」から、参照件数と確認事項を開けます。" }));
     return;
   }
   const warning = element("p", { className: "review-warning", text: generation.humanReviewRequired === false ? "根拠の自動集計結果です。正式決定前に内容を確認してください。" : "要確認：この内容は下書きです。面談・専門職の判断を反映してから正式工程へ進めてください。" });
@@ -1440,13 +1576,42 @@ async function submitChildEdit(event) {
   }
 }
 
-function openJournalDialog(trigger) {
+function journalDateTimeInputValue(value = new Date()) {
+  const date = new Date(value);
+  date.setMinutes(date.getMinutes() - date.getTimezoneOffset());
+  return date.toISOString().slice(0, 16);
+}
+
+function openJournalDialog(trigger, journal = null) {
   if (!state.selectedChild) return announce("先に利用児を選択してください。");
   const form = $("#journal-form");
   form.reset();
-  const now = new Date();
-  now.setMinutes(now.getMinutes() - now.getTimezoneOffset());
-  form.elements.occurredAt.value = now.toISOString().slice(0, 16);
+  form.dataset.journalId = journal?.id || "";
+  form.dataset.journalRowVersion = journal?.rowVersion ? String(journal.rowVersion) : "";
+  form.dataset.journalGoalIds = JSON.stringify(journal?.relatedGoalIds || []);
+  form.dataset.journalStatus = journal?.status || "draft";
+  const isDraft = journal?.status === "draft";
+  $("#journal-form-title").textContent = journal ? (isDraft ? "日誌の下書きを編集" : "日誌を編集") : "日誌を登録";
+  const draftButton = $("#save-journal-draft");
+  const finalButton = $("#save-journal-final");
+  draftButton.hidden = Boolean(journal && !isDraft);
+  draftButton.textContent = journal ? "下書きを保存" : "下書き保存";
+  finalButton.textContent = journal ? (isDraft ? "記録を保存" : "変更を保存") : "記録を保存";
+  if (journal) {
+    form.elements.occurredAt.value = journalDateTimeInputValue(journal.occurredAt);
+    form.elements.activity.value = journal.activity || "";
+    form.elements.observation.value = journal.observation || "";
+    form.elements.supportProvided.value = journal.supportProvided || "";
+    form.elements.childResponse.value = journal.childResponse || "";
+    form.elements.healthNote.value = journal.healthNote || "";
+    journal.fiveDomains?.forEach((domain) => {
+      const checkbox = form.querySelector(`[name="fiveDomains"][value="${domain}"]`);
+      if (checkbox) checkbox.checked = true;
+    });
+  } else {
+    form.elements.occurredAt.value = journalDateTimeInputValue();
+  }
+  updateAllJournalCharacterCounts(form);
   clearFormError(form, $("#journal-error"));
   openDialog($("#journal-dialog"), trigger);
 }
@@ -1471,28 +1636,269 @@ function completeJapaneseSentence(value) {
   return normalized ? `${normalized}。` : "";
 }
 
-function expandJournalField(fieldName) {
+function journalTextLength(value) {
+  return [...String(value || "").trim()].length;
+}
+
+function journalTargetLength(fieldName, form = $("#journal-form")) {
+  return Number($(`[data-journal-length="${fieldName}"]`, form)?.value || 200);
+}
+
+function updateJournalCharacterCount(fieldName, form = $("#journal-form")) {
+  const field = form.elements[fieldName];
+  const output = $(`[data-journal-character-count="${fieldName}"]`, form);
+  if (!field || !output) return;
+  const length = journalTextLength(field.value);
+  const target = journalTargetLength(fieldName, form);
+  output.textContent = `現在 ${length}字 ／ 目標 ${target}字`;
+  output.dataset.state = length >= target ? "met" : "short";
+}
+
+function updateAllJournalCharacterCounts(form = $("#journal-form")) {
+  Object.keys(JOURNAL_FIELD_LABELS).forEach((fieldName) => updateJournalCharacterCount(fieldName, form));
+}
+
+async function generateJournalField(fieldName, button) {
   const form = $("#journal-form");
   const field = form.elements[fieldName];
-  const lines = journalBulletLines(field.value);
-  if (!lines.length) {
-    showFormError(form, $("#journal-error"), `「${JOURNAL_FIELD_LABELS[fieldName]}」に箇条書きの事実を入力してから、文章を整えてください。`, [fieldName]);
+  const sourceText = field.value.trim();
+  if (!sourceText) {
+    showFormError(form, $("#journal-error"), `「${JOURNAL_FIELD_LABELS[fieldName]}」に事実を入力してから、文章を整えてください。`, [fieldName]);
     return;
   }
-  const target = Number($(`[data-journal-length="${fieldName}"]`, form)?.value || 200);
-  const sentences = lines.map(completeJapaneseSentence);
-  const lead = `${JOURNAL_FIELD_LABELS[fieldName]}として、`;
-  const draft = lines.length === 1
-    ? `${lead}${sentences[0]}`
-    : `${lead}${sentences[0]}${sentences.slice(1).map((sentence) => `また、${sentence}`).join("")}`;
+  const target = journalTargetLength(fieldName, form);
+  const originalLabel = button.textContent;
+  button.disabled = true;
+  button.textContent = "整えています…";
+  try {
+    const { data } = await api(`/children/${encodeURIComponent(state.selectedChild.id)}/writing-assist`, {
+      method: "POST",
+      body: {
+        kind: "daily_log",
+        field: fieldName,
+        sourceText,
+        activity: form.elements.activity.value.trim() || undefined,
+        targetCharacters: target,
+      },
+    });
+    field.value = data.text;
+    field.dispatchEvent(new Event("input", { bubbles: true }));
+    clearFormError(form, $("#journal-error"));
+    announce(`${JOURNAL_FIELD_LABELS[fieldName]}の文章を整えました。現在${data.characterCount}字です。`);
+  } catch (error) {
+    showFormError(form, $("#journal-error"), errorMessage(error), []);
+  } finally {
+    button.disabled = false;
+    button.textContent = originalLabel;
+  }
+}
 
-  field.value = draft;
-  field.dispatchEvent(new Event("input", { bubbles: true }));
-  clearFormError(form, $("#journal-error"));
-  const lengthNote = draft.length > target
-    ? `事実を削らないため、目安の${target}字を超えています。`
-    : `目安の${target}字に合わせて文章を整えました。`;
-  announce(`${JOURNAL_FIELD_LABELS[fieldName]}を整えました。${lengthNote} 保存前に確認してください。`);
+function assessmentTargetLength(fieldName, form = $("#assessment-editor-form")) {
+  return Number($(`[data-assessment-length="${fieldName}"]`, form)?.value || 200);
+}
+
+function updateAssessmentCharacterCount(fieldName, form = $("#assessment-editor-form")) {
+  const field = form.elements[fieldName];
+  const output = $(`[data-assessment-character-count="${fieldName}"]`, form);
+  if (!field || !output) return;
+  const length = journalTextLength(field.value);
+  const target = assessmentTargetLength(fieldName, form);
+  output.textContent = `現在 ${length}字 ／ 目標 ${target}字`;
+  output.dataset.state = length >= target ? "met" : "short";
+}
+
+function installAssessmentWritingTools(form = $("#assessment-editor-form")) {
+  for (const [fieldName] of ASSESSMENT_EDITOR_FIELDS) {
+    const field = form.elements[fieldName];
+    if (!field || $(`[data-assessment-writing-tools="${fieldName}"]`, form)) continue;
+
+    const tools = document.createElement("div");
+    tools.className = "journal-writing-tools assessment-writing-tools";
+    tools.dataset.assessmentWritingTools = fieldName;
+
+    const lengthLabel = document.createElement("label");
+    lengthLabel.textContent = "目標文字数";
+    const select = document.createElement("select");
+    select.dataset.assessmentLength = fieldName;
+    select.setAttribute("aria-label", `${ASSESSMENT_FIELD_LABELS[fieldName]}の目標文字数`);
+    for (const target of [100, 200, 300, 500]) {
+      const option = document.createElement("option");
+      option.value = String(target);
+      option.textContent = `${target}字`;
+      if (target === 200) option.selected = true;
+      select.append(option);
+    }
+    lengthLabel.append(" ", select);
+
+    const output = document.createElement("output");
+    output.className = "journal-character-count";
+    output.dataset.assessmentCharacterCount = fieldName;
+    output.id = `assessment-${fieldName}-count`;
+    output.setAttribute("aria-live", "polite");
+
+    const button = document.createElement("button");
+    button.className = "button button-quiet";
+    button.type = "button";
+    const isSynthesisField = ASSESSMENT_SYNTHESIS_FIELDS.has(fieldName);
+    button.textContent = isSynthesisField ? "入力内容から下書きを作る" : "文章を整える";
+    button.title = isSynthesisField
+      ? "本人・家族から伺ったことと、現在の状況・強み・課題をもとに、目標文字数を目安に下書きを作ります"
+      : "入力内容をもとに、目標文字数を目安に文章を整えます";
+    button.addEventListener("click", () => runAsync(() => generateAssessmentField(fieldName, button)));
+    select.addEventListener("change", () => updateAssessmentCharacterCount(fieldName, form));
+    field.addEventListener("input", () => updateAssessmentCharacterCount(fieldName, form));
+    field.setAttribute("aria-describedby", output.id);
+
+    tools.append(lengthLabel, output, button);
+    if (isSynthesisField) {
+      const contextNote = document.createElement("p");
+      contextNote.className = "assessment-writing-note";
+      contextNote.textContent = "上の「本人・家族から伺ったこと」と「現在の状況・強み・課題」をもとに下書きを作ります。";
+      tools.append(contextNote);
+    }
+    field.after(tools);
+  }
+}
+
+function updateAllAssessmentCharacterCounts(form = $("#assessment-editor-form")) {
+  for (const [fieldName] of ASSESSMENT_EDITOR_FIELDS) updateAssessmentCharacterCount(fieldName, form);
+}
+
+async function generateAssessmentField(fieldName, button) {
+  const form = $("#assessment-editor-form");
+  const field = form.elements[fieldName];
+  const sourceText = assessmentWritingSourceText(fieldName, form);
+  if (!sourceText) {
+    const message = ASSESSMENT_SYNTHESIS_FIELDS.has(fieldName)
+      ? "先に「本人・家族から伺ったこと」または「現在の状況・強み・課題」を入力してください。"
+      : `「${ASSESSMENT_FIELD_LABELS[fieldName]}」を入力してから、文章を整えてください。`;
+    showFormError(form, $("#assessment-editor-error"), message, ASSESSMENT_SYNTHESIS_FIELDS.has(fieldName) ? ASSESSMENT_CONTEXT_FIELDS : [fieldName]);
+    return;
+  }
+  const target = assessmentTargetLength(fieldName, form);
+  const originalLabel = button.textContent;
+  button.disabled = true;
+  button.textContent = "整えています…";
+  try {
+    const { data } = await api(`/children/${encodeURIComponent(state.selectedChild.id)}/writing-assist`, {
+      method: "POST",
+      body: { kind: "basic_assessment", field: fieldName, sourceText, targetCharacters: target },
+    });
+    field.value = data.text;
+    field.dispatchEvent(new Event("input", { bubbles: true }));
+    clearFormError(form, $("#assessment-editor-error"));
+    announce(`${ASSESSMENT_FIELD_LABELS[fieldName]}の下書きを作成しました。現在${data.characterCount}字です。保存前に内容を確認してください。`);
+  } catch (error) {
+    showFormError(form, $("#assessment-editor-error"), errorMessage(error), []);
+  } finally {
+    button.disabled = false;
+    button.textContent = originalLabel;
+  }
+}
+
+function planTargetLength(fieldName, form = $("#plan-editor-form")) {
+  return Number($(`[data-plan-length="${fieldName}"]`, form)?.value || 300);
+}
+
+function updatePlanCharacterCount(fieldName, form = $("#plan-editor-form")) {
+  const field = form.elements[fieldName];
+  const output = $(`[data-plan-character-count="${fieldName}"]`, form);
+  if (!field || !output) return;
+  const length = journalTextLength(field.value);
+  const target = planTargetLength(fieldName, form);
+  output.textContent = `現在 ${length}字 ／ 目標 ${target}字`;
+  output.dataset.state = length >= target ? "met" : "short";
+}
+
+function updateAllPlanCharacterCounts(form = $("#plan-editor-form")) {
+  for (const [fieldName] of INDIVIDUAL_PLAN_PAYLOAD_FIELDS) updatePlanCharacterCount(fieldName, form);
+}
+
+function installPlanWritingTools(form = $("#plan-editor-form")) {
+  for (const [fieldName, fieldLabel] of INDIVIDUAL_PLAN_PAYLOAD_FIELDS) {
+    const field = form.elements[fieldName];
+    if (!field || $(`[data-plan-writing-tools="${fieldName}"]`, form)) continue;
+
+    const tools = document.createElement("div");
+    tools.className = "journal-writing-tools plan-writing-tools";
+    tools.dataset.planWritingTools = fieldName;
+
+    const lengthLabel = document.createElement("label");
+    lengthLabel.textContent = "目標文字数";
+    const select = document.createElement("select");
+    select.dataset.planLength = fieldName;
+    select.setAttribute("aria-label", `${fieldLabel}の目標文字数`);
+    for (const target of [100, 200, 300, 500]) {
+      const option = document.createElement("option");
+      option.value = String(target);
+      option.textContent = `${target}字`;
+      if (target === 300) option.selected = true;
+      select.append(option);
+    }
+    lengthLabel.append(" ", select);
+
+    const output = document.createElement("output");
+    output.className = "journal-character-count";
+    output.dataset.planCharacterCount = fieldName;
+    output.id = `plan-${fieldName}-count`;
+    output.setAttribute("aria-live", "polite");
+
+    const button = document.createElement("button");
+    button.className = "button button-quiet";
+    button.type = "button";
+    button.textContent = "文章を整える";
+    button.title = "入力内容をもとに、目標文字数を目安に文章を整えます";
+    button.addEventListener("click", () => runAsync(() => generatePlanField(fieldName, button)));
+    select.addEventListener("change", () => updatePlanCharacterCount(fieldName, form));
+    field.addEventListener("input", () => updatePlanCharacterCount(fieldName, form));
+    field.setAttribute("aria-describedby", output.id);
+
+    tools.append(lengthLabel, output, button);
+    field.after(tools);
+  }
+}
+
+async function generatePlanField(fieldName, button) {
+  const form = $("#plan-editor-form");
+  const field = form.elements[fieldName];
+  const sourceText = field.value.trim();
+  if (!sourceText) {
+    showFormError(form, $("#plan-editor-error"), `「${INDIVIDUAL_PLAN_FIELD_LABELS[fieldName]}」を入力してから、文章を整えてください。`, [fieldName]);
+    return;
+  }
+  const target = planTargetLength(fieldName, form);
+  const originalLabel = button.textContent;
+  button.disabled = true;
+  button.textContent = "整えています…";
+  try {
+    const { data } = await api(`/children/${encodeURIComponent(state.selectedChild.id)}/writing-assist`, {
+      method: "POST",
+      body: { kind: "individual_support_plan", field: fieldName, sourceText, targetCharacters: target },
+    });
+    field.value = data.text;
+    field.dispatchEvent(new Event("input", { bubbles: true }));
+    clearFormError(form, $("#plan-editor-error"));
+    announce(`${INDIVIDUAL_PLAN_FIELD_LABELS[fieldName]}の文章を整えました。現在${data.characterCount}字です。保存前に内容を確認してください。`);
+  } catch (error) {
+    showFormError(form, $("#plan-editor-error"), errorMessage(error), []);
+  } finally {
+    button.disabled = false;
+    button.textContent = originalLabel;
+  }
+}
+
+function assessmentWritingSourceText(fieldName, form = $("#assessment-editor-form")) {
+  if (!ASSESSMENT_SYNTHESIS_FIELDS.has(fieldName)) return form.elements[fieldName].value.trim();
+  const context = ASSESSMENT_CONTEXT_FIELDS
+    .map((sourceField) => {
+      const value = form.elements[sourceField]?.value.trim();
+      if (!value) return "";
+      return `${ASSESSMENT_FIELD_LABELS[sourceField]}: ${[...value].slice(0, 500).join("")}`;
+    })
+    .filter(Boolean);
+  const currentDraft = form.elements[fieldName].value.trim();
+  if (currentDraft) context.push(`${ASSESSMENT_FIELD_LABELS[fieldName]}（現在の下書き）: ${[...currentDraft].slice(0, 500).join("")}`);
+  return context.join("\n");
 }
 
 async function submitJournal(event) {
@@ -1500,62 +1906,149 @@ async function submitJournal(event) {
   const form = event.currentTarget;
   const errorContainer = $("#journal-error");
   if (!validateForm(form, errorContainer)) return;
-  const values = new FormData(form);
-  const body = {
-    occurredAt: new Date(values.get("occurredAt")).toISOString(),
-    activity: values.get("activity").trim(),
-    observation: values.get("observation").trim(),
-    supportProvided: values.get("supportProvided").trim(),
-    childResponse: values.get("childResponse").trim(),
-    fiveDomains: values.getAll("fiveDomains"),
-    relatedGoalIds: [],
-  };
-  const healthNote = values.get("healthNote").trim();
-  if (healthNote) body.healthNote = healthNote;
+  const body = journalFormBody(form, "final");
   try {
-    await idempotentCreate(`/children/${encodeURIComponent(state.selectedChild.id)}/daily-logs`, body);
+    const journalId = form.dataset.journalId;
+    state.conflictReload = loadActiveResource;
+    state.conflictResumeDialog = $("#journal-dialog");
+    if (journalId) {
+      await api(`/children/${encodeURIComponent(state.selectedChild.id)}/daily-logs/${encodeURIComponent(journalId)}`, {
+        method: "PATCH",
+        etag: `"${form.dataset.journalRowVersion}"`,
+        body,
+      });
+    } else {
+      await idempotentCreate(`/children/${encodeURIComponent(state.selectedChild.id)}/daily-logs`, body);
+    }
     closeDialog($("#journal-dialog"));
     await loadActiveResource();
-    announce("日誌を保存しました。");
+    state.conflictReload = null;
+    state.conflictResumeDialog = null;
+    announce(journalId ? "日誌を変更しました。" : "日誌を保存しました。");
   } catch (error) {
     if (error.status !== 409) showFormError(form, errorContainer, errorMessage(error), []);
   }
 }
 
-function openContactDialog(trigger) {
+function journalFormBody(form, status) {
+  const values = new FormData(form);
+  return {
+    status,
+    occurredAt: new Date(values.get("occurredAt")).toISOString(),
+    activity: values.get("activity").trim(),
+    observation: values.get("observation").trim(),
+    supportProvided: values.get("supportProvided").trim(),
+    childResponse: values.get("childResponse").trim(),
+    healthNote: values.get("healthNote").trim(),
+    fiveDomains: values.getAll("fiveDomains"),
+    relatedGoalIds: JSON.parse(form.dataset.journalGoalIds || "[]"),
+  };
+}
+
+function journalDraftHasContent(body) {
+  return Boolean(
+    body.activity || body.observation || body.supportProvided || body.childResponse || body.healthNote
+    || body.fiveDomains.length || body.relatedGoalIds.length,
+  );
+}
+
+async function saveJournalDraft() {
+  const form = $("#journal-form");
+  const errorContainer = $("#journal-error");
+  const body = journalFormBody(form, "draft");
+  if (!journalDraftHasContent(body)) {
+    showFormError(form, errorContainer, "下書きとして保存する内容を入力してください。", []);
+    return;
+  }
+  try {
+    const journalId = form.dataset.journalId;
+    state.conflictReload = loadActiveResource;
+    state.conflictResumeDialog = $("#journal-dialog");
+    if (journalId) {
+      await api(`/children/${encodeURIComponent(state.selectedChild.id)}/daily-logs/${encodeURIComponent(journalId)}`, {
+        method: "PATCH",
+        etag: `"${form.dataset.journalRowVersion}"`,
+        body,
+      });
+    } else {
+      await idempotentCreate(`/children/${encodeURIComponent(state.selectedChild.id)}/daily-logs`, body);
+    }
+    closeDialog($("#journal-dialog"));
+    await loadActiveResource();
+    state.conflictReload = null;
+    state.conflictResumeDialog = null;
+    announce("日誌の下書きを保存しました。");
+  } catch (error) {
+    if (error.status !== 409) showFormError(form, errorContainer, errorMessage(error), []);
+  }
+}
+
+function openContactDialog(trigger, entry = null) {
   if (!state.selectedChild) return announce("先に利用児を選択してください。");
   const form = $("#contact-form");
   form.reset();
-  const today = new Date();
-  today.setMinutes(today.getMinutes() - today.getTimezoneOffset());
-  form.elements.entryDate.value = today.toISOString().slice(0, 10);
+  form.dataset.contactEntryId = entry?.id || "";
+  form.dataset.contactRowVersion = entry?.rowVersion || "";
+  if (entry) {
+    form.elements.entryDate.value = entry.entryDate || "";
+    form.elements.familyMessage.value = entry.familyMessage || "";
+    form.elements.facilityReply.value = entry.facilityReply || "";
+    form.elements.requestSummary.value = entry.requestSummary || "";
+    form.elements.reflectedInSupport.checked = Boolean(entry.reflectedInSupport);
+  } else {
+    const today = new Date();
+    today.setMinutes(today.getMinutes() - today.getTimezoneOffset());
+    form.elements.entryDate.value = today.toISOString().slice(0, 10);
+  }
+  $("#contact-form-title").textContent = entry ? "連絡帳を編集" : "連絡を登録";
+  $("#save-contact-button").textContent = entry ? "変更を保存" : "連絡を保存";
+  updateContactReplyCharacterCount(form);
   clearFormError(form, $("#contact-error"));
   openDialog($("#contact-dialog"), trigger);
 }
 
-function expandContactDraft() {
+function contactReplyTargetLength(form = $("#contact-form")) {
+  return Number($("[data-contact-reply-length]", form)?.value || 200);
+}
+
+function updateContactReplyCharacterCount(form = $("#contact-form")) {
+  const output = $("#contact-reply-count", form);
+  if (!output) return;
+  const length = journalTextLength(form.elements.facilityReply.value);
+  const target = contactReplyTargetLength(form);
+  output.textContent = `現在 ${length}字 ／ 目標 ${target}字`;
+  output.dataset.state = length >= target ? "met" : "short";
+}
+
+async function generateContactDraft(button) {
   const form = $("#contact-form");
   const familyMessage = form.elements.familyMessage.value.trim();
   const requestSummary = form.elements.requestSummary.value.trim();
-  const existingReply = form.elements.facilityReply.value.trim();
+  const facilityReply = form.elements.facilityReply.value.trim();
   const reflectedInSupport = form.elements.reflectedInSupport.checked;
-  if (![familyMessage, requestSummary, existingReply].some(Boolean)) {
-    showFormError(form, $("#contact-error"), "家庭からの連絡・要望の要点・返信のいずれかを入力してから、文章を整えてください。", ["familyMessage", "requestSummary", "facilityReply"]);
+  if (![familyMessage, requestSummary, facilityReply].some(Boolean)) {
+    showFormError(form, $("#contact-error"), "家庭からの連絡・支援時の引継ぎ・返信のいずれかを入力してから、返信文を整えてください。", ["familyMessage", "requestSummary", "facilityReply"]);
     return;
   }
-  const quotedFamilyMessage = familyMessage.replace(/[。．！？!?]+$/u, "");
-
-  const draft = [
-    familyMessage ? `ご連絡ありがとうございます。「${quotedFamilyMessage}」とのご連絡を確認しました。` : "",
-    requestSummary ? `ご要望の要点は「${requestSummary}」と受け止めています。` : "",
-    existingReply ? existingReply : "当日の様子を確認し、必要な配慮についてご連絡します。",
-    reflectedInSupport ? "支援内容への反映についても確認します。" : "",
-  ].filter(Boolean).join("\n\n");
-
-  form.elements.facilityReply.value = draft;
-  form.elements.facilityReply.dispatchEvent(new Event("input", { bubbles: true }));
-  clearFormError(form, $("#contact-error"));
-  announce("返信文の下書きを作成しました。保存前に内容を確認してください。");
+  const target = contactReplyTargetLength(form);
+  const originalLabel = button.textContent;
+  button.disabled = true;
+  button.textContent = "整えています…";
+  try {
+    const { data } = await api(`/children/${encodeURIComponent(state.selectedChild.id)}/writing-assist`, {
+      method: "POST",
+      body: { kind: "contact_reply", familyMessage, requestSummary, facilityReply, reflectedInSupport, targetCharacters: target },
+    });
+    form.elements.facilityReply.value = data.text;
+    form.elements.facilityReply.dispatchEvent(new Event("input", { bubbles: true }));
+    clearFormError(form, $("#contact-error"));
+    announce(`返信文を整えました。現在${data.characterCount}字です。`);
+  } catch (error) {
+    showFormError(form, $("#contact-error"), errorMessage(error), []);
+  } finally {
+    button.disabled = false;
+    button.textContent = originalLabel;
+  }
 }
 
 async function submitContact(event) {
@@ -1572,17 +2065,29 @@ async function submitContact(event) {
   }
   const body = {
     entryDate: values.get("entryDate"),
+    familyMessage,
+    facilityReply,
+    requestSummary: values.get("requestSummary").trim(),
     reflectedInSupport: values.get("reflectedInSupport") === "on",
   };
-  if (familyMessage) body.familyMessage = familyMessage;
-  if (facilityReply) body.facilityReply = facilityReply;
-  const requestSummary = values.get("requestSummary").trim();
-  if (requestSummary) body.requestSummary = requestSummary;
   try {
-    await idempotentCreate(`/children/${encodeURIComponent(state.selectedChild.id)}/contact-book`, body);
+    const entryId = form.dataset.contactEntryId;
+    state.conflictReload = loadActiveResource;
+    state.conflictResumeDialog = $("#contact-dialog");
+    if (entryId) {
+      await api(`/children/${encodeURIComponent(state.selectedChild.id)}/contact-book/${encodeURIComponent(entryId)}`, {
+        method: "PATCH",
+        etag: `"${form.dataset.contactRowVersion}"`,
+        body,
+      });
+    } else {
+      await idempotentCreate(`/children/${encodeURIComponent(state.selectedChild.id)}/contact-book`, body);
+    }
     closeDialog($("#contact-dialog"));
     await loadActiveResource();
-    announce("連絡を保存しました。");
+    state.conflictReload = null;
+    state.conflictResumeDialog = null;
+    announce(entryId ? "連絡帳を変更しました。" : "連絡を保存しました。");
   } catch (error) {
     if (error.status !== 409) showFormError(form, errorContainer, errorMessage(error), []);
   }
@@ -1601,7 +2106,7 @@ async function createDocumentDraft(button) {
     });
     await loadActiveResource();
     state.conflictReload = null;
-    announce(`${DOCUMENT_KIND_LABELS[kind]}の下書きを作成しました。`);
+    announce(`${DOCUMENT_KIND_LABELS[kind]}を作成しました。内容を編集して確認してください。`);
   } catch (error) {
     if (error.status !== 409) announce(errorMessage(error));
   } finally {
@@ -1619,6 +2124,7 @@ async function generateDraft(button) {
         targetDocumentKind: "basic_assessment",
         consultationPlanId: consultation?.id,
         currentScheduleVersionId: state.schedules.current?.id,
+        previousMonitoringDocumentId: latestDocument("monitoring_record")?.id || undefined,
       }
     : {
         targetDocumentKind: "individual_support_plan",
@@ -1632,7 +2138,7 @@ async function generateDraft(button) {
     await idempotentCreate(`/children/${encodeURIComponent(state.selectedChild.id)}/draft-generations`, body);
     await loadDocuments();
     state.conflictReload = null;
-    announce(`${DOCUMENT_KIND_LABELS[kind]}の下書きを作成しました。内容を確認してください。`);
+    announce(`${DOCUMENT_KIND_LABELS[kind]}を作成しました。内容を編集して確認してください。`);
   } catch (error) {
     if (error.status !== 409) announce(errorMessage(error));
   } finally {
@@ -1677,7 +2183,7 @@ async function submitMonitoringGeneration(event) {
     await idempotentCreate(`/children/${encodeURIComponent(state.selectedChild.id)}/draft-generations`, body);
     closeDialog($("#monitoring-generation-dialog"));
     await loadDocuments();
-    announce("モニタリングの下書きを作成しました。目標ごとの評価を確認してください。");
+    announce("モニタリングを作成しました。目標ごとの評価を入力してください。");
   } catch (error) {
     if (error.status !== 409) showFormError(form, errorContainer, errorMessage(error), []);
   }
@@ -1721,6 +2227,257 @@ async function submitMonitoringResult(event) {
     state.conflictReload = null;
     await loadDocuments();
     announce("モニタリング評価を保存しました。");
+  } catch (error) {
+    if (error.status !== 409) showFormError(form, errorContainer, errorMessage(error), []);
+  }
+}
+
+function planEditorField(name, label, value, { rows = 3, type = "textarea", required = false } = {}) {
+  const field = element("label", { className: "field field-wide" });
+  const fieldLabel = element("span", { text: required ? `${label} 必須` : label });
+  const control = element(type === "textarea" ? "textarea" : "input", {
+    attributes: type === "textarea"
+      ? { name, maxlength: "8000", rows: String(rows) }
+      : { name, type, maxlength: "1000" },
+  });
+  control.value = value || "";
+  if (required) control.required = true;
+  field.append(fieldLabel, control);
+  return field;
+}
+
+function renderPlanEditorGoals(goals = []) {
+  const container = $("#plan-editor-goals");
+  container.replaceChildren();
+  if (!goals.length) {
+    container.append(element("p", { text: "支援目標はまだ登録されていません。" }));
+    return;
+  }
+  for (const [index, goal] of goals.entries()) {
+    const card = element("article", { attributes: { "data-goal-id": goal.id, "data-goal-etag": `\"${goal.rowVersion}\"` } });
+    card.append(element("h4", { text: `${goal.goalKind === "long_term" ? "長期" : "短期"}目標 ${index + 1}` }));
+    const grid = element("div", { className: "field-grid" });
+    grid.append(
+      planEditorField("title", "目標", goal.title, { rows: 2, required: true }),
+      planEditorField("desiredOutcome", "目指す状態", goal.desiredOutcome),
+      planEditorField("supportDetails", "支援内容", goal.supportDetails, { rows: 4 }),
+      planEditorField("evaluationMethod", "評価方法", goal.evaluationMethod),
+      planEditorField("responsibleParty", "担当", goal.responsibleParty, { type: "text" }),
+      planEditorField("targetDate", "目標時期", goal.targetDate, { type: "date" }),
+    );
+    card.append(grid);
+    container.append(card);
+  }
+}
+
+async function openPlanEditor(documentRecord, trigger) {
+  if (!state.selectedChild || documentRecord.documentKind !== "individual_support_plan") return;
+  if (!EDITABLE_DOCUMENT_STATUSES.includes(documentRecord.status)) {
+    announce("確定後の計画書は編集できません。新しい版を作成してください。");
+    return;
+  }
+  const childId = encodeURIComponent(state.selectedChild.id);
+  let detailResult = state.documentDetails.get(documentRecord.id);
+  if (!detailResult) {
+    detailResult = await api(`/children/${childId}/documents/${encodeURIComponent(documentRecord.id)}`);
+    state.documentDetails.set(documentRecord.id, detailResult);
+  }
+  const detail = detailResult.data;
+  const form = $("#plan-editor-form");
+  form.reset();
+  form.elements.documentId.value = detail.id;
+  form.dataset.documentEtag = detailResult.etag || `\"${detail.rowVersion}\"`;
+  form.elements.periodStart.value = detail.periodStart || "";
+  form.elements.periodEnd.value = detail.periodEnd || "";
+  const planIsEmpty = INDIVIDUAL_PLAN_PAYLOAD_FIELDS.every(([field]) => !detail.payload?.[field]);
+  const assessmentRecord = latestDocument("basic_assessment");
+  let assessmentDetail = assessmentRecord ? state.documentDetails.get(assessmentRecord.id)?.data : null;
+  if (planIsEmpty && assessmentRecord && !assessmentDetail) {
+    const assessmentResult = await api(`/children/${childId}/documents/${encodeURIComponent(assessmentRecord.id)}`);
+    assessmentDetail = assessmentResult.data;
+    state.documentDetails.set(assessmentRecord.id, assessmentResult);
+  }
+  const suggestedValues = planIsEmpty ? planDraftValuesFromAssessment(assessmentDetail) : {};
+  for (const [field] of INDIVIDUAL_PLAN_PAYLOAD_FIELDS) form.elements[field].value = detail.payload?.[field] || suggestedValues[field] || "";
+  installPlanWritingTools(form);
+  updateAllPlanCharacterCounts(form);
+  renderPlanEditorGoals(detail.goals || []);
+  clearFormError(form, $("#plan-editor-error"));
+  openDialog($("#plan-editor-dialog"), trigger);
+}
+
+function planDraftValuesFromAssessment(assessment) {
+  const payload = assessment?.payload || {};
+  const sections = payload.assessment || {};
+  const text = (...values) => values.find((value) => typeof value === "string" && value.trim())?.trim() || "";
+  const childWish = text(payload.childWishes, sections.personWish);
+  const familyWish = text(payload.familyWishes, sections.familyWish);
+  return {
+    userAndFamilyWishes: [childWish ? `本人: ${childWish}` : "", familyWish ? `家族: ${familyWish}` : ""].filter(Boolean).join("\n"),
+    overallSupportPolicy: text(payload.overallAssessment, sections.overallAssessment, sections.supportDirection),
+    supportConsiderations: text(payload.supportConsiderations, sections.supportDirection),
+    serviceDelivery: text(payload.planningNotes, sections.planningNotes),
+    coordination: text(payload.supportNetwork),
+  };
+}
+
+async function openAssessmentEditor(documentRecord, trigger) {
+  if (!state.selectedChild || documentRecord.documentKind !== "basic_assessment") return;
+  if (!EDITABLE_DOCUMENT_STATUSES.includes(documentRecord.status)) {
+    announce("確定後のアセスメントは編集できません。新しい版を作成してください。");
+    return;
+  }
+  const childId = encodeURIComponent(state.selectedChild.id);
+  let detailResult = state.documentDetails.get(documentRecord.id);
+  if (!detailResult) {
+    detailResult = await api(`/children/${childId}/documents/${encodeURIComponent(documentRecord.id)}`);
+    state.documentDetails.set(documentRecord.id, detailResult);
+  }
+  const detail = detailResult.data;
+  const form = $("#assessment-editor-form");
+  form.reset();
+  form.elements.documentId.value = detail.id;
+  form.dataset.documentEtag = detailResult.etag || `"${detail.rowVersion}"`;
+  for (const [field, assessmentField] of ASSESSMENT_EDITOR_FIELDS) {
+    form.elements[field].value = detail.payload?.[field] || (assessmentField ? detail.payload?.assessment?.[assessmentField] : "") || "";
+  }
+  installAssessmentWritingTools(form);
+  updateAllAssessmentCharacterCounts(form);
+  clearFormError(form, $("#assessment-editor-error"));
+  openDialog($("#assessment-editor-dialog"), trigger);
+}
+
+async function openReferencePlanEditor(documentRecord, trigger) {
+  if (!state.selectedChild || documentRecord.documentKind !== "consultation_plan") return;
+  if (!EDITABLE_DOCUMENT_STATUSES.includes(documentRecord.status)) {
+    announce("確定後の参考資料は編集できません。必要な場合は新しい版を登録してください。");
+    return;
+  }
+  const childId = encodeURIComponent(state.selectedChild.id);
+  let detailResult = state.documentDetails.get(documentRecord.id);
+  if (!detailResult) {
+    detailResult = await api(`/children/${childId}/documents/${encodeURIComponent(documentRecord.id)}`);
+    state.documentDetails.set(documentRecord.id, detailResult);
+  }
+  const detail = detailResult.data;
+  const form = $("#reference-plan-editor-form");
+  form.reset();
+  form.elements.documentId.value = detail.id;
+  form.dataset.documentEtag = detailResult.etag || `"${detail.rowVersion}"`;
+  for (const field of REFERENCE_PLAN_PAYLOAD_FIELDS) form.elements[field].value = detail.payload?.[field] || "";
+  clearFormError(form, $("#reference-plan-editor-error"));
+  openDialog($("#reference-plan-editor-dialog"), trigger);
+}
+
+function optionalEditorValue(value) {
+  const text = value?.trim();
+  return text || null;
+}
+
+async function submitPlanEditor(event) {
+  event.preventDefault();
+  const form = event.currentTarget;
+  const errorContainer = $("#plan-editor-error");
+  if (!validateForm(form, errorContainer)) return;
+  const documentId = form.elements.documentId.value;
+  const currentDetail = state.documentDetails.get(documentId)?.data;
+  const payload = { ...(currentDetail?.payload || {}) };
+  for (const [field] of INDIVIDUAL_PLAN_PAYLOAD_FIELDS) payload[field] = optionalEditorValue(form.elements[field].value);
+  const body = {
+    periodStart: form.elements.periodStart.value || null,
+    periodEnd: form.elements.periodEnd.value || null,
+    payload,
+  };
+  if (body.periodStart && body.periodEnd && body.periodEnd < body.periodStart) {
+    return showFormError(form, errorContainer, "終了日は開始日以降にしてください。", ["periodEnd"]);
+  }
+  state.conflictResumeDialog = $("#plan-editor-dialog");
+  state.conflictReload = loadDocuments;
+  try {
+    const childId = encodeURIComponent(state.selectedChild.id);
+    await api(`/children/${childId}/documents/${encodeURIComponent(documentId)}`, {
+      method: "PATCH",
+      etag: form.dataset.documentEtag,
+      body,
+    });
+    for (const goalCard of $$("[data-goal-id]", $("#plan-editor-goals"))) {
+      const goalBody = {
+        title: optionalEditorValue($("[name=title]", goalCard)?.value),
+        desiredOutcome: optionalEditorValue($("[name=desiredOutcome]", goalCard)?.value),
+        supportDetails: optionalEditorValue($("[name=supportDetails]", goalCard)?.value),
+        evaluationMethod: optionalEditorValue($("[name=evaluationMethod]", goalCard)?.value),
+        responsibleParty: optionalEditorValue($("[name=responsibleParty]", goalCard)?.value),
+        targetDate: $("[name=targetDate]", goalCard)?.value || null,
+      };
+      await api(`/children/${childId}/documents/${encodeURIComponent(documentId)}/goals/${encodeURIComponent(goalCard.dataset.goalId)}`, {
+        method: "PATCH",
+        etag: goalCard.dataset.goalEtag,
+        body: goalBody,
+      });
+    }
+    closeDialog($("#plan-editor-dialog"));
+    state.conflictResumeDialog = null;
+    state.conflictReload = null;
+    await loadDocuments();
+    announce("計画書を保存しました。必要に応じて確認用PDFを作成してください。");
+  } catch (error) {
+    if (error.status !== 409) showFormError(form, errorContainer, errorMessage(error), []);
+  }
+}
+
+async function submitAssessmentEditor(event) {
+  event.preventDefault();
+  const form = event.currentTarget;
+  const errorContainer = $("#assessment-editor-error");
+  const documentId = form.elements.documentId.value;
+  const currentDetail = state.documentDetails.get(documentId)?.data;
+  const payload = { ...(currentDetail?.payload || {}) };
+  const assessment = { ...(payload.assessment || {}) };
+  for (const [field, assessmentField] of ASSESSMENT_EDITOR_FIELDS) {
+    const value = optionalEditorValue(form.elements[field].value);
+    payload[field] = value;
+    if (assessmentField) assessment[assessmentField] = value;
+  }
+  payload.assessment = assessment;
+  state.conflictResumeDialog = $("#assessment-editor-dialog");
+  state.conflictReload = loadDocuments;
+  try {
+    await api(`/children/${encodeURIComponent(state.selectedChild.id)}/documents/${encodeURIComponent(documentId)}`, {
+      method: "PATCH",
+      etag: form.dataset.documentEtag,
+      body: { payload },
+    });
+    closeDialog($("#assessment-editor-dialog"));
+    state.conflictResumeDialog = null;
+    state.conflictReload = null;
+    await loadDocuments();
+    announce("アセスメントを保存しました。内容を確認してから、個別支援計画を作成してください。");
+  } catch (error) {
+    if (error.status !== 409) showFormError(form, errorContainer, errorMessage(error), []);
+  }
+}
+
+async function submitReferencePlanEditor(event) {
+  event.preventDefault();
+  const form = event.currentTarget;
+  const errorContainer = $("#reference-plan-editor-error");
+  const documentId = form.elements.documentId.value;
+  const currentDetail = state.documentDetails.get(documentId)?.data;
+  const payload = { ...(currentDetail?.payload || {}) };
+  for (const field of REFERENCE_PLAN_PAYLOAD_FIELDS) payload[field] = optionalEditorValue(form.elements[field].value);
+  state.conflictResumeDialog = $("#reference-plan-editor-dialog");
+  state.conflictReload = loadDocuments;
+  try {
+    await api(`/children/${encodeURIComponent(state.selectedChild.id)}/documents/${encodeURIComponent(documentId)}`, {
+      method: "PATCH",
+      etag: form.dataset.documentEtag,
+      body: { payload },
+    });
+    closeDialog($("#reference-plan-editor-dialog"));
+    state.conflictResumeDialog = null;
+    state.conflictReload = null;
+    await loadDocuments();
+    announce("外部計画の参考情報を保存しました。次に作るアセスメントの候補に反映されます。");
   } catch (error) {
     if (error.status !== 409) showFormError(form, errorContainer, errorMessage(error), []);
   }
@@ -1896,7 +2653,7 @@ function renderStaff() {
     const role = element("div", { className: "staff-role" });
     role.append(element("strong", { text: ROLE_LABELS[staff.role] || staff.role }), element("span", { className: `status-chip status-${staff.status}`, text: STAFF_STATUS_LABELS[staff.status] || staff.status }));
     const facilityNames = staff.facilityIds?.map((id) => state.facilities.find((facility) => facility.id === id)?.name || "担当外の事業所") || [];
-    const facilities = element("p", { text: staff.role === "tenant_admin" && !facilityNames.length ? "法人内の全事業所" : facilityNames.join("、") || "事業所未設定" });
+    const facilities = element("p", { text: staff.role === "tenant_admin" && !facilityNames.length ? "すべての事業所" : facilityNames.join("、") || "事業所未設定" });
     const actions = element("div", { className: "staff-actions" });
     let invitationWarning = null;
     if (["failed", "sent"].includes(staff.invitation?.status)) {
@@ -2020,7 +2777,8 @@ async function submitStaffEdit(event) {
   }
 }
 
-function workflowActionsForStatus(status) {
+function workflowActionsForStatus(status, documentKind) {
+  if (documentKind !== "individual_support_plan") return [];
   const transitions = {
     draft: ["submit", "void"],
     internal_review: ["return", "explain", "void"],
@@ -2034,6 +2792,7 @@ function workflowActionsForStatus(status) {
 }
 
 async function openWorkflow(documentRecord, trigger) {
+  if (documentRecord.documentKind !== "individual_support_plan") return;
   const result = await api(`/children/${encodeURIComponent(state.selectedChild.id)}/documents/${encodeURIComponent(documentRecord.id)}/workflow`);
   state.workflow = result.data;
   state.workflowEtag = result.etag || `"${result.data.document.rowVersion}"`;
@@ -2048,7 +2807,7 @@ function renderWorkflow() {
   $("#workflow-document-summary").textContent = `${DOCUMENT_KIND_LABELS[documentRecord.documentKind]} 第${documentRecord.versionNumber}版 ／ ${DOCUMENT_STATUS_LABELS[documentRecord.status] || documentRecord.status}`;
   const actions = $("#workflow-actions");
   actions.replaceChildren();
-  for (const action of workflowActionsForStatus(documentRecord.status)) {
+  for (const action of workflowActionsForStatus(documentRecord.status, documentRecord.documentKind)) {
     const config = WORKFLOW_ACTIONS[action];
     const button = element("button", { className: action === "void" ? "button button-danger" : "button button-primary", text: config.label, attributes: { type: "button" } });
     button.addEventListener("click", () => runAsync(() => openTransition(action, button)));
@@ -2182,7 +2941,7 @@ function showConflict(error) {
   const isPdfStatusChanged = ["DRAFT_PDF_NOT_AVAILABLE", "OFFICIAL_PDF_NOT_AVAILABLE"].includes(error.code);
   $("#conflict-title").textContent = isExistingDraft
     ? "編集中の下書きがすでにあります"
-    : isLastAdmin ? "最後の法人管理者は変更できません"
+    : isLastAdmin ? "最後の管理者は変更できません"
       : isStaffRegistered ? "この職員は登録済みです"
         : isDuplicate ? "同じ情報がすでに登録されています"
       : isInvalidTransition ? "文書の工程が変わりました"
@@ -2191,7 +2950,7 @@ function showConflict(error) {
           : "別の職員が先に更新しました";
   $("#conflict-description").textContent = isExistingDraft
     ? "同じ種類の下書きを重複して作らないよう、作成を中止しました。既存の下書きを確認してください。"
-    : isLastAdmin ? "法人には有効な法人管理者が1名以上必要です。別の職員を法人管理者にしてから変更してください。"
+    : isLastAdmin ? "有効な管理者を1名以上残す必要があります。別の職員を管理者にしてから変更してください。"
       : isStaffRegistered ? "同じメールアドレスの職員を重複登録しないよう、招待を中止しました。職員一覧を確認してください。"
         : isDuplicate ? "管理番号や事業所コードが重複しています。最新の一覧を確認し、別のコードを指定してください。"
       : isInvalidTransition ? "別の職員が工程を進めた可能性があります。最新の工程を読み込んでください。"
@@ -2261,12 +3020,18 @@ function setupEvents() {
   });
   $("#remove-child-photo-button")?.addEventListener("click", () => runAsync(deleteChildProfilePhoto));
   $("#create-journal-button")?.addEventListener("click", (event) => openJournalDialog(event.currentTarget));
-  $$('[data-expand-journal-field]').forEach((button) => button.addEventListener("click", () => expandJournalField(button.dataset.expandJournalField)));
+  $("#save-journal-draft")?.addEventListener("click", () => runAsync(saveJournalDraft));
+  $$('[data-expand-journal-field]').forEach((button) => button.addEventListener("click", () => runAsync(() => generateJournalField(button.dataset.expandJournalField, button))));
+  $$("#journal-form textarea[name]").forEach((field) => field.addEventListener("input", () => updateJournalCharacterCount(field.name)));
+  $$('[data-journal-length]').forEach((select) => select.addEventListener("change", () => updateJournalCharacterCount(select.dataset.journalLength)));
+  $("#contact-form textarea[name=facilityReply]")?.addEventListener("input", () => updateContactReplyCharacterCount());
+  $("[data-contact-reply-length]")?.addEventListener("change", () => updateContactReplyCharacterCount());
   $("#create-contact-button")?.addEventListener("click", (event) => openContactDialog(event.currentTarget));
-  $("#expand-contact-draft")?.addEventListener("click", expandContactDraft);
+  $("#expand-contact-draft")?.addEventListener("click", () => runAsync(() => generateContactDraft($("#expand-contact-draft"))));
   $("#create-guardian-button")?.addEventListener("click", (event) => openGuardianDialog(event.currentTarget));
   $("#add-schedule-item")?.addEventListener("click", () => addScheduleItem());
   $("#open-monitoring-generation")?.addEventListener("click", (event) => openMonitoringGeneration(event.currentTarget));
+  $("#open-current-schedule-from-assessment")?.addEventListener("click", (event) => runAsync(() => openCurrentScheduleFromAssessment(event.currentTarget)));
   $("#invite-staff-button")?.addEventListener("click", (event) => openStaffInvite(event.currentTarget));
   $("#create-facility-button")?.addEventListener("click", (event) => openFacilityCreate(event.currentTarget));
   $("#refresh-audit-button")?.addEventListener("click", () => runAsync(loadAuditEvents));
@@ -2278,6 +3043,9 @@ function setupEvents() {
   $("#schedule-form")?.addEventListener("submit", submitSchedule);
   $("#monitoring-generation-form")?.addEventListener("submit", submitMonitoringGeneration);
   $("#monitoring-result-form")?.addEventListener("submit", submitMonitoringResult);
+  $("#plan-editor-form")?.addEventListener("submit", submitPlanEditor);
+  $("#assessment-editor-form")?.addEventListener("submit", submitAssessmentEditor);
+  $("#reference-plan-editor-form")?.addEventListener("submit", submitReferencePlanEditor);
   $("#staff-invite-form")?.addEventListener("submit", submitStaffInvite);
   $("#staff-edit-form")?.addEventListener("submit", submitStaffEdit);
   $("#facility-create-form")?.addEventListener("submit", submitFacilityCreate);

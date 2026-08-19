@@ -31,7 +31,7 @@ const configSchema = z
     DATABASE_SSL: z.enum(["disable", "require"]).default("disable"),
     DATABASE_CA_FILE: optionalString,
     DB_POOL_MAX: z.coerce.number().int().min(1).max(50).default(10),
-    AUTH_MODE: z.enum(["development", "cognito"]).default("development"),
+    AUTH_MODE: z.enum(["development", "local", "cognito"]).default("development"),
     COOKIE_SECRET: z.preprocess((value) => value || undefined, z.string().min(32).optional()),
     AUDIT_HASH_KEY: z.preprocess((value) => value || undefined, z.string().min(32).optional()),
     PDF_FINALIZATION_SECRET: z.preprocess(
@@ -49,6 +49,8 @@ const configSchema = z
     PDF_RENDER_QUEUE_LIMIT: z.coerce.number().int().min(0).max(4).default(1),
     PDF_RENDER_RETRY_AFTER_SECONDS: z.coerce.number().int().min(1).max(60).default(5),
     PDF_JOB_LEASE_SECONDS: z.coerce.number().int().min(60).max(600).default(120),
+    OPENAI_API_KEY: z.preprocess((value) => value || undefined, z.string().min(20).optional()),
+    OPENAI_MODEL: z.string().min(1).max(100).default("gpt-4.1"),
     COGNITO_USER_POOL_ID: z.preprocess((value) => value || undefined, z.string().min(1).optional()),
     COGNITO_CLIENT_ID: z.preprocess((value) => value || undefined, z.string().min(1).optional()),
     COGNITO_CLIENT_SECRET: z.preprocess((value) => value || undefined, z.string().min(1).optional()),
@@ -104,6 +106,9 @@ const configSchema = z
     }
     if (value.NODE_ENV === "production" && value.AUTH_MODE !== "cognito") {
       context.addIssue({ code: "custom", path: ["AUTH_MODE"], message: "productionではcognitoのみ利用できます" });
+    }
+    if (value.AUTH_MODE === "local" && !value.COOKIE_SECRET) {
+      context.addIssue({ code: "custom", path: ["COOKIE_SECRET"], message: "local authentication requires COOKIE_SECRET" });
     }
     if (value.NODE_ENV === "production" && !value.AUDIT_HASH_KEY) {
       context.addIssue({ code: "custom", path: ["AUDIT_HASH_KEY"], message: "productionでは必須です" });
@@ -204,6 +209,8 @@ export function loadConfig(env = process.env) {
     pdfRenderQueueLimit: value.PDF_RENDER_QUEUE_LIMIT,
     pdfRenderRetryAfterSeconds: value.PDF_RENDER_RETRY_AFTER_SECONDS,
     pdfJobLeaseSeconds: value.PDF_JOB_LEASE_SECONDS,
+    openAiApiKey: value.OPENAI_API_KEY,
+    openAiModel: value.OPENAI_MODEL,
     cognito: value.AUTH_MODE === "cognito"
       ? {
           region: value.AWS_REGION || inferredCognitoRegion || "ap-northeast-3",

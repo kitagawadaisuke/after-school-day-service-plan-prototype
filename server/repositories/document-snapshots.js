@@ -684,6 +684,15 @@ export async function markDocumentSnapshotUploaded(client, actor, input) {
   return serializeSnapshotJob(row);
 }
 
+export async function markDatabaseDocumentSnapshotUploaded(client, actor, input) {
+  const row = (await client.query(
+    "select * from app_private.record_database_document_snapshot_job_upload($1, $2)",
+    [input.jobId, input.leaseToken],
+  )).rows[0];
+  if (!row) throw pdfBusy();
+  return serializeSnapshotJob(row);
+}
+
 export async function releaseDocumentSnapshotJob(client, actor, input) {
   await client.query(
     "select app_private.fail_document_snapshot_job($1, $2, $3)",

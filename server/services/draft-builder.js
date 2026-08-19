@@ -46,7 +46,7 @@ function baseGeneration({ targetDocumentKind, generatedAt, sourceDocuments, peri
 }
 
 function consultationCandidates(document) {
-  const payload = document.payload || {};
+  const payload = document?.payload || {};
   return {
     personWish: firstText(payload, ["personWish", "childWish", "childAndFamilyWishes"]),
     familyWish: firstText(payload, ["familyWish", "guardianWish", "childAndFamilyWishes"]),
@@ -81,6 +81,65 @@ function monitoringCandidates(document, goalResults) {
   };
 }
 
+function assessmentPlanDraftValues(assessment) {
+  const payload = assessment?.payload || {};
+  const sections = payload.assessment || {};
+  const childWish = firstText(payload, ["childWishes"]) || firstText(sections, ["personWish"]);
+  const familyWish = firstText(payload, ["familyWishes"]) || firstText(sections, ["familyWish"]);
+  const wishes = [
+    childWish ? `本人: ${childWish}` : "",
+    familyWish ? `家族: ${familyWish}` : "",
+  ].filter(Boolean).join("\n") || null;
+  const overallAssessment = firstText(payload, ["overallAssessment"])
+    || firstText(sections, ["overallAssessment", "supportDirection"]);
+  const supportConsiderations = firstText(payload, ["supportConsiderations"])
+    || firstText(sections, ["supportDirection"]);
+  return {
+    userAndFamilyWishes: wishes,
+    overallSupportPolicy: overallAssessment,
+    consultationPlanBasis: null,
+    supportConsiderations,
+    serviceDelivery: firstText(payload, ["planningNotes"]) || firstText(sections, ["planningNotes"]),
+    coordination: firstText(payload, ["supportNetwork"]),
+    monitoringPlan: null,
+    explanationNotes: null,
+  };
+}
+
+function monitoringResultText(results, fieldName) {
+  return results
+    .map((result) => {
+      const value = result?.[fieldName];
+      if (typeof value !== "string" || !value.trim()) return "";
+      const title = typeof result.goal?.title === "string" && result.goal.title.trim()
+        ? `${result.goal.title.trim()}: `
+        : "";
+      return `${title}${value.trim()}`;
+    })
+    .filter(Boolean)
+    .join("\n") || null;
+}
+
+function monitoringAssessmentDraftValues(previousMonitoring, previousMonitoringGoalResults) {
+  const monitoring = monitoringCandidates(previousMonitoring, previousMonitoringGoalResults);
+  if (!monitoring) return {
+    childWishes: null,
+    familyWishes: null,
+    concerns: null,
+    overallAssessment: null,
+    supportConsiderations: null,
+    planningNotes: null,
+  };
+  return {
+    childWishes: monitoring.personFeedback,
+    familyWishes: monitoring.familyFeedback,
+    concerns: monitoringResultText(previousMonitoringGoalResults, "currentChallenge"),
+    overallAssessment: monitoring.overallEvaluation || monitoringResultText(previousMonitoringGoalResults, "progressSummary"),
+    supportConsiderations: monitoringResultText(previousMonitoringGoalResults, "nextSupportPolicy"),
+    planningNotes: monitoring.nextPlanDirection,
+  };
+}
+
 export function buildBasicAssessmentDraft({
   child,
   guardians,
@@ -91,18 +150,19 @@ export function buildBasicAssessmentDraft({
   generatedAt = new Date(),
 }) {
   const candidates = consultationCandidates(consultationPlan);
+  const monitoringDraft = monitoringAssessmentDraftValues(previousMonitoring, previousMonitoringGoalResults);
   return {
     templateVersion: "basic-assessment-v2",
-    periodStart: consultationPlan.periodStart || currentSchedule.validFrom || null,
-    periodEnd: consultationPlan.periodEnd || currentSchedule.validTo || null,
+    periodStart: consultationPlan?.periodStart || currentSchedule.validFrom || null,
+    periodEnd: consultationPlan?.periodEnd || currentSchedule.validTo || null,
     payload: {
       generation: baseGeneration({
         targetDocumentKind: "basic_assessment",
         generatedAt,
         sourceDocuments: [consultationPlan, previousMonitoring],
         period: {
-          start: consultationPlan.periodStart || currentSchedule.validFrom || null,
-          end: consultationPlan.periodEnd || currentSchedule.validTo || null,
+          start: consultationPlan?.periodStart || currentSchedule.validFrom || null,
+          end: consultationPlan?.periodEnd || currentSchedule.validTo || null,
         },
         counts: {
           guardians: guardians.length,
@@ -146,6 +206,7 @@ export function buildBasicAssessmentDraft({
         previousMonitoring,
         previousMonitoringGoalResults,
       ),
+      ...monitoringDraft,
       currentScheduleFacts: {
         scheduleVersionId: currentSchedule.id,
         summary: currentSchedule.summary,
@@ -162,12 +223,12 @@ export function buildBasicAssessmentDraft({
         })),
       },
       assessment: {
-        personWish: null,
-        familyWish: null,
+        personWish: monitoringDraft.childWishes,
+        familyWish: monitoringDraft.familyWishes,
         strengths: null,
-        needs: null,
-        supportDirection: null,
-        planningNotes: null,
+        needs: monitoringDraft.concerns,
+        supportDirection: monitoringDraft.supportConsiderations,
+        planningNotes: monitoringDraft.planningNotes,
       },
       confirmationRequired: [
         "本人の意向は、本人への聞き取りまたは意思決定支援を行って確認してください。",
@@ -222,7 +283,7 @@ function goalCandidate(goal, sourceDocument, monitoringResult = null) {
 export function buildIndividualSupportPlanDraft({
   consultationPlan,
   assessment,
-  consultationGoals,
+  consultationGoals = [],
   previousMonitoring = null,
   previousMonitoringGoalResults = [],
   generatedAt = new Date(),
@@ -230,7 +291,7 @@ export function buildIndividualSupportPlanDraft({
   const goals = [];
   const seenSourceGoals = new Set();
 
-  for (const goal of consultationGoals) {
+  for (const goal of consultationGoals || []) {
     goals.push(goalCandidate(goal, consultationPlan));
     seenSourceGoals.add(goal.id);
   }
@@ -242,18 +303,19 @@ export function buildIndividualSupportPlanDraft({
 
   const assessmentPayload = assessment.payload || {};
   const assessmentSections = assessmentPayload.assessment || assessmentPayload;
+  const planDraft = assessmentPlanDraftValues(assessment);
   return {
     templateVersion: "individual-support-plan-v1",
-    periodStart: assessment.periodStart || consultationPlan.periodStart || null,
-    periodEnd: assessment.periodEnd || consultationPlan.periodEnd || null,
+    periodStart: assessment.periodStart || consultationPlan?.periodStart || null,
+    periodEnd: assessment.periodEnd || consultationPlan?.periodEnd || null,
     payload: {
       generation: baseGeneration({
         targetDocumentKind: "individual_support_plan",
         generatedAt,
         sourceDocuments: [consultationPlan, assessment, previousMonitoring],
         period: {
-          start: assessment.periodStart || consultationPlan.periodStart || null,
-          end: assessment.periodEnd || consultationPlan.periodEnd || null,
+          start: assessment.periodStart || consultationPlan?.periodStart || null,
+          end: assessment.periodEnd || consultationPlan?.periodEnd || null,
         },
         counts: {
           consultationGoals: consultationGoals.length,
@@ -277,13 +339,14 @@ export function buildIndividualSupportPlanDraft({
         previousMonitoring,
         previousMonitoringGoalResults,
       ),
+      ...planDraft,
       plan: {
-        personWish: null,
-        familyWish: null,
-        comprehensiveSupportPolicy: null,
+        personWish: planDraft.userAndFamilyWishes,
+        familyWish: firstText(assessmentPayload, ["familyWishes"]) || assessmentSections.familyWish || null,
+        comprehensiveSupportPolicy: planDraft.overallSupportPolicy,
         longTermGoalSummary: null,
         shortTermGoalSummary: null,
-        monitoringMethod: null,
+        monitoringMethod: planDraft.monitoringPlan,
       },
       confirmationRequired: [
         "本人・家族の意向と、具体的な目標・支援方法・担当者・評価方法を会議で確認してください。",

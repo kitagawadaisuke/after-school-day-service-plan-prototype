@@ -205,6 +205,10 @@ async function setupDatabase() {
     id: IDS.assessment,
     kind: "basic_assessment",
     payload: {
+      childWishes: "好きな活動を自分で選びたい",
+      familyWishes: "安心して友達と過ごしてほしい",
+      overallAssessment: "予定を視覚的に共有する",
+      supportConsiderations: "予定を視覚的に共有する",
       assessment: {
         strengths: "絵や写真を見て順序を理解できる",
         needs: "切り替え前の予告が必要",
@@ -368,7 +372,10 @@ test("相談支援計画・アセスメント・前回モニタリングから�
     assert.equal(response.statusCode, 201);
     const draft = response.json();
     assert.equal(draft.documentKind, "individual_support_plan");
-    assert.equal(draft.payload.plan.personWish, null);
+    assert.equal(draft.payload.userAndFamilyWishes, "本人: 好きな活動を自分で選びたい\n家族: 安心して友達と過ごしてほしい");
+    assert.equal(draft.payload.overallSupportPolicy, "予定を視覚的に共有する");
+    assert.equal(draft.payload.supportConsiderations, "予定を視覚的に共有する");
+    assert.equal(draft.payload.plan.personWish, "本人: 好きな活動を自分で選びたい\n家族: 安心して友達と過ごしてほしい");
     assert.equal(draft.payload.assessmentCandidates.strengths, "絵や写真を見て順序を理解できる");
     assert.equal(draft.goals.length, 2);
     assert.deepEqual(
@@ -376,6 +383,26 @@ test("相談支援計画・アセスメント・前回モニタリングから�
       new Set([IDS.consultationGoal, IDS.activeGoalOne]),
     );
     assert.equal(draft.payload.generation.evidenceCounts.previousMonitoringResults, 1);
+  });
+});
+
+test("相談支援計画がなくても、事業所のアセスメントと個別支援計画を作れる", async () => {
+  await withApp("plan_approver", async (app) => {
+    const assessment = await generate(app, {
+      targetDocumentKind: "basic_assessment",
+      currentScheduleVersionId: IDS.schedule,
+    });
+    assert.equal(assessment.statusCode, 201);
+    assert.equal(assessment.json().payload.consultationPlanCandidates.personWish, null);
+    assert.equal(assessment.json().payload.generation.sourceDocuments.some((document) => document.documentKind === "consultation_plan"), false);
+
+    const individual = await generate(app, {
+      targetDocumentKind: "individual_support_plan",
+      assessmentDocumentId: IDS.assessment,
+    });
+    assert.equal(individual.statusCode, 201);
+    assert.equal(individual.json().payload.generation.sourceDocuments.some((document) => document.documentKind === "consultation_plan"), false);
+    assert.equal(individual.json().payload.generation.evidenceCounts.consultationGoals, 0);
   });
 });
 
@@ -445,6 +472,20 @@ test("モニタリング下書きの根拠を次期アセスメントと個別�
     });
     assert.equal(monitoringResponse.statusCode, 201);
     const monitoring = monitoringResponse.json();
+    const monitoringResult = monitoring.monitoringResults.find((result) => result.goalId === IDS.activeGoalOne);
+    const reviewed = await app.inject({
+      method: "PATCH",
+      url: `/api/v1/children/${IDS.child}/documents/${monitoring.id}/monitoring-results/${monitoringResult.id}`,
+      headers: { "if-match": '"1"' },
+      payload: {
+        progressStatus: "maintained",
+        progressSummary: "日誌と面談を確認し、見通しを持って活動に取り組む様子が維持できていると評価した。",
+        currentChallenge: "予定変更時は、事前の説明がないと不安定になりやすい。",
+        nextSupportPolicy: "予定を視覚的に共有し、変更前に短く伝える。",
+        nextGoalAction: "continue",
+      },
+    });
+    assert.equal(reviewed.statusCode, 200);
 
     const assessmentResponse = await generate(app, {
       targetDocumentKind: "basic_assessment",
@@ -456,6 +497,9 @@ test("モニタリング下書きの根拠を次期アセスメントと個別�
     const assessment = assessmentResponse.json();
     assert.equal(assessment.payload.provenance.previousMonitoring.id, monitoring.id);
     assert.equal(assessment.payload.previousMonitoringCandidates.goalResults.length, 2);
+    assert.match(assessment.payload.concerns, /予定変更時は、事前の説明がないと不安定になりやすい/);
+    assert.match(assessment.payload.overallAssessment, /日誌と面談を確認し/);
+    assert.match(assessment.payload.supportConsiderations, /予定を視覚的に共有し/);
     assert.equal(
       assessment.payload.previousMonitoringCandidates.goalResults.some(
         (result) => result.progressStatus === "not_evaluated",
@@ -473,7 +517,7 @@ test("モニタリング下書きの根拠を次期アセスメントと個別�
     const plan = planResponse.json();
     assert.equal(plan.payload.previousMonitoringCandidates.goalResults.length, 2);
     assert.equal(plan.payload.generation.evidenceCounts.previousMonitoringResults, 2);
-    assert.equal(plan.payload.plan.comprehensiveSupportPolicy, null);
+    assert.match(plan.payload.plan.comprehensiveSupportPolicy, /日誌と面談を確認し/);
   });
 });
 

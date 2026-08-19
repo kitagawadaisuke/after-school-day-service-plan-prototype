@@ -15,6 +15,7 @@ import { renderDocumentTemplate } from "../pdf/templates/index.js";
 import { signPdfUpload } from "../security/pdf-finalization.js";
 import {
   getDocumentSnapshot,
+  markDatabaseDocumentSnapshotUploaded,
   finalizeDocumentSnapshotJob,
   listDocumentSnapshots,
   markDocumentSnapshotUploaded,
@@ -178,10 +179,12 @@ async function generateSnapshotHandler(app, request, reply) {
     let stored;
     try {
       stored = await app.documentStorage.putPdf({
+        actor: request.actor,
         key: reservation.job.storageKey,
         body: pdfBody,
         sha256: digest,
         jobId: reservation.job.id,
+        leaseToken,
       });
     } catch (error) {
       if (error?.code !== "DOCUMENT_OBJECT_EXISTS") {
@@ -193,27 +196,35 @@ async function generateSnapshotHandler(app, request, reply) {
         );
       }
       stored = await app.documentStorage.inspectPdf({
+        actor: request.actor,
         key: reservation.job.storageKey,
         expectedJobId: reservation.job.id,
       });
       if (!stored) throw storageIntegrityError();
     }
-    const uploadAttestation = signPdfUpload(app.config.pdfFinalizationSecret, {
-      jobId: reservation.job.id,
-      leaseToken,
-      storageVersionId: stored.versionId,
-      sha256: stored.sha256 || digest,
-      byteSize: stored.byteSize || pdfBody.length,
-    });
-    uploadedJob = await withTenantTransaction(app.db, request.actor, (client) =>
-      markDocumentSnapshotUploaded(client, request.actor, {
+    uploadedJob = await withTenantTransaction(app.db, request.actor, (client) => {
+      if (app.documentStorage.kind === "database") {
+        return markDatabaseDocumentSnapshotUploaded(client, request.actor, {
+          jobId: reservation.job.id,
+          leaseToken,
+        });
+      }
+      const uploadAttestation = signPdfUpload(app.config.pdfFinalizationSecret, {
+        jobId: reservation.job.id,
+        leaseToken,
+        storageVersionId: stored.versionId,
+        sha256: stored.sha256 || digest,
+        byteSize: stored.byteSize || pdfBody.length,
+      });
+      return markDocumentSnapshotUploaded(client, request.actor, {
         jobId: reservation.job.id,
         leaseToken,
         sha256: stored.sha256 || digest,
         byteSize: stored.byteSize || pdfBody.length,
         storageVersionId: stored.versionId,
         uploadAttestation,
-      }));
+      });
+    });
   }
 
   let result;
@@ -335,6 +346,7 @@ export async function documentSnapshotRoutes(app) {
       body = legacy.body;
     } else {
       body = await app.documentStorage.getPdf({
+        actor: request.actor,
         key: row.storage_key,
         versionId: row.storage_version_id,
       });

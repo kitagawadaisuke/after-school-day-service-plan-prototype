@@ -8,6 +8,7 @@ await import("../tests/infra-contract.test.mjs");
 await import("../tests/cognito-auth.test.mjs");
 await import("../tests/document-api.test.mjs");
 await import("../tests/saas-frontend.test.mjs");
+await import("../tests/writing-assist.test.mjs");
 await import("../tests/document-workflow.test.mjs");
 await import("../tests/document-state-integrity.test.mjs");
 await import("../tests/draft-generation.test.mjs");

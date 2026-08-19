@@ -14,7 +14,7 @@ import { dateSchema, parseIfMatch, parseInput, setVersionEtag, uuidSchema } from
 const basicAssessmentGenerationSchema = z
   .object({
     targetDocumentKind: z.literal("basic_assessment"),
-    consultationPlanId: uuidSchema,
+    consultationPlanId: uuidSchema.optional(),
     currentScheduleVersionId: uuidSchema.optional(),
     previousMonitoringDocumentId: uuidSchema.optional(),
   })
@@ -23,7 +23,7 @@ const basicAssessmentGenerationSchema = z
 const individualPlanGenerationSchema = z
   .object({
     targetDocumentKind: z.literal("individual_support_plan"),
-    consultationPlanId: uuidSchema,
+    consultationPlanId: uuidSchema.optional(),
     assessmentDocumentId: uuidSchema,
     previousMonitoringDocumentId: uuidSchema.optional(),
   })

@@ -563,6 +563,36 @@ test("下書きPDFを不変スナップショットとして作成・再利用�
   }
 });
 
+test("S3未設定の開発環境ではPDF本体をDBへ不変保存してダウンロードできる", async () => {
+  const db = await setupDatabase();
+  const fake = fakePdfInfrastructure();
+  const app = await buildApp({
+    config: testConfig(),
+    pool: pglitePool(db),
+    pdfRenderer: fake.pdfRenderer,
+  });
+  try {
+    const plan = await createPlan(app);
+    const url = `/api/v1/children/${IDS.child}/documents/${plan.json().id}/snapshots`;
+    const generated = await app.inject({
+      method: "POST",
+      url,
+      headers: { "if-match": plan.headers.etag, "idempotency-key": "pdf-db-storage-create-0001" },
+      payload: { snapshotKind: "draft" },
+    });
+    assert.equal(generated.statusCode, 201);
+    const content = await app.inject({
+      method: "GET",
+      url: `${url}/${generated.json().id}/content`,
+    });
+    assert.equal(content.statusCode, 200);
+    assert.equal(content.body.startsWith("%PDF-"), true);
+  } finally {
+    await app.close();
+    await db.close();
+  }
+});
+
 test("正式版は承認後のみ作成し、同じ元版への再要求は一つの不変スナップショットを返す", async () => {
   const db = await setupDatabase();
   await db.exec("reset role");

@@ -9,6 +9,7 @@ import Fastify, { LogController } from "fastify";
 import { createCognitoAdmin } from "./aws/cognito-admin.js";
 import { createKmsFieldEncryption } from "./aws/field-encryption.js";
 import { createCognitoAuth } from "./auth/cognito.js";
+import { createLocalAuth } from "./auth/local.js";
 import { createCognitoAuthenticator, createDevelopmentAuthenticator } from "./auth/request-auth.js";
 import { loadConfig } from "./config.js";
 import { createPgPool } from "./db/pool.js";
@@ -16,8 +17,9 @@ import { startIdempotencyRetentionWorker } from "./db/idempotency-retention.js";
 import { startSecurityRetentionWorker } from "./db/security-retention.js";
 import { AppError } from "./errors.js";
 import { createBoundedPdfRenderer, createPlaywrightPdfRenderer } from "./pdf/renderer.js";
-import { createS3DocumentStorage, createUnavailableDocumentStorage } from "./pdf/storage.js";
+import { createDatabaseDocumentStorage, createS3DocumentStorage, createUnavailableDocumentStorage } from "./pdf/storage.js";
 import { createSecurityAuthAudit } from "./security-auth-audit.js";
+import { createWritingAssistant } from "./services/writing-assist.js";
 import { apiRoutes } from "./routes/api.js";
 import { authRoutes } from "./routes/auth.js";
 
@@ -31,6 +33,8 @@ const SHARED_STATIC_FILES = Object.freeze({
   "/src/app.js": ["src/app.js", "text/javascript; charset=utf-8"],
   "/src/demo-data.js": ["src/demo-data.js", "text/javascript; charset=utf-8"],
   "/src/plan-engine.js": ["src/plan-engine.js", "text/javascript; charset=utf-8"],
+  "/login.html": ["login.html", "text/html; charset=utf-8"],
+  "/src/local-login.js": ["src/local-login.js", "text/javascript; charset=utf-8"],
   "/src/utils.js": ["src/utils.js", "text/javascript; charset=utf-8"],
 });
 
@@ -105,6 +109,9 @@ export async function buildApp(options = {}) {
   const cognitoAuth = config.authMode === "cognito"
     ? (options.cognitoAuth || createCognitoAuth({ config, pool, ...(options.cognitoDependencies || {}) }))
     : null;
+  const localAuth = config.authMode === "local"
+    ? (options.localAuth || createLocalAuth({ config, pool }))
+    : null;
   const cognitoAdmin = options.cognitoAdmin
     || (config.cognito?.userPoolId
       ? createCognitoAdmin({ config, ...(options.cognitoAdminDependencies || {}) })
@@ -128,13 +135,17 @@ export async function buildApp(options = {}) {
           region: config.awsRegion,
           ...(options.s3Dependencies || {}),
         })
-      : createUnavailableDocumentStorage());
+      : pool ? createDatabaseDocumentStorage({ pool }) : createUnavailableDocumentStorage());
   const authenticateRequest = options.authenticateRequest
     || (config.authMode === "development"
       ? createDevelopmentAuthenticator(config)
-      : createCognitoAuthenticator(cognitoAuth));
+      : config.authMode === "local"
+        ? localAuth.authenticateRequest
+        : createCognitoAuthenticator(cognitoAuth));
   const recordSecurityAuthFailure = options.recordSecurityAuthFailure
     || createSecurityAuthAudit({ pool, config });
+  const writingAssistant = options.writingAssistant
+    || createWritingAssistant({ apiKey: config.openAiApiKey, model: config.openAiModel });
   const idempotencyRetentionWorker = config.nodeEnv === "production" && pool
     ? startIdempotencyRetentionWorker({ pool, logger: app.log })
     : null;
@@ -150,7 +161,9 @@ export async function buildApp(options = {}) {
   app.decorate("pdfRenderer", pdfRenderer);
   app.decorate("documentStorage", documentStorage);
   app.decorate("recordSecurityAuthFailure", recordSecurityAuthFailure);
+  app.decorate("writingAssistant", writingAssistant);
   if (cognitoAuth) app.decorate("cognitoAuth", cognitoAuth);
+  if (localAuth) app.decorate("localAuth", localAuth);
 
   // Authenticated API payloads include sensitive care and family data. Apply
   // this at the root scope so successful, error and not-found responses all
@@ -242,7 +255,7 @@ export async function buildApp(options = {}) {
   app.get("/healthz", liveHandler);
   app.get("/readyz", readyHandler);
 
-  if (cognitoAuth) await app.register(authRoutes, { prefix: "/auth" });
+  if (cognitoAuth || localAuth) await app.register(authRoutes, { prefix: "/auth" });
   await app.register(apiRoutes, { prefix: "/api/v1" });
   registerStaticRoutes(app, options.projectRoot || PROJECT_ROOT, config);
 

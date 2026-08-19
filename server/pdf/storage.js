@@ -1,6 +1,7 @@
 import { GetObjectCommand, HeadObjectCommand, PutObjectCommand, S3Client } from "@aws-sdk/client-s3";
 import { createHash } from "node:crypto";
 import { AppError } from "../errors.js";
+import { withTenantTransaction } from "../db/tenant-transaction.js";
 
 const PDF_MIME_TYPE = "application/pdf";
 const MAX_STORED_PDF_BYTES = 20 * 1024 * 1024;
@@ -160,6 +161,42 @@ export function createS3DocumentStorage(options) {
       }
       return { versionId: head.VersionId, sha256: digest, byteSize: body.length, body };
     },
+  });
+}
+
+// A self-contained development deployment has no S3/KMS document bucket. In
+// that case the immutable PDF bytes live in PostgreSQL behind restricted
+// database functions; they are never exposed through a general blob table.
+export function createDatabaseDocumentStorage({ pool }) {
+  if (!pool) throw new TypeError("database document storage requires a pool");
+  return Object.freeze({
+    kind: "database",
+    async putPdf({ actor, key, body, sha256, jobId, leaseToken }) {
+      assertStorageKey(key);
+      if (!actor || !Buffer.isBuffer(body) || body.length < 1 || body.length > MAX_STORED_PDF_BYTES) {
+        throw new TypeError("valid actor and PDF bytes are required");
+      }
+      const result = await withTenantTransaction(pool, actor, (client) => client.query(
+        "select * from app_private.store_database_document_snapshot_blob($1, $2, $3, $4, $5)",
+        [jobId, leaseToken, key, sha256, body],
+      ));
+      const row = result.rows[0];
+      if (!row) throw integrityError("database PDF storage did not return a version");
+      return { versionId: row.storage_version_id, sha256: row.sha256, byteSize: Number(row.byte_size) };
+    },
+    async getPdf({ actor, key, versionId }) {
+      assertStorageKey(key);
+      assertVersionId(versionId);
+      const result = await withTenantTransaction(pool, actor, (client) => client.query(
+        "select app_private.read_database_document_snapshot_blob($1, $2) as content",
+        [key, versionId],
+      ));
+      const content = result.rows[0]?.content;
+      if (!content) throw integrityError("database PDF bytes are unavailable");
+      return Buffer.from(content);
+    },
+    async inspectPdf() { return null; },
+    async inspectLegacyPdf() { return null; },
   });
 }
 

@@ -8,21 +8,47 @@ import { dateTimeSchema, parseIfMatch, parseInput, setVersionEtag, uuidSchema } 
 
 const fiveDomainSchema = z.enum(["health_life", "motor_sensory", "cognition_behavior", "language_communication", "human_relations_sociality"]);
 
-const createSchema = z
-  .object({
-    occurredAt: dateTimeSchema,
-    activity: z.string().trim().min(1).max(500),
-    observation: z.string().trim().min(1).max(4000),
-    supportProvided: z.string().trim().min(1).max(4000),
-    childResponse: z.string().trim().min(1).max(4000),
-    healthNote: z.string().trim().max(2000).optional(),
-    fiveDomains: z.array(fiveDomainSchema).max(5).default([]),
-    relatedGoalIds: z.array(uuidSchema).max(30).default([]),
-  })
-  .strict();
+const finalLogSchema = z.object({
+  status: z.literal("final").optional(),
+  occurredAt: dateTimeSchema,
+  activity: z.string().trim().min(1).max(500),
+  observation: z.string().trim().min(1).max(4000),
+  supportProvided: z.string().trim().min(1).max(4000),
+  childResponse: z.string().trim().min(1).max(4000),
+  healthNote: z.string().trim().max(2000).optional(),
+  fiveDomains: z.array(fiveDomainSchema).max(5).default([]),
+  relatedGoalIds: z.array(uuidSchema).max(30).default([]),
+}).strict();
 
-const updateSchema = createSchema
-  .partial()
+const draftLogSchema = z.object({
+  status: z.literal("draft"),
+  occurredAt: dateTimeSchema,
+  activity: z.string().trim().max(500).optional(),
+  observation: z.string().trim().max(4000).optional(),
+  supportProvided: z.string().trim().max(4000).optional(),
+  childResponse: z.string().trim().max(4000).optional(),
+  healthNote: z.string().trim().max(2000).optional(),
+  fiveDomains: z.array(fiveDomainSchema).max(5).default([]),
+  relatedGoalIds: z.array(uuidSchema).max(30).default([]),
+}).strict().refine((value) => Boolean(
+  value.activity || value.observation || value.supportProvided || value.childResponse || value.healthNote
+  || value.fiveDomains.length || value.relatedGoalIds.length,
+), "下書きとして保存する内容を入力してください");
+
+const createSchema = z.union([draftLogSchema, finalLogSchema]);
+
+const updateSchema = z.object({
+  status: z.enum(["draft", "final"]).optional(),
+  occurredAt: dateTimeSchema.optional(),
+  activity: z.string().trim().max(500).optional(),
+  observation: z.string().trim().max(4000).optional(),
+  supportProvided: z.string().trim().max(4000).optional(),
+  childResponse: z.string().trim().max(4000).optional(),
+  healthNote: z.string().trim().max(2000).optional(),
+  fiveDomains: z.array(fiveDomainSchema).max(5).optional(),
+  relatedGoalIds: z.array(uuidSchema).max(30).optional(),
+})
+  .strict()
   .strict()
   .refine((value) => Object.keys(value).length > 0, "変更する項目を指定してください");
 

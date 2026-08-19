@@ -14,6 +14,9 @@ begin
 end
 $$;
 
+grant execute on function app_private.resolve_local_login(text) to michinote_runtime;
+grant execute on function app_private.record_local_login_attempt(uuid, boolean) to michinote_runtime;
+
 create or replace function app_private.configure_runtime_login(runtime_verifier text)
 returns void
 language plpgsql
@@ -215,6 +218,10 @@ grant execute on function app_private.fail_document_snapshot_job(uuid, uuid, tex
 grant execute on function app_private.finalize_document_snapshot_job(uuid) to michinote_runtime;
 grant execute on function app_private.quarantine_stale_document_snapshot_job(uuid) to michinote_runtime;
 grant execute on function app_private.backfill_document_snapshot_storage_version(uuid, text, bigint, text) to michinote_runtime;
+grant select, insert on public.document_snapshot_blobs to michinote_runtime;
+grant execute on function app_private.store_database_document_snapshot_blob(uuid, uuid, text, text, bytea) to michinote_runtime;
+grant execute on function app_private.record_database_document_snapshot_job_upload(uuid, uuid) to michinote_runtime;
+grant execute on function app_private.read_database_document_snapshot_blob(text, text) to michinote_runtime;
 
 revoke all on function app_private.provision_tenant(uuid, text, uuid, text, text, text, uuid, uuid, text, text)
 from michinote_provisioner;

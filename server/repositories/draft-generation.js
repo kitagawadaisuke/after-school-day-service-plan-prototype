@@ -204,13 +204,15 @@ async function createGeneratedDocument(client, actor, childId, documentKind, bui
 
 export async function generateBasicAssessment(client, actor, childId, input, options = {}) {
   const child = await readChild(client, actor, childId);
-  const consultationPlan = await readSourceDocument(
-    client,
-    actor,
-    childId,
-    input.consultationPlanId,
-    "consultation_plan",
-  );
+  const consultationPlan = input.consultationPlanId
+    ? await readSourceDocument(
+      client,
+      actor,
+      childId,
+      input.consultationPlanId,
+      "consultation_plan",
+    )
+    : null;
   const guardians = await client.query(
     `select id, legal_name, relationship, is_primary, row_version
      from public.guardians
@@ -257,7 +259,7 @@ export async function generateBasicAssessment(client, actor, childId, input, opt
   );
   return {
     document,
-    sourceIds: [consultationPlan.id, currentSchedule.id, previousMonitoring?.id].filter(Boolean),
+    sourceIds: [consultationPlan?.id, currentSchedule.id, previousMonitoring?.id].filter(Boolean),
     evidenceCounts: built.payload.generation.evidenceCounts,
   };
 }
@@ -297,13 +299,15 @@ async function readPreviousMonitoringGoalResults(client, actor, childId, monitor
 
 export async function generateIndividualSupportPlan(client, actor, childId, input, options = {}) {
   await readChild(client, actor, childId);
-  const consultationPlan = await readSourceDocument(
-    client,
-    actor,
-    childId,
-    input.consultationPlanId,
-    "consultation_plan",
-  );
+  const consultationPlan = input.consultationPlanId
+    ? await readSourceDocument(
+      client,
+      actor,
+      childId,
+      input.consultationPlanId,
+      "consultation_plan",
+    )
+    : null;
   const assessment = await readSourceDocument(
     client,
     actor,
@@ -320,7 +324,7 @@ export async function generateIndividualSupportPlan(client, actor, childId, inpu
         "monitoring_record",
       )
     : null;
-  const consultationGoals = await readGoals(client, actor, consultationPlan.id);
+  const consultationGoals = consultationPlan ? await readGoals(client, actor, consultationPlan.id) : [];
   const previousMonitoringGoalResults = await readPreviousMonitoringGoalResults(
     client,
     actor,
@@ -349,7 +353,7 @@ export async function generateIndividualSupportPlan(client, actor, childId, inpu
   }
   return {
     document: { ...document, goals },
-    sourceIds: [consultationPlan.id, assessment.id, previousMonitoring?.id].filter(Boolean),
+    sourceIds: [consultationPlan?.id, assessment.id, previousMonitoring?.id].filter(Boolean),
     evidenceCounts: built.payload.generation.evidenceCounts,
   };
 }
@@ -385,7 +389,7 @@ async function readPeriodEvidence(client, actor, childId, planId, periodStart, p
   const dailyLogs = await client.query(
     `select id, occurred_at, activity, observation, support_provided, child_response
      from public.daily_logs
-     where tenant_id = $1 and child_id = $2 and deleted_at is null
+     where tenant_id = $1 and child_id = $2 and deleted_at is null and status = 'final'
        and occurred_at >= $3::date and occurred_at < ($4::date + interval '1 day')
      order by occurred_at, id
      limit $5`,
@@ -418,7 +422,7 @@ async function readPeriodEvidence(client, actor, childId, planId, periodStart, p
      from public.daily_log_goals dlg
      join public.daily_logs l
        on l.tenant_id = dlg.tenant_id and l.id = dlg.daily_log_id
-     where dlg.tenant_id = $1 and l.child_id = $2 and l.deleted_at is null
+     where dlg.tenant_id = $1 and l.child_id = $2 and l.deleted_at is null and l.status = 'final'
        and l.occurred_at >= $3::date and l.occurred_at < ($4::date + interval '1 day')
        and dlg.goal_id = any($5::uuid[])
      order by dlg.goal_id, l.occurred_at, dlg.daily_log_id`,

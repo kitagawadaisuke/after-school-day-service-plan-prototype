@@ -65,28 +65,19 @@
           </button>
         </nav>
 
-        <button class="admin-nav permission-view-admin" type="button" data-view="admin" hidden>
-          <span aria-hidden="true">管</span><span><strong>法人・職員管理</strong><small>管理権限がある職員のみ</small></span>
-        </button>
-
-        <div class="sidebar-note">
-          <strong>記録は法人ごとに分離</strong>
-          <span>許可された事業所・利用児だけを表示します。</span>
-        </div>
       </aside>
 
       <div class="workspace">
         <header class="topbar">
-          <div class="workspace-context">
-            <span id="tenant-name">法人</span>
+          <div class="workspace-context" hidden>
             <label for="facility-select">事業所</label>
             <select id="facility-select" aria-label="表示する事業所"></select>
           </div>
           <div class="session-context">
-            <div id="network-save-status" class="save-status" role="status" aria-live="polite" data-state="saved">
+            <div id="network-save-status" class="save-status" role="status" aria-live="polite" data-state="saved" hidden>
               <span aria-hidden="true"></span><b>同期済み</b>
             </div>
-            <div class="staff-context">
+            <div class="staff-context" hidden>
               <strong id="staff-name">職員</strong>
               <span id="staff-role">役割</span>
             </div>
@@ -99,7 +90,7 @@
             <header class="page-heading">
               <div class="child-heading-content">
                 <div id="child-profile-photo" class="child-profile-photo" aria-label="利用児の顔写真"></div>
-                <div><p class="eyebrow">利用児台帳</p><h1 id="child-title">利用児情報</h1><p>本人・保護者・一週間の生活を、同じ利用児の情報として確認します。</p></div>
+                <div><p class="eyebrow">利用児台帳</p><h1 id="child-title">利用児情報</h1></div>
               </div>
               <div class="child-heading-actions">
                 <input id="child-photo-input" type="file" accept="image/jpeg,image/png,image/webp" hidden>
@@ -126,7 +117,6 @@
               </section>
             </div>
             <div id="child-panel-schedules" role="tabpanel" aria-labelledby="child-tab-schedules" data-child-tab-panel="schedules" hidden>
-              <div class="schedule-explanation"><strong>日をまたぐ予定も記録できます</strong><p>終了時刻が翌日の場合は「翌日」を選びます。例：月曜22:00〜火曜02:00。</p></div>
               <div class="schedule-columns">
                 <section class="schedule-lane" aria-labelledby="current-schedule-title"><header><span>いま</span><h2 id="current-schedule-title">現在の生活</h2><p>アセスメント時点で実際に過ごしている一週間です。</p></header><div id="current-schedule" class="schedule-content empty-state"><strong>週間予定は未登録です</strong></div></section>
                 <section class="schedule-lane planned" aria-labelledby="planned-schedule-title"><header><span>これから</span><h2 id="planned-schedule-title">計画後の生活</h2><p>支援計画を実施した後に目指す一週間です。</p></header><div id="planned-schedule" class="schedule-content empty-state"><strong>週間予定は未登録です</strong></div></section>
@@ -150,61 +140,49 @@
             <div id="contact-list" class="record-list empty-state"><strong>利用児を選択してください</strong></div>
           </section>
 
-          <section id="view-documents" class="page-view" data-page-view="documents" aria-labelledby="documents-title" hidden>
-            <header class="page-heading">
-              <div><p class="eyebrow">支援書類と正式工程</p><h1 id="documents-title">根拠をつないで、次の支援へ</h1><p>自動作成されるのは根拠を持つ下書きだけです。内容の判断、説明、同意、承認は必ず人が行います。</p></div>
+          <section id="view-documents" class="page-view" data-page-view="documents" aria-label="計画書" hidden>
+            <header class="document-workspace-header">
+              <div><p class="eyebrow">支援計画</p><h1>計画をつくる</h1></div>
+              <ol class="document-process" aria-label="計画作成の順番"><li><span>1</span>アセスメント</li><li><span>2</span>個別支援計画</li><li><span>3</span>モニタリング</li></ol>
             </header>
-            <section class="support-cycle" aria-labelledby="support-cycle-title">
-              <div class="section-heading"><div><p class="eyebrow">支援の循環</p><h2 id="support-cycle-title">書類ができる順番</h2></div><p id="cycle-readiness">利用児を選択すると、次にできる作業を確認できます。</p></div>
-              <ol class="support-cycle-list">
-                <li data-cycle-step="consultation"><span>01</span><strong>相談支援計画</strong><small>暮らし全体の方針</small></li>
-                <li data-cycle-step="assessment"><span>02</span><strong>アセスメント</strong><small>事業所で状況整理</small></li>
-                <li data-cycle-step="individual"><span>03</span><strong>個別支援計画</strong><small>具体的な支援内容</small></li>
-                <li data-cycle-step="records"><span>04</span><strong>日誌・連絡帳</strong><small>実施と反応の根拠</small><div><button type="button" data-view="journals">日誌へ</button><button type="button" data-view="contact">連絡帳へ</button></div></li>
-                <li data-cycle-step="monitoring"><span>05</span><strong>モニタリング</strong><small>実績を人が評価</small></li>
-              </ol>
-            </section>
-            <div class="document-columns">
-              <section class="document-lane consultation" aria-labelledby="consultation-title">
-                <div class="document-lane-heading">
-                  <span aria-hidden="true">外部方針</span>
-                  <h2 id="consultation-title">相談支援計画</h2>
-                  <p>相談支援事業者が本人・家族との面談をもとに作る、暮らし全体の計画です。</p>
-                  <button class="button button-secondary permission-edit-documents" type="button" data-create-document="consultation_plan" hidden>相談支援計画の下書きを作成</button>
-                </div>
-                <div id="consultation-document-list" class="document-list empty-state"><strong>登録された計画はありません</strong></div>
-              </section>
+            <div class="document-flow-columns">
               <section class="document-lane assessment" aria-labelledby="assessment-title">
                 <div class="document-lane-heading">
-                  <span aria-hidden="true">事業所の整理</span><h2 id="assessment-title">アセスメント</h2><p>相談支援計画・保護者情報・確定した現在の生活を根拠に、面談で確認する下書きを作ります。</p>
-                  <button class="button button-secondary permission-edit-documents" type="button" data-generate-draft="basic_assessment" aria-describedby="assessment-readiness" hidden>アセスメントの下書きを作成</button><small id="assessment-readiness" class="readiness-copy">相談支援計画と現在の生活が必要です。</small>
+                  <span aria-hidden="true">1　整理する</span><h2 id="assessment-title">アセスメント</h2><p>現在の生活と面談内容を整理します。</p>
+                  <button class="button button-secondary permission-edit-documents" type="button" data-generate-draft="basic_assessment" aria-describedby="assessment-readiness" hidden>アセスメントを作成</button><small id="assessment-readiness" class="readiness-copy">確定した現在の生活が必要です。</small><button id="open-current-schedule-from-assessment" class="button button-ghost" type="button" hidden>現在の生活を登録する</button>
                 </div>
                 <div id="assessment-document-list" class="document-list empty-state"><strong>登録されたアセスメントはありません</strong></div>
               </section>
               <section class="document-lane individual" aria-labelledby="individual-title">
                 <div class="document-lane-heading">
-                  <span aria-hidden="true">事業所計画</span>
+                  <span aria-hidden="true">2　計画にする</span>
                   <h2 id="individual-title">個別支援計画</h2>
-                  <p>事業所がアセスメントをもとに、目標・支援内容・評価方法を具体化する計画です。</p>
-                  <button class="button button-primary permission-edit-documents" type="button" data-generate-draft="individual_support_plan" aria-describedby="individual-readiness" hidden>根拠から個別支援計画を作成</button><small id="individual-readiness" class="readiness-copy">相談支援計画とアセスメントが必要です。</small>
+                  <p>目標と支援内容を決め、日々の支援の基準にします。</p>
+                  <button class="button button-primary permission-edit-documents" type="button" data-generate-draft="individual_support_plan" aria-describedby="individual-readiness" hidden>個別支援計画を作成</button><small id="individual-readiness" class="readiness-copy">アセスメントが必要です。</small>
                 </div>
                 <div id="individual-document-list" class="document-list empty-state"><strong>登録された計画はありません</strong></div>
               </section>
               <section class="document-lane monitoring" aria-labelledby="monitoring-title">
                 <div class="document-lane-heading">
-                  <span aria-hidden="true">振り返り</span><h2 id="monitoring-title">モニタリング</h2><p>有効な個別支援計画と期間内の日誌・連絡帳を根拠に、評価待ちの下書きを作ります。</p>
-                  <button id="open-monitoring-generation" class="button button-secondary permission-edit-documents" type="button" aria-describedby="monitoring-readiness" hidden>モニタリングの下書きを作成</button><small id="monitoring-readiness" class="readiness-copy">運用中の個別支援計画が必要です。</small>
+                  <span aria-hidden="true">3　振り返る</span><h2 id="monitoring-title">モニタリング</h2><p>日誌と連絡帳をもとに、支援を振り返ります。</p>
+                  <button id="open-monitoring-generation" class="button button-secondary permission-edit-documents" type="button" aria-describedby="monitoring-readiness" hidden>モニタリングを作成</button><small id="monitoring-readiness" class="readiness-copy">運用中の個別支援計画が必要です。</small>
                 </div>
                 <div id="monitoring-document-list" class="document-list empty-state"><strong>登録されたモニタリングはありません</strong></div>
               </section>
             </div>
-            <section id="generation-evidence" class="generation-evidence" aria-labelledby="generation-evidence-title"><div><p class="eyebrow">自動作成の根拠</p><h2 id="generation-evidence-title">人が確認するための下書きです</h2></div><p>書類を選ぶと、参照した日誌・連絡帳・前工程の件数と「要確認／未評価」を表示します。</p></section>
+            <details id="external-reference-details" class="document-reference-panel">
+              <summary><span><strong>外部計画・参考資料</strong><small>必要な場合だけ、計画づくりの参考として登録します。</small></span><em>任意</em></summary>
+              <div class="document-reference-content">
+                <div><p>相談支援計画など、事業所で参照したい情報を記録できます。</p><button class="button button-secondary permission-edit-documents" type="button" data-create-document="consultation_plan" hidden>参考資料を登録</button></div>
+                <div id="consultation-document-list" class="document-list empty-state"><strong>登録された参考資料はありません</strong></div>
+              </div>
+            </details>
           </section>
 
           <section id="view-admin" class="page-view permission-view-admin" data-page-view="admin" aria-labelledby="admin-title" hidden>
-            <header class="page-heading"><div><p class="eyebrow">法人・事業所管理</p><h1 id="admin-title">法人・運用管理</h1><p>権限に応じて、事業所・職員・監査履歴を確認します。</p></div><button id="invite-staff-button" class="button button-primary permission-manage-staff" type="button" hidden>職員を招待</button></header>
-            <div class="admin-principle permission-manage-staff" hidden><strong>最小権限で運用</strong><p>必要な業務だけを許可し、法人管理者は必ず1名以上残します。停止・役割変更は監査記録に残ります。</p></div>
-            <section class="admin-section permission-manage-tenant" aria-labelledby="facilities-admin-title" hidden><header class="subsection-heading"><div><p class="eyebrow">法人内の拠点</p><h2 id="facilities-admin-title">事業所</h2><p>利用停止にした事業所は、通常の事業所切替には表示しません。</p></div><button id="create-facility-button" class="button button-secondary" type="button">事業所を追加</button></header><div id="facility-admin-list" class="facility-admin-list"></div></section>
+            <header class="page-heading"><div><p class="eyebrow">職員・事業所設定</p><h1 id="admin-title">運用設定</h1><p>職員・事業所・監査履歴を確認します。</p></div><button id="invite-staff-button" class="button button-primary permission-manage-staff" type="button" hidden>職員を招待</button></header>
+            <div class="admin-principle permission-manage-staff" hidden><strong>必要な権限だけを付与</strong><p>役割や利用停止の変更は監査記録に残ります。</p></div>
+            <section class="admin-section permission-manage-tenant" aria-labelledby="facilities-admin-title" hidden><header class="subsection-heading"><div><p class="eyebrow">利用する拠点</p><h2 id="facilities-admin-title">事業所</h2><p>利用停止にした事業所は、通常の事業所切替には表示しません。</p></div><button id="create-facility-button" class="button button-secondary" type="button">事業所を追加</button></header><div id="facility-admin-list" class="facility-admin-list"></div></section>
             <section class="admin-section permission-manage-staff" aria-labelledby="staff-admin-title" hidden><header class="subsection-heading"><div><p class="eyebrow">アカウントと権限</p><h2 id="staff-admin-title">職員</h2></div></header><div id="staff-list" class="staff-list empty-state"><strong>職員情報を読み込んでいます</strong></div></section>
             <section class="admin-section permission-view-audit" aria-labelledby="audit-title" hidden><header class="subsection-heading"><div><p class="eyebrow">改ざん防止・追跡</p><h2 id="audit-title">直近の監査履歴</h2><p>本文や氏名などの詳細情報は表示せず、誰が・何を・いつ操作したかだけを確認します。</p></div><button id="refresh-audit-button" class="button button-ghost" type="button">再読み込み</button></header><div id="audit-list" class="audit-list empty-state"><strong>監査履歴を読み込んでいます</strong></div></section>
           </section>
@@ -268,24 +246,24 @@
         <div id="journal-error" class="form-error" role="alert" hidden></div>
         <div class="field-grid">
           <label class="field"><span>日時 <em>必須</em></span><input name="occurredAt" type="datetime-local" required></label>
-          <label class="field"><span>活動 <em>必須</em></span><input name="activity" required maxlength="500"></label>
+          <label class="field"><span>活動・場面 <em>必須</em></span><input name="activity" required maxlength="500" placeholder="例：公園での運動あそび"></label>
           <div class="field field-wide journal-writing-field">
             <label for="journal-observation"><span>観察した事実 <em>必須</em></span></label><textarea id="journal-observation" name="observation" required maxlength="4000" rows="4"></textarea>
-            <div class="journal-writing-tools"><label>目安の文字数 <select data-journal-length="observation"><option value="100">100字</option><option value="200" selected>200字</option><option value="300">300字</option><option value="400">400字</option></select></label><button class="button button-quiet" type="button" data-expand-journal-field="observation">箇条書きを整える</button></div>
+            <div class="journal-writing-tools"><label>目標文字数 <select data-journal-length="observation" aria-describedby="journal-observation-count"><option value="100">100字</option><option value="200" selected>200字</option><option value="300">300字</option><option value="400">400字</option></select></label><output id="journal-observation-count" class="journal-character-count" data-journal-character-count="observation" aria-live="polite"></output><button class="button button-quiet" type="button" data-expand-journal-field="observation" title="入力内容をもとに、目標文字数を目安に文章を整えます">文章を整える</button></div>
           </div>
           <div class="field field-wide journal-writing-field">
             <label for="journal-support"><span>行った支援 <em>必須</em></span></label><textarea id="journal-support" name="supportProvided" required maxlength="4000" rows="4"></textarea>
-            <div class="journal-writing-tools"><label>目安の文字数 <select data-journal-length="supportProvided"><option value="100">100字</option><option value="200" selected>200字</option><option value="300">300字</option><option value="400">400字</option></select></label><button class="button button-quiet" type="button" data-expand-journal-field="supportProvided">箇条書きを整える</button></div>
+            <div class="journal-writing-tools"><label>目標文字数 <select data-journal-length="supportProvided" aria-describedby="journal-support-count"><option value="100">100字</option><option value="200" selected>200字</option><option value="300">300字</option><option value="400">400字</option></select></label><output id="journal-support-count" class="journal-character-count" data-journal-character-count="supportProvided" aria-live="polite"></output><button class="button button-quiet" type="button" data-expand-journal-field="supportProvided" title="入力内容をもとに、目標文字数を目安に文章を整えます">文章を整える</button></div>
           </div>
           <div class="field field-wide journal-writing-field">
             <label for="journal-response"><span>本人の反応 <em>必須</em></span></label><textarea id="journal-response" name="childResponse" required maxlength="4000" rows="4"></textarea>
-            <div class="journal-writing-tools"><label>目安の文字数 <select data-journal-length="childResponse"><option value="100">100字</option><option value="200" selected>200字</option><option value="300">300字</option><option value="400">400字</option></select></label><button class="button button-quiet" type="button" data-expand-journal-field="childResponse">箇条書きを整える</button></div>
+            <div class="journal-writing-tools"><label>目標文字数 <select data-journal-length="childResponse" aria-describedby="journal-response-count"><option value="100">100字</option><option value="200" selected>200字</option><option value="300">300字</option><option value="400">400字</option></select></label><output id="journal-response-count" class="journal-character-count" data-journal-character-count="childResponse" aria-live="polite"></output><button class="button button-quiet" type="button" data-expand-journal-field="childResponse" title="入力内容をもとに、目標文字数を目安に文章を整えます">文章を整える</button></div>
           </div>
           <div class="field field-wide journal-writing-field">
             <label for="journal-health"><span>健康上の連絡</span></label><textarea id="journal-health" name="healthNote" maxlength="2000" rows="3"></textarea>
-            <div class="journal-writing-tools"><label>目安の文字数 <select data-journal-length="healthNote"><option value="80">80字</option><option value="150" selected>150字</option><option value="250">250字</option></select></label><button class="button button-quiet" type="button" data-expand-journal-field="healthNote">箇条書きを整える</button></div>
+            <div class="journal-writing-tools"><label>目標文字数 <select data-journal-length="healthNote" aria-describedby="journal-health-count"><option value="80">80字</option><option value="150" selected>150字</option><option value="250">250字</option></select></label><output id="journal-health-count" class="journal-character-count" data-journal-character-count="healthNote" aria-live="polite"></output><button class="button button-quiet" type="button" data-expand-journal-field="healthNote" title="入力内容をもとに、目標文字数を目安に文章を整えます">文章を整える</button></div>
           </div>
-          <p class="journal-writing-note field-wide">箇条書きの事実を文章に整えます。事実は追加・削除しないため、目安の文字数を超える場合があります。保存前に必ず確認・編集してください。</p>
+          <p class="journal-writing-note field-wide">AIが入力した事実だけをもとに、目標文字数に近い下書きを作成します。内容を確認してから保存してください。</p>
           <fieldset class="field-wide checkbox-field"><legend>関連する5領域</legend><div>
             <label><input type="checkbox" name="fiveDomains" value="health_life">健康・生活</label>
             <label><input type="checkbox" name="fiveDomains" value="motor_sensory">運動・感覚</label>
@@ -294,7 +272,7 @@
             <label><input type="checkbox" name="fiveDomains" value="human_relations_sociality">人間関係・社会性</label>
           </div></fieldset>
         </div>
-        <div class="dialog-actions"><button class="button button-ghost" type="button" data-close-dialog="journal-dialog">キャンセル</button><button class="button button-primary" type="submit">日誌を保存</button></div>
+        <div class="dialog-actions"><button class="button button-ghost" type="button" data-close-dialog="journal-dialog">キャンセル</button><button id="save-journal-draft" class="button button-quiet" type="button">下書き保存</button><button id="save-journal-final" class="button button-primary" type="submit">記録を保存</button></div>
       </form>
     </dialog>
 
@@ -305,22 +283,23 @@
         <div class="field-grid">
           <label class="field"><span>日付 <em>必須</em></span><input name="entryDate" type="date" required></label>
           <label class="field field-wide"><span>家庭からの連絡</span><textarea name="familyMessage" maxlength="4000" rows="4"></textarea></label>
-          <label class="field field-wide"><span>事業所からの返信</span><textarea name="facilityReply" maxlength="4000" rows="4"></textarea></label>
-          <label class="field field-wide"><span>要望の要点</span><textarea name="requestSummary" maxlength="2000" rows="3"></textarea></label>
-          <div class="draft-assist field-wide">
-            <div><strong>返信文の下書き</strong><p>入力した内容をもとに、事業所からの返信文を整えます。</p></div>
-            <button id="expand-contact-draft" class="button button-secondary" type="button">文章を整える</button>
-            <small>新しい具体的事実は追加しません。保存前に内容を確認してください。</small>
+          <div class="field field-wide journal-writing-field">
+            <label for="contact-facility-reply"><span>事業所からの返信</span></label><textarea id="contact-facility-reply" name="facilityReply" maxlength="4000" rows="4"></textarea>
+            <div class="journal-writing-tools"><label>目標文字数 <select data-contact-reply-length aria-describedby="contact-reply-count"><option value="100">100字</option><option value="200" selected>200字</option><option value="300">300字</option><option value="400">400字</option></select></label><output id="contact-reply-count" class="journal-character-count" aria-live="polite"></output><button id="expand-contact-draft" class="button button-quiet" type="button" title="入力内容をもとに、目標文字数を目安に返信文を整えます">返信文を整える</button></div>
           </div>
+          <label class="field field-wide" for="contact-request-summary"><span>支援時の引継ぎ</span><textarea id="contact-request-summary" name="requestSummary" maxlength="2000" rows="3"></textarea></label>
+          <p class="journal-writing-note field-wide">入力した内容をもとに作成します。新しい事実は追加されないため、内容を確認してから保存してください。</p>
           <label class="check-line field-wide"><input name="reflectedInSupport" type="checkbox"><span>この要望を支援内容に反映した</span></label>
         </div>
-        <div class="dialog-actions"><button class="button button-ghost" type="button" data-close-dialog="contact-dialog">キャンセル</button><button class="button button-primary" type="submit">連絡を保存</button></div>
+        <div class="dialog-actions"><button class="button button-ghost" type="button" data-close-dialog="contact-dialog">キャンセル</button><button id="save-contact-button" class="button button-primary" type="submit">連絡を保存</button></div>
       </form>
     </dialog>
 
     <dialog id="guardian-dialog" class="app-dialog form-dialog permission-edit-clients" aria-labelledby="guardian-form-title">
       <form id="guardian-form" novalidate>
-        <div class="dialog-heading"><p class="eyebrow">利用児台帳</p><h2 id="guardian-form-title">保護者・連絡先を登録</h2><p>連絡先は支援の確認に必要な範囲だけを登録してください。</p></div>
+        <input name="guardianId" type="hidden">
+        <input name="rowVersion" type="hidden">
+        <div class="dialog-heading"><p class="eyebrow">利用児台帳</p><h2 id="guardian-form-title">保護者・連絡先を登録</h2><p id="guardian-form-description">連絡先は支援の確認に必要な範囲だけを登録してください。</p></div>
         <div id="guardian-error" class="form-error" role="alert" hidden></div>
         <div class="field-grid">
           <label class="field"><span>氏名 <em>必須</em></span><input name="legalName" maxlength="100" autocomplete="name" required></label>
@@ -329,7 +308,7 @@
           <label class="field"><span>メールアドレス</span><input name="email" type="email" maxlength="254" autocomplete="email"></label>
           <label class="check-line field-wide"><input name="isPrimary" type="checkbox"><span>主連絡先にする</span></label>
         </div>
-        <div class="dialog-actions"><button class="button button-ghost" type="button" data-close-dialog="guardian-dialog">キャンセル</button><button class="button button-primary" type="submit">登録する</button></div>
+        <div class="dialog-actions"><button class="button button-ghost" type="button" data-close-dialog="guardian-dialog">キャンセル</button><button id="guardian-save-button" class="button button-primary" type="submit">登録する</button></div>
       </form>
     </dialog>
 
@@ -343,7 +322,7 @@
           <label class="field"><span>終了日</span><input name="validTo" type="date"></label>
           <label class="field field-wide"><span>一週間の概要</span><textarea name="summary" maxlength="8000" rows="3"></textarea></label>
         </div>
-        <fieldset class="schedule-items-fieldset"><legend>予定</legend><p>日をまたぐ予定は「翌日」を選びます（例：月曜22:00〜翌日2:00）。</p><div id="schedule-item-rows"></div><button id="add-schedule-item" class="button button-ghost" type="button">＋ 予定を追加</button></fieldset>
+        <fieldset class="schedule-items-fieldset"><legend>予定</legend><div id="schedule-item-rows"></div><button id="add-schedule-item" class="button button-ghost" type="button">＋ 予定を追加</button></fieldset>
         <div class="dialog-actions"><button class="button button-ghost" type="button" data-close-dialog="schedule-dialog">キャンセル</button><button class="button button-primary" type="submit">週間予定を保存</button></div>
       </form>
     </dialog>
@@ -355,16 +334,16 @@
         <label class="field"><span>終了</span><span class="time-pair"><select name="endDay" aria-label="終了日"><option value="same">同日</option><option value="next">翌日</option></select><input name="endTime" type="time" aria-label="終了時刻" required></span></label>
         <label class="field schedule-activity"><span>活動 <em>必須</em></span><input name="activity" maxlength="500" required></label>
         <label class="field schedule-location"><span>場所</span><input name="location" maxlength="500"></label>
-        <button class="icon-button remove-schedule-item" type="button" aria-label="この予定を削除">×</button>
+        <div class="schedule-row-actions"><button class="button button-ghost duplicate-schedule-item" type="button">複製</button><button class="icon-button remove-schedule-item" type="button" aria-label="この予定を削除">×</button></div>
       </div>
     </template>
 
     <dialog id="monitoring-generation-dialog" class="app-dialog form-dialog permission-edit-documents" aria-labelledby="monitoring-generation-title">
       <form id="monitoring-generation-form" novalidate>
-        <div class="dialog-heading"><p class="eyebrow">根拠期間を指定</p><h2 id="monitoring-generation-title">モニタリングの下書きを作成</h2><p>期間内の日誌・連絡帳を根拠として集計します。作成後に、職員が目標ごとの評価を入力します。</p></div>
+        <div class="dialog-heading"><p class="eyebrow">対象期間を指定</p><h2 id="monitoring-generation-title">モニタリングを作成</h2><p>期間内の日誌・連絡帳を集計します。作成後に、職員が目標ごとの評価を入力します。</p></div>
         <div id="monitoring-generation-error" class="form-error" role="alert" hidden></div>
         <div class="field-grid"><label class="field"><span>開始日 <em>必須</em></span><input name="periodStart" type="date" required></label><label class="field"><span>終了日 <em>必須</em></span><input name="periodEnd" type="date" required></label></div>
-        <div class="dialog-actions"><button class="button button-ghost" type="button" data-close-dialog="monitoring-generation-dialog">キャンセル</button><button class="button button-primary" type="submit">下書きを作成</button></div>
+        <div class="dialog-actions"><button class="button button-ghost" type="button" data-close-dialog="monitoring-generation-dialog">キャンセル</button><button class="button button-primary" type="submit">モニタリングを作成</button></div>
       </form>
     </dialog>
 
@@ -384,9 +363,79 @@
       </form>
     </dialog>
 
+    <dialog id="plan-editor-dialog" class="app-dialog form-dialog permission-edit-documents" aria-labelledby="plan-editor-title">
+      <form id="plan-editor-form" novalidate>
+        <input name="documentId" type="hidden">
+        <div class="dialog-heading"><p class="eyebrow">個別支援計画</p><h2 id="plan-editor-title">計画書を編集</h2><p>保存後、必要に応じて確認用PDFを作成します。</p></div>
+        <div id="plan-editor-error" class="form-error" role="alert" hidden></div>
+        <div class="field-grid">
+          <label class="field"><span>開始日</span><input name="periodStart" type="date"></label>
+          <label class="field"><span>終了日</span><input name="periodEnd" type="date"></label>
+          <label class="field field-wide"><span>本人・家族の意向</span><textarea name="userAndFamilyWishes" maxlength="8000" rows="3"></textarea></label>
+          <label class="field field-wide"><span>総合的な支援の方針</span><textarea name="overallSupportPolicy" maxlength="8000" rows="4"></textarea></label>
+          <label class="field field-wide"><span>相談支援計画とのつながり</span><textarea name="consultationPlanBasis" maxlength="8000" rows="3"></textarea></label>
+          <label class="field field-wide"><span>支援上の留意事項</span><textarea name="supportConsiderations" maxlength="8000" rows="3"></textarea></label>
+          <label class="field field-wide"><span>標準的な支援方法</span><textarea name="serviceDelivery" maxlength="8000" rows="3"></textarea></label>
+          <label class="field field-wide"><span>家族・関係機関との連携</span><textarea name="coordination" maxlength="8000" rows="3"></textarea></label>
+          <label class="field field-wide"><span>モニタリングの時期・方法</span><textarea name="monitoringPlan" maxlength="8000" rows="3"></textarea></label>
+          <label class="field field-wide"><span>説明・同意時の確認事項</span><textarea name="explanationNotes" maxlength="8000" rows="3"></textarea></label>
+        </div>
+        <section class="document-goal-editor" aria-labelledby="plan-editor-goals-title"><h3 id="plan-editor-goals-title">支援目標</h3><div id="plan-editor-goals"></div></section>
+        <div class="dialog-actions"><button class="button button-ghost" type="button" data-close-dialog="plan-editor-dialog">キャンセル</button><button class="button button-primary" type="submit">計画書を保存</button></div>
+      </form>
+    </dialog>
+
+    <dialog id="assessment-editor-dialog" class="app-dialog form-dialog permission-edit-documents" aria-labelledby="assessment-editor-title">
+      <form id="assessment-editor-form" novalidate>
+        <input name="documentId" type="hidden">
+        <div class="dialog-heading"><p class="eyebrow">アセスメント</p><h2 id="assessment-editor-title">アセスメントを編集</h2><p>面談で確認した内容と、事業所の見立てを入力します。保存後、必要に応じて確認用PDFを作成します。</p></div>
+        <div id="assessment-editor-error" class="form-error" role="alert" hidden></div>
+        <div class="field-grid">
+          <p class="form-section-label field-wide">本人・家族から伺ったこと</p>
+          <label class="field field-wide"><span>本人の願い</span><textarea name="childWishes" maxlength="8000" rows="3"></textarea></label>
+          <label class="field field-wide"><span>家族の願い</span><textarea name="familyWishes" maxlength="8000" rows="3"></textarea></label>
+          <label class="field field-wide"><span>困りごと・相談内容</span><textarea name="concerns" maxlength="8000" rows="3"></textarea></label>
+          <label class="field field-wide"><span>望む生活のイメージ</span><textarea name="desiredLife" maxlength="8000" rows="3"></textarea></label>
+          <p class="form-section-label field-wide">現在の状況と強み・課題</p>
+          <label class="field"><span>生活・健康</span><textarea name="healthManagement" maxlength="8000" rows="3"></textarea></label>
+          <label class="field"><span>運動・感覚</span><textarea name="movementSensory" maxlength="8000" rows="3"></textarea></label>
+          <label class="field"><span>認知・行動</span><textarea name="cognitionBehavior" maxlength="8000" rows="3"></textarea></label>
+          <label class="field"><span>言語・コミュニケーション</span><textarea name="languageCommunication" maxlength="8000" rows="3"></textarea></label>
+          <label class="field"><span>人間関係・社会性</span><textarea name="relationshipsSocial" maxlength="8000" rows="3"></textarea></label>
+          <label class="field"><span>家族・生活環境</span><textarea name="familySituation" maxlength="8000" rows="3"></textarea></label>
+          <label class="field"><span>強み・好きなこと</span><textarea name="strengths" maxlength="8000" rows="3"></textarea></label>
+          <label class="field"><span>優先して支援する課題</span><textarea name="priorityNeeds" maxlength="8000" rows="3"></textarea></label>
+          <p class="form-section-label field-wide">支援の見立て</p>
+          <label class="field field-wide"><span>総合的なアセスメント</span><textarea name="overallAssessment" maxlength="8000" rows="3"></textarea></label>
+          <label class="field field-wide"><span>支援で大切にすること</span><textarea name="supportConsiderations" maxlength="8000" rows="3"></textarea></label>
+          <label class="field"><span>医療・安全上の留意事項</span><textarea name="medicalSafetyNotes" maxlength="8000" rows="3"></textarea></label>
+          <label class="field"><span>連携先と役割</span><textarea name="supportNetwork" maxlength="8000" rows="3"></textarea></label>
+          <label class="field field-wide"><span>個別支援計画へ引き継ぐこと</span><textarea name="planningNotes" maxlength="8000" rows="3"></textarea></label>
+        </div>
+        <div class="dialog-actions"><button class="button button-ghost" type="button" data-close-dialog="assessment-editor-dialog">キャンセル</button><button class="button button-primary" type="submit">アセスメントを保存</button></div>
+      </form>
+    </dialog>
+
+    <dialog id="reference-plan-editor-dialog" class="app-dialog form-dialog permission-edit-documents" aria-labelledby="reference-plan-editor-title">
+      <form id="reference-plan-editor-form" novalidate>
+        <input name="documentId" type="hidden">
+        <div class="dialog-heading"><p class="eyebrow">外部計画・参考資料</p><h2 id="reference-plan-editor-title">参考にする要点を入力</h2><p>受け取った相談支援計画などから、事業所のアセスメントで参照したい内容だけを記録します。</p></div>
+        <div id="reference-plan-editor-error" class="form-error" role="alert" hidden></div>
+        <div class="field-grid">
+          <label class="field field-wide"><span>本人の希望</span><textarea name="childWish" maxlength="8000" rows="3"></textarea></label>
+          <label class="field field-wide"><span>家族の希望</span><textarea name="guardianWish" maxlength="8000" rows="3"></textarea></label>
+          <label class="field field-wide"><span>全体的な支援方針</span><textarea name="overallPolicy" maxlength="8000" rows="4"></textarea></label>
+          <label class="field field-wide"><span>現在の状況・課題</span><textarea name="currentSituation" maxlength="8000" rows="3"></textarea></label>
+          <label class="field field-wide"><span>事業所に期待される支援</span><textarea name="supportNeed" maxlength="8000" rows="3"></textarea></label>
+          <label class="field field-wide"><span>連携時の留意事項</span><textarea name="considerations" maxlength="8000" rows="3"></textarea></label>
+        </div>
+        <div class="dialog-actions"><button class="button button-ghost" type="button" data-close-dialog="reference-plan-editor-dialog">キャンセル</button><button class="button button-primary" type="submit">要点を保存</button></div>
+      </form>
+    </dialog>
+
     <dialog id="staff-invite-dialog" class="app-dialog form-dialog permission-manage-staff" aria-labelledby="staff-invite-title">
       <form id="staff-invite-form" novalidate>
-        <div class="dialog-heading"><p class="eyebrow">法人・事業所管理</p><h2 id="staff-invite-title">職員を招待</h2><p>役割と担当事業所を指定します。法人管理者以外は事業所が必須です。</p></div>
+        <div class="dialog-heading"><p class="eyebrow">職員・事業所設定</p><h2 id="staff-invite-title">職員を招待</h2><p>役割と担当事業所を指定します。管理者以外は事業所が必須です。</p></div>
         <div id="staff-invite-error" class="form-error" role="alert" hidden></div>
         <div class="field-grid"><label class="field"><span>氏名 <em>必須</em></span><input name="displayName" maxlength="100" autocomplete="name" required></label><label class="field"><span>メールアドレス <em>必須</em></span><input name="email" type="email" maxlength="320" autocomplete="email" required></label><label class="field field-wide"><span>役割 <em>必須</em></span><select name="role" required></select></label><fieldset class="field-wide facility-checks"><legend>担当事業所</legend><div id="invite-facility-options"></div></fieldset></div>
         <div class="dialog-actions"><button class="button button-ghost" type="button" data-close-dialog="staff-invite-dialog">キャンセル</button><button class="button button-primary" type="submit">招待する</button></div>
@@ -395,7 +444,7 @@
 
     <dialog id="facility-create-dialog" class="app-dialog form-dialog permission-manage-tenant" aria-labelledby="facility-create-title">
       <form id="facility-create-form" novalidate>
-        <div class="dialog-heading"><p class="eyebrow">法人内の拠点</p><h2 id="facility-create-title">事業所を追加</h2><p>コードは法人内で重複しない短い識別子にしてください。</p></div>
+        <div class="dialog-heading"><p class="eyebrow">利用する拠点</p><h2 id="facility-create-title">事業所を追加</h2><p>コードは事業所ごとに重複しない短い識別子にしてください。</p></div>
         <div id="facility-create-error" class="form-error" role="alert" hidden></div>
         <div class="field-grid"><label class="field"><span>事業所コード <em>必須</em></span><input name="code" maxlength="50" required></label><label class="field"><span>事業所名 <em>必須</em></span><input name="name" maxlength="200" required></label><label class="field field-wide"><span>サービス種別 <em>必須</em></span><input name="serviceType" maxlength="100" value="放課後等デイサービス" required></label><input name="timezone" type="hidden" value="Asia/Tokyo"></div>
         <div class="dialog-actions"><button class="button button-ghost" type="button" data-close-dialog="facility-create-dialog">キャンセル</button><button class="button button-primary" type="submit">事業所を追加</button></div>
@@ -405,7 +454,7 @@
     <dialog id="facility-edit-dialog" class="app-dialog form-dialog permission-manage-tenant" aria-labelledby="facility-edit-title">
       <form id="facility-edit-form" novalidate>
         <input name="facilityId" type="hidden"><input name="rowVersion" type="hidden">
-        <div class="dialog-heading"><p class="eyebrow">法人内の拠点</p><h2 id="facility-edit-title">事業所情報を編集</h2><p>利用停止にしても過去の記録は保持されます。</p></div>
+        <div class="dialog-heading"><p class="eyebrow">利用する拠点</p><h2 id="facility-edit-title">事業所情報を編集</h2><p>利用停止にしても過去の記録は保持されます。</p></div>
         <div id="facility-edit-error" class="form-error" role="alert" hidden></div>
         <div class="field-grid"><label class="field"><span>事業所コード <em>必須</em></span><input name="code" maxlength="50" required></label><label class="field"><span>事業所名 <em>必須</em></span><input name="name" maxlength="200" required></label><label class="field"><span>サービス種別 <em>必須</em></span><input name="serviceType" maxlength="100" required></label><label class="field"><span>状態 <em>必須</em></span><select name="status" required><option value="active">利用中</option><option value="inactive">利用停止</option></select></label></div>
         <div class="dialog-actions"><button class="button button-ghost" type="button" data-close-dialog="facility-edit-dialog">キャンセル</button><button class="button button-primary" type="submit">変更を保存</button></div>

@@ -43,25 +43,39 @@ test("SaaSシェルはセッション・所属・利用児を起点にした業�
   assert.match(html, /<aside class="sidebar" aria-label="主な機能">/);
   assert.match(html, /<nav class="primary-nav" aria-label="業務メニュー">/);
   assert.match(html, /<main id="main-content" tabindex="-1">/);
-  assert.match(html, /id="tenant-name"/);
   assert.match(html, /id="facility-select" aria-label="表示する事業所"/);
   assert.match(html, /id="staff-name"/);
   assert.match(html, /id="staff-role"/);
   assert.match(html, /id="logout-button"[^>]+type="button">ログアウト/);
+  assert.match(html, /職員・事業所設定/);
+  assert.doesNotMatch(html, /<button class="admin-nav permission-view-admin"/);
+  assert.doesNotMatch(html, /この事業所の記録/);
+  assert.doesNotMatch(html, /記録は法人ごとに分離/);
   assert.match(html, /id="child-search-input" type="search"/);
 });
 
-test("相談支援計画・アセスメント・個別支援計画・モニタリングを別工程として扱う", () => {
+test("外部計画は任意の参考資料とし、事業所の計画だけを正式工程で扱う", () => {
   assert.match(html, /data-create-document="consultation_plan"/);
   assert.match(html, /data-generate-draft="basic_assessment"/);
   assert.match(html, /data-generate-draft="individual_support_plan"/);
   assert.match(html, /id="open-monitoring-generation"/);
-  assert.match(html, /相談支援事業者が本人・家族との面談をもとに作る/);
-  assert.match(html, /事業所がアセスメントをもとに/);
+  assert.match(html, /外部計画・参考資料/);
+  assert.match(html, /参考資料を登録/);
+  assert.match(html, /必要な場合だけ、計画づくりの参考として登録します。/);
+  assert.match(html, /id="reference-plan-editor-dialog"/);
+  assert.match(script, /kind === "individual_support_plan" && \(can\("documents\.edit"\)/);
+  assert.match(html, /目標と支援内容を決め、日々の支援の基準にします。/);
   assert.match(script, /documentKind: kind/);
   assert.match(script, /targetDocumentKind: "basic_assessment"/);
   assert.match(script, /targetDocumentKind: "individual_support_plan"/);
   assert.match(script, /targetDocumentKind: "monitoring_record"/);
+  assert.match(script, /assessmentButton\.disabled = !state\.selectedChild \|\| !finalizedCurrent/);
+  assert.match(script, /individualButton\.disabled = !state\.selectedChild \|\| !assessment/);
+  assert.match(html, /id="open-current-schedule-from-assessment"/);
+  assert.match(script, /function openCurrentScheduleFromAssessment\(/);
+  assert.match(script, /「現在の生活」を登録後、「この週間予定を確定」を選んでください。/);
+  assert.match(script, /function openReferencePlanEditor\(/);
+  assert.match(script, /次に作るアセスメントの候補に反映されます。/);
   assert.match(script, /PROGRESS_STATUS_LABELS/);
   assert.match(script, /未評価（根拠不足）/);
   assert.match(script, /要確認/);
@@ -71,17 +85,45 @@ test("相談支援計画・アセスメント・個別支援計画・モニタ�
 test("保護者・受給者証・現在と計画後の週間予定を利用児台帳で扱う", () => {
   assert.match(html, /role="tablist" aria-label="利用児情報の種類"/);
   assert.match(html, /id="guardian-form" novalidate/);
+  assert.match(html, /name="guardianId" type="hidden"/);
+  assert.match(html, /id="guardian-save-button"/);
   assert.match(html, /name="recipientCertificateNumber"/);
   assert.match(html, /保存後は末尾4桁だけを表示/);
   assert.match(html, /name="municipalityName"/);
   assert.match(html, /name="copaymentLimitYen"/);
   assert.match(html, /id="current-schedule"/);
   assert.match(html, /id="planned-schedule"/);
-  assert.match(html, /日をまたぐ予定/);
+  assert.doesNotMatch(html, /日をまたぐ予定/);
+  assert.match(html, /duplicate-schedule-item/);
+  assert.match(html, /data-journal-character-count="observation"/);
+  assert.match(html, /id="save-journal-draft"[^>]+>下書き保存/);
+  assert.match(html, /id="save-journal-final"[^>]+>記録を保存/);
+  assert.match(html, /data-contact-reply-length/);
+  assert.match(html, /返信文を整える/);
+  assert.match(html, /支援時の引継ぎ/);
+  assert.doesNotMatch(html, /data-request-summary-length|expand-request-summary/);
+  assert.match(html, /目標文字数/);
+  assert.match(script, /日誌を編集/);
+  assert.match(script, /連絡帳を編集/);
+  assert.match(script, /contact-book\/\$\{encodeURIComponent\(entryId\)\}/);
+  assert.match(script, /連絡帳を変更しました/);
+  assert.match(script, /daily-logs\/\$\{encodeURIComponent\(journalId\)\}/);
+  assert.match(script, /日誌を変更しました/);
+  assert.match(html, /活動・場面 <em>必須<\/em>/);
   assert.match(script, /\/guardians/);
+  assert.match(script, /function openGuardianEdit\(/);
+  assert.match(script, /保護者・連絡先を変更しました。/);
   assert.match(script, /scheduleKind=current/);
   assert.match(script, /scheduleKind=planned/);
   assert.match(script, /endMinute \+= 1440/);
+  assert.match(script, /予定を複製しました/);
+  assert.match(script, /updateJournalCharacterCount/);
+  assert.match(script, /function saveJournalDraft/);
+  assert.match(script, /journal\.status === "draft"/);
+  assert.match(script, /updateContactReplyCharacterCount/);
+  assert.doesNotMatch(script, /updateRequestSummaryCharacterCount|generateRequestSummary|contact_request_summary/);
+  assert.match(script, /writing-assist/);
+  assert.match(script, /整えています/);
 });
 
 test("ブラウザ内を正本にせず認証済みAPIとCSRF・ETagで保存する", () => {
@@ -147,6 +189,42 @@ test("権限と工程に応じて改変不能な帳票PDFを作成・参照す�
   assert.match(script, /PDF_RENDER_FAILED/);
   assert.match(script, /DOCUMENT_STORAGE_UNAVAILABLE/);
   assert.doesNotMatch(script, /storageKey|sha256|generatedBy/);
+});
+
+test("個別支援計画は下書きの元データを編集してからPDFを作り直せる", () => {
+  assert.match(html, /id="plan-editor-dialog"/);
+  assert.match(html, /name="overallSupportPolicy"/);
+  assert.match(html, /id="plan-editor-goals"/);
+  assert.match(script, /EDITABLE_DOCUMENT_STATUSES = Object\.freeze\(\["draft", "internal_review", "explanation_pending"\]\)/);
+  assert.match(script, /function openPlanEditor\(/);
+  assert.match(script, /function submitPlanEditor\(/);
+  assert.match(script, /function planDraftValuesFromAssessment\(/);
+  assert.match(script, /function installPlanWritingTools\(/);
+  assert.match(script, /kind: "individual_support_plan"/);
+  assert.match(script, /dataset\.planLength/);
+  assert.match(script, /const planIsEmpty = INDIVIDUAL_PLAN_PAYLOAD_FIELDS\.every/);
+  assert.match(script, /計画書を保存しました。必要に応じて確認用PDFを作成してください。/);
+  assert.match(script, /\/documents\/\$\{encodeURIComponent\(documentId\)\}\/goals\/\$\{encodeURIComponent\(goalCard\.dataset\.goalId\)\}/);
+});
+
+test("アセスメントは下書きの面談内容を編集してから個別支援計画へ進める", () => {
+  assert.match(html, /id="assessment-editor-dialog"/);
+  assert.match(html, /name="childWishes"/);
+  assert.match(html, /name="healthManagement"/);
+  assert.match(html, /name="supportConsiderations"/);
+  assert.match(script, /kind === "basic_assessment" && can\("documents\.edit"\)/);
+  assert.match(script, /function openAssessmentEditor\(/);
+  assert.match(script, /function submitAssessmentEditor\(/);
+  assert.match(script, /ASSESSMENT_EDITOR_FIELDS/);
+  assert.match(script, /function installAssessmentWritingTools\(/);
+  assert.match(script, /kind: "basic_assessment"/);
+  assert.match(script, /dataset\.assessmentLength/);
+  assert.match(script, /ASSESSMENT_SYNTHESIS_FIELDS/);
+  assert.match(script, /入力内容から下書きを作る/);
+  assert.match(script, /function assessmentWritingSourceText\(/);
+  assert.match(script, /"overallAssessment", "supportConsiderations"/);
+  assert.match(script, /payload\.assessment = assessment/);
+  assert.match(script, /アセスメントを保存しました。内容を確認してから、個別支援計画を作成してください。/);
 });
 
 test("フォーム・保存状態・競合ダイアログに主要なアクセシビリティ契約がある", () => {

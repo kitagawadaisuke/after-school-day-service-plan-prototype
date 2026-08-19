@@ -40,6 +40,48 @@ async function recordAuthenticationFailure(app, request, error) {
 }
 
 export async function authRoutes(app) {
+  if (app.localAuth) {
+    app.get("/login", async (_request, reply) => {
+      noStore(reply);
+      return reply.redirect("/login.html");
+    });
+
+    app.post("/local/login", async (request, reply) => {
+      noStore(reply);
+      let result;
+      try {
+        result = await app.localAuth.login({
+          email: request.body?.email,
+          password: request.body?.password,
+          requestContext: { ip: request.ip, userAgent: request.headers["user-agent"] },
+        });
+      } catch (error) {
+        await recordAuthenticationFailure(app, request, error);
+        throw error;
+      }
+      reply.setCookie(SESSION_COOKIE_NAME, result.sessionToken, {
+        ...SECURE_COOKIE,
+        maxAge: 12 * 60 * 60,
+        expires: result.expiresAt,
+      });
+      reply.setCookie(CSRF_COOKIE_NAME, result.csrfToken, {
+        ...CSRF_COOKIE,
+        maxAge: 12 * 60 * 60,
+        expires: result.expiresAt,
+      });
+      return reply.code(200).send({ redirectTo: "/" });
+    });
+
+    app.post("/logout", async (request, reply) => {
+      noStore(reply);
+      await app.localAuth.logout(request);
+      reply.clearCookie(SESSION_COOKIE_NAME, SECURE_COOKIE);
+      reply.clearCookie(CSRF_COOKIE_NAME, CSRF_COOKIE);
+      return reply.code(200).send({ logoutUrl: new URL("/login.html", app.config.appBaseUrl).toString() });
+    });
+    return;
+  }
+
   app.get("/login", async (request, reply) => {
     noStore(reply);
     const returnTo = typeof request.query?.returnTo === "string" ? request.query.returnTo : "/";

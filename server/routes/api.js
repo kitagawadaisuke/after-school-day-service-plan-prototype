@@ -13,6 +13,7 @@ import { registerPiiReadAuditHook } from "../pii-read-audit.js";
 import { sessionRoutes } from "./session.js";
 import { scheduleRoutes } from "./schedules.js";
 import { tenantAdminRoutes } from "./tenant-admin.js";
+import { writingAssistRoutes } from "./writing-assist.js";
 
 export async function apiRoutes(app) {
   app.decorateRequest("actor", null);
@@ -29,6 +30,7 @@ export async function apiRoutes(app) {
   await app.register(caseContextRoutes);
   await app.register(guardianRoutes);
   await app.register(dailyLogRoutes);
+  await app.register(writingAssistRoutes);
   await app.register(contactBookRoutes);
   await app.register(scheduleRoutes);
   await app.register(documentRoutes);
