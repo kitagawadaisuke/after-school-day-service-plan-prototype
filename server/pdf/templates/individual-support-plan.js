@@ -26,5 +26,6 @@ export function renderIndividualSupportPlan(source, snapshotKind) {
     subtitle: "事業所で実施する支援計画",
     orientation: INDIVIDUAL_SUPPORT_PLAN_ORIENTATION,
     bodyHtml,
+    plainHeading: true,
   });
 }

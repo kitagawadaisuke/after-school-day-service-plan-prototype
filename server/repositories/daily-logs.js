@@ -175,3 +175,36 @@ export async function updateDailyLog(client, actor, childId, logId, expectedVers
     updatedBy: current.rows[0].updated_by,
   });
 }
+
+export async function deleteDailyLog(client, actor, childId, logId, expectedVersion) {
+  const result = await client.query(
+    `update public.daily_logs
+     set deleted_at = now(), deleted_by = $5, updated_by = $5,
+         updated_at = now(), row_version = row_version + 1
+     where tenant_id = $1 and child_id = $2 and id = $3
+       and row_version = $4 and deleted_at is null
+     returning id, child_id, facility_id, deleted_at, row_version`,
+    [actor.tenantId, childId, logId, expectedVersion, actor.userId],
+  );
+  if (result.rows[0]) {
+    const row = result.rows[0];
+    return {
+      id: row.id,
+      childId: row.child_id,
+      facilityId: row.facility_id,
+      deletedAt: row.deleted_at instanceof Date ? row.deleted_at.toISOString() : row.deleted_at,
+      rowVersion: Number(row.row_version),
+    };
+  }
+
+  const current = await client.query(
+    "select row_version, updated_at, updated_by from public.daily_logs where tenant_id = $1 and child_id = $2 and id = $3 and deleted_at is null",
+    [actor.tenantId, childId, logId],
+  );
+  if (!current.rows[0]) throw notFound("日誌が見つかりません。");
+  throw conflict("EDIT_CONFLICT", "別の職員が日誌を更新しました。最新内容を確認してください。", {
+    currentVersion: Number(current.rows[0].row_version),
+    updatedAt: current.rows[0].updated_at,
+    updatedBy: current.rows[0].updated_by,
+  });
+}

@@ -187,7 +187,37 @@ test("認証済みセッションは法人・施設・役割を返す", async ()
   await app.close();
 });
 
-test("閲覧者による利用児登録はDBへ到達する前に403となる", async () => {
+test("ローカルログインの安全確認トークンは画面の更新APIへ渡せる", async () => {
+  const sessionToken = "local-session";
+  const csrfToken = "local-csrf-token";
+  let authenticatedWith = null;
+  const localAuth = {
+    async authenticateRequest(request) {
+      authenticatedWith = {
+        method: request.method,
+        csrfHeader: request.headers["x-csrf-token"],
+        csrfCookie: request.cookies?.__Host_michinote_csrf,
+      };
+      return { ...testConfig().devActor, csrfToken: request.cookies?.__Host_michinote_csrf };
+    },
+  };
+  const app = await buildApp({
+    config: testConfig({ authMode: "local", cookieSecret: "c".repeat(32) }),
+    pool: null,
+    localAuth,
+  });
+  const response = await app.inject({
+    method: "GET",
+    url: "/api/v1/session",
+    cookies: { __Host_michinote_session: sessionToken, __Host_michinote_csrf: csrfToken },
+  });
+  assert.equal(response.statusCode, 200);
+  assert.equal(response.json().csrfToken, csrfToken);
+  assert.equal(authenticatedWith.csrfCookie, csrfToken);
+  await app.close();
+});
+
+test("共通権限の職員は利用者登録の処理へ進める", async () => {
   const config = testConfig({ devActor: { ...testConfig().devActor, role: "viewer" } });
   const app = await buildApp({ config, pool: null });
   const response = await app.inject({
@@ -200,6 +230,34 @@ test("閲覧者による利用児登録はDBへ到達する前に403となる", 
       legalName: "架空 利用児",
     },
   });
+  assert.equal(response.statusCode, 503);
+  assert.equal(response.json().error.code, "SERVICE_UNAVAILABLE");
+  await app.close();
+});
+
+test("共通権限の職員は日誌の文章整形処理へ進める", async () => {
+  const config = testConfig({ devActor: { ...testConfig().devActor, role: "viewer" } });
+  const app = await buildApp({ config, pool: null });
+  const response = await app.inject({
+    method: "POST",
+    url: `/api/v1/children/${IDS.user}/writing-assist`,
+    payload: {
+      kind: "daily_log",
+      field: "observation",
+      sourceText: "活動に参加した",
+      activity: "体幹トレーニング",
+      targetCharacters: 200,
+    },
+  });
+  assert.equal(response.statusCode, 503);
+  assert.equal(response.json().error.code, "SERVICE_UNAVAILABLE");
+  await app.close();
+});
+
+test("共同運用の職員は職員・事業所・操作履歴の管理権限を持たない", async () => {
+  const config = testConfig({ devActor: { ...testConfig().devActor, role: "support_staff" } });
+  const app = await buildApp({ config, pool: null });
+  const response = await app.inject({ method: "GET", url: "/api/v1/staff" });
   assert.equal(response.statusCode, 403);
   assert.equal(response.json().error.code, "FORBIDDEN");
   await app.close();
@@ -240,7 +298,7 @@ test("idempotency retention purges bounded batches until the expired queue is dr
   assert.deepEqual(calls.map((call) => call.parameters), [[250], [250], [250]]);
 });
 
-test("連絡帳は家庭または事業所の本文を必須にする", async () => {
+test("連絡帳は事業所からの連絡を必須にする", async () => {
   const app = await buildApp({ config: testConfig(), pool: null });
   const response = await app.inject({
     method: "POST",
@@ -252,16 +310,49 @@ test("連絡帳は家庭または事業所の本文を必須にする", async ()
   await app.close();
 });
 
-test("閲覧者は連絡帳を登録できない", async () => {
+test("共通権限の職員は連絡帳登録の処理へ進める", async () => {
   const config = testConfig({ devActor: { ...testConfig().devActor, role: "viewer" } });
   const app = await buildApp({ config, pool: null });
   const response = await app.inject({
     method: "POST",
     url: `/api/v1/children/${IDS.user}/contact-book`,
-    payload: { entryDate: "2026-08-14", familyMessage: "テスト連絡" },
+    payload: { entryDate: "2026-08-14", facilityReply: "テスト連絡" },
   });
-  assert.equal(response.statusCode, 403);
-  assert.equal(response.json().error.code, "FORBIDDEN");
+  assert.equal(response.statusCode, 503);
+  assert.equal(response.json().error.code, "SERVICE_UNAVAILABLE");
+  await app.close();
+});
+
+test("共通権限の職員は日誌・連絡帳の削除処理へ進める", async () => {
+  const config = testConfig({ devActor: { ...testConfig().devActor, role: "viewer" } });
+  const app = await buildApp({ config, pool: null });
+  const journalResponse = await app.inject({
+    method: "DELETE",
+    url: `/api/v1/children/${IDS.user}/daily-logs/${IDS.user}`,
+    headers: { "if-match": '"1"' },
+  });
+  assert.equal(journalResponse.statusCode, 503);
+  assert.equal(journalResponse.json().error.code, "SERVICE_UNAVAILABLE");
+  const contactResponse = await app.inject({
+    method: "DELETE",
+    url: `/api/v1/children/${IDS.user}/contact-book/${IDS.user}`,
+    headers: { "if-match": '"1"' },
+  });
+  assert.equal(contactResponse.statusCode, 503);
+  assert.equal(contactResponse.json().error.code, "SERVICE_UNAVAILABLE");
+  await app.close();
+});
+
+test("共通権限の職員は利用者を一覧から削除する処理へ進める", async () => {
+  const config = testConfig({ devActor: { ...testConfig().devActor, role: "viewer" } });
+  const app = await buildApp({ config, pool: null });
+  const response = await app.inject({
+    method: "DELETE",
+    url: `/api/v1/children/${IDS.user}`,
+    headers: { "if-match": '"1"' },
+  });
+  assert.equal(response.statusCode, 503);
+  assert.equal(response.json().error.code, "SERVICE_UNAVAILABLE");
   await app.close();
 });
 

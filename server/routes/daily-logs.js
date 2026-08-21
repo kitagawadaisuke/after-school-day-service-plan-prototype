@@ -3,7 +3,7 @@ import { auditContextFromRequest, writeAuditEvent } from "../audit.js";
 import { PERMISSIONS, requirePermission } from "../auth/permissions.js";
 import { withTenantTransaction } from "../db/tenant-transaction.js";
 import { applyIdempotencyReply, withIdempotentTenantTransaction } from "../db/idempotency.js";
-import { createDailyLog, listDailyLogs, updateDailyLog } from "../repositories/daily-logs.js";
+import { createDailyLog, deleteDailyLog, listDailyLogs, updateDailyLog } from "../repositories/daily-logs.js";
 import { dateTimeSchema, parseIfMatch, parseInput, setVersionEtag, uuidSchema } from "./validation.js";
 
 const fiveDomainSchema = z.enum(["health_life", "motor_sensory", "cognition_behavior", "language_communication", "human_relations_sociality"]);
@@ -117,5 +117,27 @@ export async function dailyLogRoutes(app) {
       return updated;
     });
     return setVersionEtag(reply, log);
+  });
+
+  app.delete("/children/:childId/daily-logs/:logId", async (request, reply) => {
+    requirePermission(request.actor, PERMISSIONS.EDIT_JOURNALS);
+    const { childId, logId } = parseInput(logParamsSchema, request.params);
+    const expectedVersion = parseIfMatch(request);
+    const audit = auditContextFromRequest(request, app.config);
+    const deleted = await withTenantTransaction(app.db, request.actor, async (client) => {
+      const result = await deleteDailyLog(client, request.actor, childId, logId, expectedVersion);
+      await writeAuditEvent(client, {
+        ...audit,
+        tenantId: request.actor.tenantId,
+        facilityId: result.facilityId,
+        actorUserId: request.actor.userId,
+        action: "daily_log.deleted",
+        resourceType: "daily_log",
+        resourceId: logId,
+        changedFields: ["deleted_at"],
+      });
+      return result;
+    });
+    return setVersionEtag(reply, deleted);
   });
 }

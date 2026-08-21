@@ -225,6 +225,40 @@ export async function updateChild(client, actor, childId, expectedVersion, chang
   });
 }
 
+export async function deleteChild(client, actor, childId, expectedVersion) {
+  const result = await client.query(
+    `update public.children
+        set deleted_at = now(),
+            deleted_by = $4,
+            updated_by = $4,
+            updated_at = now(),
+            row_version = row_version + 1
+      where tenant_id = $1 and id = $2 and row_version = $3 and deleted_at is null
+      returning id, facility_id, deleted_at, row_version`,
+    [actor.tenantId, childId, expectedVersion, actor.userId],
+  );
+  if (result.rows[0]) {
+    const row = result.rows[0];
+    return {
+      id: row.id,
+      facilityId: row.facility_id,
+      deletedAt: row.deleted_at instanceof Date ? row.deleted_at.toISOString() : row.deleted_at,
+      rowVersion: Number(row.row_version),
+    };
+  }
+
+  const current = await client.query(
+    "select row_version, updated_at, updated_by from public.children where tenant_id = $1 and id = $2 and deleted_at is null",
+    [actor.tenantId, childId],
+  );
+  if (!current.rows[0]) throw notFound("利用者が見つかりません。");
+  throw conflict("EDIT_CONFLICT", "別の職員が利用者情報を更新しました。最新内容を確認してください。", {
+    currentVersion: Number(current.rows[0].row_version),
+    updatedAt: current.rows[0].updated_at,
+    updatedBy: current.rows[0].updated_by,
+  });
+}
+
 export async function getChildProfilePhoto(client, tenantId, childId) {
   const result = await client.query(
     `select profile_photo, profile_photo_content_type, profile_photo_updated_at

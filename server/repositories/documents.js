@@ -1,4 +1,5 @@
 import { v7 as uuidv7 } from "uuid";
+import { createHash } from "node:crypto";
 import { AppError, badRequest, conflict, notFound } from "../errors.js";
 
 export const SUPPORTED_DOCUMENT_KINDS = Object.freeze([
@@ -117,6 +118,18 @@ function serializeGoal(row) {
     sortOrder: Number(row.sort_order),
     createdAt: dateTime(row.created_at),
     updatedAt: dateTime(row.updated_at),
+    rowVersion: Number(row.row_version),
+  };
+}
+
+function serializeReferenceAttachment(row) {
+  return {
+    id: row.id,
+    documentId: row.document_id,
+    fileName: row.original_filename,
+    contentType: row.content_type,
+    byteSize: Number(row.byte_size),
+    createdAt: dateTime(row.created_at),
     rowVersion: Number(row.row_version),
   };
 }
@@ -244,7 +257,99 @@ export async function getDocument(client, tenantId, childId, documentId) {
      order by sort_order, id`,
     [tenantId, documentId],
   );
-  return serializeDocument(result.rows[0], goals.rows);
+  const attachments = result.rows[0].document_kind === "consultation_plan"
+    ? await listReferenceMaterialAttachments(client, tenantId, childId, documentId)
+    : [];
+  return { ...serializeDocument(result.rows[0], goals.rows), attachments };
+}
+
+async function readReferenceDocument(client, tenantId, childId, documentId, options = {}) {
+  const result = await client.query(
+    `select id, facility_id, status
+       from public.case_documents
+      where tenant_id = $1 and child_id = $2 and id = $3
+        and document_kind = 'consultation_plan' and deleted_at is null
+      ${options.forUpdate ? "for update" : ""}`,
+    [tenantId, childId, documentId],
+  );
+  if (!result.rows[0]) throw notFound("参考資料が見つかりません。");
+  return result.rows[0];
+}
+
+export async function listReferenceMaterialAttachments(client, tenantId, childId, documentId) {
+  await readReferenceDocument(client, tenantId, childId, documentId);
+  const result = await client.query(
+    `select id, document_id, original_filename, content_type, byte_size, created_at, row_version
+       from public.reference_material_attachments
+      where tenant_id = $1 and document_id = $2 and deleted_at is null
+      order by created_at desc, id desc`,
+    [tenantId, documentId],
+  );
+  return result.rows.map(serializeReferenceAttachment);
+}
+
+export async function createReferenceMaterialAttachment(client, actor, childId, documentId, input) {
+  const document = await readReferenceDocument(client, actor.tenantId, childId, documentId, { forUpdate: true });
+  assertEditableDocument(document);
+  const sha256 = createHash("sha256").update(input.bytes).digest("hex");
+  const result = await client.query(
+    `insert into public.reference_material_attachments (
+      id, tenant_id, document_id, original_filename, content_type,
+      byte_size, sha256, content, created_by
+    ) values ($1, $2, $3, $4, $5, $6, $7, $8, $9)
+    returning id, document_id, original_filename, content_type, byte_size, created_at, row_version`,
+    [
+      uuidv7(),
+      actor.tenantId,
+      documentId,
+      input.fileName,
+      input.contentType,
+      input.bytes.byteLength,
+      sha256,
+      input.bytes,
+      actor.userId,
+    ],
+  );
+  return { attachment: serializeReferenceAttachment(result.rows[0]), facilityId: document.facility_id };
+}
+
+export async function getReferenceMaterialAttachmentContent(client, tenantId, childId, documentId, attachmentId) {
+  await readReferenceDocument(client, tenantId, childId, documentId);
+  const result = await client.query(
+    `select id, document_id, original_filename, content_type, byte_size, created_at, row_version, content
+       from public.reference_material_attachments
+      where tenant_id = $1 and document_id = $2 and id = $3 and deleted_at is null`,
+    [tenantId, documentId, attachmentId],
+  );
+  if (!result.rows[0]) throw notFound("参考資料ファイルが見つかりません。");
+  return {
+    ...serializeReferenceAttachment(result.rows[0]),
+    bytes: Buffer.from(result.rows[0].content),
+  };
+}
+
+export async function deleteReferenceMaterialAttachment(client, actor, childId, documentId, attachmentId, expectedVersion) {
+  const document = await readReferenceDocument(client, actor.tenantId, childId, documentId, { forUpdate: true });
+  assertEditableDocument(document);
+  const result = await client.query(
+    `update public.reference_material_attachments
+        set deleted_at = now(), deleted_by = $5
+      where tenant_id = $1 and document_id = $2 and id = $3 and row_version = $4
+        and deleted_at is null
+      returning id, row_version`,
+    [actor.tenantId, documentId, attachmentId, expectedVersion, actor.userId],
+  );
+  if (result.rows[0]) return { attachmentId, facilityId: document.facility_id };
+  const current = await client.query(
+    `select row_version, deleted_at
+       from public.reference_material_attachments
+      where tenant_id = $1 and document_id = $2 and id = $3`,
+    [actor.tenantId, documentId, attachmentId],
+  );
+  if (!current.rows[0] || current.rows[0].deleted_at) throw notFound("参考資料ファイルが見つかりません。");
+  throw conflict("EDIT_CONFLICT", "別の職員が参考資料を更新しました。最新内容を確認してください。", {
+    currentVersion: Number(current.rows[0].row_version),
+  });
 }
 
 export async function createDocument(client, actor, childId, input) {
@@ -264,7 +369,14 @@ export async function createDocument(client, actor, childId, input) {
     [actor.tenantId, childId, input.documentKind],
   );
   const previous = latest.rows[0];
-  if (previous && EDITABLE_DOCUMENT_STATUSES.includes(previous.status)) {
+  // 相談支援計画は、このアプリではアセスメント用の「参考資料」として
+  // 扱う。受け取った資料は複数あり得るため、計画書本体のように
+  // 「編集中の下書きは1件だけ」という制約を適用しない。
+  if (
+    input.documentKind !== "consultation_plan"
+    && previous
+    && EDITABLE_DOCUMENT_STATUSES.includes(previous.status)
+  ) {
     throw conflict(
       "DRAFT_EXISTS",
       "編集中の計画書があります。既存の下書きを更新してください。",

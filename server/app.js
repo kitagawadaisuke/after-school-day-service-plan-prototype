@@ -20,6 +20,7 @@ import { createBoundedPdfRenderer, createPlaywrightPdfRenderer } from "./pdf/ren
 import { createDatabaseDocumentStorage, createS3DocumentStorage, createUnavailableDocumentStorage } from "./pdf/storage.js";
 import { createSecurityAuthAudit } from "./security-auth-audit.js";
 import { createWritingAssistant } from "./services/writing-assist.js";
+import { createMailService } from "./services/mail.js";
 import { apiRoutes } from "./routes/api.js";
 import { authRoutes } from "./routes/auth.js";
 
@@ -35,6 +36,10 @@ const SHARED_STATIC_FILES = Object.freeze({
   "/src/plan-engine.js": ["src/plan-engine.js", "text/javascript; charset=utf-8"],
   "/login.html": ["login.html", "text/html; charset=utf-8"],
   "/src/local-login.js": ["src/local-login.js", "text/javascript; charset=utf-8"],
+  "/signup.html": ["signup.html", "text/html; charset=utf-8"],
+  "/src/local-signup.js": ["src/local-signup.js", "text/javascript; charset=utf-8"],
+  "/reset-password.html": ["reset-password.html", "text/html; charset=utf-8"],
+  "/src/password-setup.js": ["src/password-setup.js", "text/javascript; charset=utf-8"],
   "/src/utils.js": ["src/utils.js", "text/javascript; charset=utf-8"],
 });
 
@@ -72,7 +77,11 @@ function registerStaticRoutes(app, projectRoot, config) {
   // Keep the local prototype available during development while making the
   // authenticated SaaS shell the only root document in Cognito/production.
   // PUBLIC_SAAS_UI is intentionally opt-in for the shared development demo.
-  const useSaasShell = config.nodeEnv === "production" || config.authMode === "cognito" || config.publicSaasUi === true;
+  const useSaasShell =
+    config.nodeEnv === "production" ||
+    config.authMode === "cognito" ||
+    config.authMode === "local" ||
+    config.publicSaasUi === true;
   const entryFile = useSaasShell ? "saas.html" : "index.html";
   const staticFiles = {
     "/": [entryFile, "text/html; charset=utf-8"],
@@ -96,7 +105,9 @@ export async function buildApp(options = {}) {
   const config = options.config || loadConfig();
   const app = Fastify({
     logger: options.logger ?? defaultLogger(config),
-    bodyLimit: 1_048_576,
+    // 参考資料はPDF/Office文書を15MBまで受け付ける。Base64 JSONで送る
+    // ため、転送時の余白を含めて22MBに制限する。
+    bodyLimit: 22 * 1024 * 1024,
     trustProxy: config.nodeEnv === "production" ? 1 : false,
     requestIdHeader: false,
     // OAuth callbacks carry one-time codes in the URL. Manual structured logs
@@ -146,6 +157,7 @@ export async function buildApp(options = {}) {
     || createSecurityAuthAudit({ pool, config });
   const writingAssistant = options.writingAssistant
     || createWritingAssistant({ apiKey: config.openAiApiKey, model: config.openAiModel });
+  const mailService = options.mailService || createMailService(config, options.mailDependencies);
   const idempotencyRetentionWorker = config.nodeEnv === "production" && pool
     ? startIdempotencyRetentionWorker({ pool, logger: app.log })
     : null;
@@ -162,6 +174,7 @@ export async function buildApp(options = {}) {
   app.decorate("documentStorage", documentStorage);
   app.decorate("recordSecurityAuthFailure", recordSecurityAuthFailure);
   app.decorate("writingAssistant", writingAssistant);
+  app.decorate("mailService", mailService);
   if (cognitoAuth) app.decorate("cognitoAuth", cognitoAuth);
   if (localAuth) app.decorate("localAuth", localAuth);
 
@@ -220,6 +233,20 @@ export async function buildApp(options = {}) {
         requestId: request.id,
         errorName: error?.name,
         errorCode: error?.code,
+      });
+    } else if (statusCode === 403) {
+      // In development the logger is configured at warn level. Keep enough
+      // route context to diagnose a denied operation without logging IDs,
+      // cookies, request bodies or care-record content.
+      request.log.warn({
+        event: "request_forbidden",
+        requestId: request.id,
+        code,
+        errorName: error?.name,
+        errorCode: error?.code,
+        method: request.method,
+        route: request.routeOptions?.url || null,
+        actorRole: request.actor?.role || null,
       });
     } else {
       request.log.info({ event: "request_rejected", requestId: request.id, code, statusCode });

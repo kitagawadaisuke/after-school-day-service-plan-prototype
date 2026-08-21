@@ -33,6 +33,7 @@ const configSchema = z
     DB_POOL_MAX: z.coerce.number().int().min(1).max(50).default(10),
     AUTH_MODE: z.enum(["development", "local", "cognito"]).default("development"),
     COOKIE_SECRET: z.preprocess((value) => value || undefined, z.string().min(32).optional()),
+    LOCAL_SIGNUP_TENANT_ID: z.preprocess((value) => value || undefined, z.string().uuid().optional()),
     AUDIT_HASH_KEY: z.preprocess((value) => value || undefined, z.string().min(32).optional()),
     PDF_FINALIZATION_SECRET: z.preprocess(
       (value) => value || undefined,
@@ -58,6 +59,12 @@ const configSchema = z
     COGNITO_CALLBACK_URL: optionalUrl,
     COGNITO_LOGOUT_URL: optionalUrl,
     SESSION_TTL_HOURS: z.coerce.number().int().min(1).max(168).default(12),
+    MAIL_SERVER: optionalString,
+    MAIL_PORT: z.coerce.number().int().min(1).max(65535).default(587),
+    MAIL_USE_TLS: z.enum(["true", "false"]).default("true").transform((value) => value === "true"),
+    MAIL_USERNAME: optionalString,
+    MAIL_PASSWORD: optionalString,
+    MAIL_DEFAULT_SENDER: optionalString,
     DEV_USER_ID: z.string().uuid().default("018f1db5-c170-7c35-a784-3cfc6f98c201"),
     DEV_TENANT_ID: z.string().uuid().default("018f1db5-c170-7c35-a784-3cfc6f98c101"),
     DEV_TENANT_NAME: z.string().min(1).max(200).default("開発用デモ法人"),
@@ -109,6 +116,16 @@ const configSchema = z
     }
     if (value.AUTH_MODE === "local" && !value.COOKIE_SECRET) {
       context.addIssue({ code: "custom", path: ["COOKIE_SECRET"], message: "local authentication requires COOKIE_SECRET" });
+    }
+    if (value.AUTH_MODE === "local" && !value.LOCAL_SIGNUP_TENANT_ID) {
+      context.addIssue({ code: "custom", path: ["LOCAL_SIGNUP_TENANT_ID"], message: "local signup requires a tenant" });
+    }
+    if (value.AUTH_MODE === "local") {
+      const mailKeys = ["MAIL_SERVER", "MAIL_USERNAME", "MAIL_PASSWORD", "MAIL_DEFAULT_SENDER"];
+      const supplied = mailKeys.filter((key) => Boolean(value[key]));
+      if (supplied.length > 0 && supplied.length !== mailKeys.length) {
+        for (const key of mailKeys.filter((key) => !value[key])) context.addIssue({ code: "custom", path: [key], message: "local認証のメール設定では必須です" });
+      }
     }
     if (value.NODE_ENV === "production" && !value.AUDIT_HASH_KEY) {
       context.addIssue({ code: "custom", path: ["AUDIT_HASH_KEY"], message: "productionでは必須です" });
@@ -200,6 +217,7 @@ export function loadConfig(env = process.env) {
     dbPoolMax: value.DB_POOL_MAX,
     authMode: value.AUTH_MODE,
     cookieSecret: value.COOKIE_SECRET,
+    localSignupTenantId: value.LOCAL_SIGNUP_TENANT_ID,
     auditHashKey: value.AUDIT_HASH_KEY || "development-audit-key-not-for-production",
     awsRegion: value.AWS_REGION || inferredCognitoRegion || "ap-northeast-3",
     documentKmsKeyArn: value.DOCUMENT_KMS_KEY_ARN,
@@ -223,6 +241,15 @@ export function loadConfig(env = process.env) {
           sessionTtlSeconds: value.SESSION_TTL_HOURS * 60 * 60,
         }
       : null,
+    mail: value.MAIL_SERVER ? {
+      host: value.MAIL_SERVER,
+      port: value.MAIL_PORT,
+      secure: false,
+      requireTLS: value.MAIL_USE_TLS,
+      username: value.MAIL_USERNAME,
+      password: value.MAIL_PASSWORD,
+      from: value.MAIL_DEFAULT_SENDER,
+    } : null,
     devActor: {
       userId: value.DEV_USER_ID,
       tenantId: value.DEV_TENANT_ID,

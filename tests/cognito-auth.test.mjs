@@ -296,7 +296,7 @@ test("セッション照合はCSRFを検証し、無効化後は同じCookieを�
   assert.equal(actor.csrfToken, created.csrfToken);
   await assert.rejects(
     () => store.authenticate(created.sessionToken, { method: "PATCH", csrfToken: "incorrect" }),
-    (error) => error.code === "FORBIDDEN",
+    (error) => error.code === "CSRF_INVALID",
   );
   await store.revoke(created.sessionToken);
   await assert.rejects(

@@ -4,8 +4,10 @@ const error = document.querySelector("#login-error");
 form?.addEventListener("submit", async (event) => {
   event.preventDefault();
   error.hidden = true;
+  for (const input of form.querySelectorAll("input")) input.removeAttribute("aria-invalid");
   const submit = form.querySelector("button[type='submit']");
   submit.disabled = true;
+  submit.setAttribute("aria-busy", "true");
   try {
     const response = await fetch("/auth/local/login", {
       method: "POST",
@@ -22,6 +24,8 @@ form?.addEventListener("submit", async (event) => {
   } catch (cause) {
     error.textContent = cause.message;
     error.hidden = false;
+    for (const input of form.querySelectorAll("input")) input.setAttribute("aria-invalid", "true");
     submit.disabled = false;
+    submit.removeAttribute("aria-busy");
   }
 });

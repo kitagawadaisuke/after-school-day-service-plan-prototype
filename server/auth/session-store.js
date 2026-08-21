@@ -1,5 +1,5 @@
 import { createHmac, randomBytes, randomUUID, timingSafeEqual } from "node:crypto";
-import { forbidden, serviceUnavailable, unauthorized } from "../errors.js";
+import { csrfInvalid, serviceUnavailable, unauthorized } from "../errors.js";
 import { hashOpaqueValue, randomOpaqueToken } from "./crypto.js";
 
 export const SESSION_COOKIE_NAME = "__Host-michinote_session";
@@ -119,7 +119,7 @@ export function createSessionStore({
 
         if (!SAFE_METHODS.has(String(method).toUpperCase()) || csrfToken) {
           if (!csrfToken || !equalBytes(csrfHash(csrfToken), session.csrf_token_hash)) {
-            throw forbidden("安全確認用トークンが一致しません。画面を再読み込みしてください。");
+            throw csrfInvalid();
           }
         }
 

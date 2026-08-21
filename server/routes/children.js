@@ -5,6 +5,7 @@ import { withTenantTransaction } from "../db/tenant-transaction.js";
 import { applyIdempotencyReply, withIdempotentTenantTransaction } from "../db/idempotency.js";
 import {
   createChild,
+  deleteChild,
   getChild,
   getChildProfilePhoto,
   listChildren,
@@ -65,6 +66,8 @@ const updateSchema = createSchema
     birthDate: dateSchema.nullable().optional(),
     gender: genderSchema.nullable().optional(),
     recipientCertificateNumber: certificateNumberSchema.nullable().optional(),
+    certificateValidFrom: dateSchema.nullable().optional(),
+    certificateValidTo: dateSchema.nullable().optional(),
     municipalityName: z.string().trim().max(200).nullable().optional(),
     copaymentLimitYen: z.number().int().min(0).max(10_000_000).nullable().optional(),
     status: statusSchema.optional(),
@@ -215,6 +218,28 @@ export async function childRoutes(app) {
       return updated;
     });
     return setVersionEtag(reply, child);
+  });
+
+  app.delete("/children/:childId", async (request, reply) => {
+    requirePermission(request.actor, PERMISSIONS.EDIT_CLIENTS);
+    const { childId } = parseInput(z.object({ childId: uuidSchema }).strict(), request.params);
+    const expectedVersion = parseIfMatch(request);
+    const audit = auditContextFromRequest(request, app.config);
+    const deleted = await withTenantTransaction(app.db, request.actor, async (client) => {
+      const result = await deleteChild(client, request.actor, childId, expectedVersion);
+      await writeAuditEvent(client, {
+        ...audit,
+        tenantId: request.actor.tenantId,
+        facilityId: result.facilityId,
+        actorUserId: request.actor.userId,
+        action: "child.deleted",
+        resourceType: "child",
+        resourceId: childId,
+        changedFields: ["deleted_at"],
+      });
+      return result;
+    });
+    return setVersionEtag(reply, deleted);
   });
 
   app.get("/children/:childId/profile-photo", async (request, reply) => {

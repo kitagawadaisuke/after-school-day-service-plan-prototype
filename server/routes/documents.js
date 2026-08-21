@@ -4,14 +4,19 @@ import { PERMISSIONS, requirePermission } from "../auth/permissions.js";
 import { withTenantTransaction } from "../db/tenant-transaction.js";
 import { applyIdempotencyReply, withIdempotentTenantTransaction } from "../db/idempotency.js";
 import { AppError } from "../errors.js";
+import { transitionDocument } from "../repositories/document-workflow.js";
 import {
   createDocument,
   createDocumentGoal,
+  createReferenceMaterialAttachment,
+  deleteReferenceMaterialAttachment,
   deleteDocumentGoal,
   getDocument,
   getDocumentGoal,
+  getReferenceMaterialAttachmentContent,
   listDocumentGoals,
   listDocuments,
+  listReferenceMaterialAttachments,
   updateDocument,
   updateDocumentGoal,
 } from "../repositories/documents.js";
@@ -123,6 +128,48 @@ const listQuerySchema = z
 const childParamsSchema = z.object({ childId: uuidSchema }).strict();
 const documentParamsSchema = z.object({ childId: uuidSchema, documentId: uuidSchema }).strict();
 const goalParamsSchema = z.object({ childId: uuidSchema, documentId: uuidSchema, goalId: uuidSchema }).strict();
+const referenceAttachmentParamsSchema = z.object({
+  childId: uuidSchema,
+  documentId: uuidSchema,
+  attachmentId: uuidSchema,
+}).strict();
+
+const referenceAttachmentMimeTypes = new Set([
+  "application/pdf",
+  "application/msword",
+  "application/vnd.ms-excel",
+  "application/vnd.ms-powerpoint",
+  "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+  "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+  "application/vnd.openxmlformats-officedocument.presentationml.presentation",
+]);
+const maxReferenceAttachmentBytes = 15 * 1024 * 1024;
+const referenceAttachmentSchema = z.object({
+  fileName: z.string().trim().min(1).max(255),
+  contentType: z.string().trim().max(200),
+  dataBase64: z.string().min(4).max(21 * 1024 * 1024).regex(/^[A-Za-z0-9+/]+={0,2}$/),
+}).strict();
+
+function hasExpectedReferenceFileSignature(contentType, bytes) {
+  if (contentType === "application/pdf") return bytes.length >= 5 && bytes.subarray(0, 5).toString("ascii") === "%PDF-";
+  const officeBinary = bytes.length >= 8
+    && bytes.subarray(0, 8).equals(Buffer.from([0xd0, 0xcf, 0x11, 0xe0, 0xa1, 0xb1, 0x1a, 0xe1]));
+  if (["application/msword", "application/vnd.ms-excel", "application/vnd.ms-powerpoint"].includes(contentType)) return officeBinary;
+  return bytes.length >= 4 && bytes.subarray(0, 4).equals(Buffer.from([0x50, 0x4b, 0x03, 0x04]));
+}
+
+function decodeReferenceAttachment(input) {
+  if (!referenceAttachmentMimeTypes.has(input.contentType)) {
+    throw new AppError(422, "UNSUPPORTED_REFERENCE_FILE", "PDF、Word、Excel、PowerPoint形式の資料を選択してください。");
+  }
+  const bytes = Buffer.from(input.dataBase64, "base64");
+  if (!bytes.length || bytes.byteLength > maxReferenceAttachmentBytes || !hasExpectedReferenceFileSignature(input.contentType, bytes)) {
+    throw new AppError(422, "INVALID_REFERENCE_FILE", "資料は15MB以下のPDF、Word、Excel、PowerPointを選択してください。");
+  }
+  const fileName = input.fileName.replace(/[\\/:*?"<>|\u0000-\u001f]/g, "_").trim();
+  if (!fileName) throw new AppError(422, "INVALID_REFERENCE_FILE", "資料のファイル名を確認してください。");
+  return { fileName, contentType: input.contentType, bytes };
+}
 
 function parseDocumentBody(schema, value) {
   const parsed = schema.safeParse(value);
@@ -176,6 +223,114 @@ export async function documentRoutes(app) {
       getDocument(client, request.actor.tenantId, childId, documentId),
     );
     return setVersionEtag(reply, document);
+  });
+
+  app.get("/children/:childId/documents/:documentId/reference-materials", async (request) => {
+    requirePermission(request.actor, PERMISSIONS.VIEW_DOCUMENTS);
+    const { childId, documentId } = parseInput(documentParamsSchema, request.params);
+    const items = await withTenantTransaction(app.db, request.actor, (client) =>
+      listReferenceMaterialAttachments(client, request.actor.tenantId, childId, documentId),
+    );
+    return { items };
+  });
+
+  app.post("/children/:childId/documents/:documentId/reference-materials", async (request, reply) => {
+    requirePermission(request.actor, PERMISSIONS.EDIT_DOCUMENTS);
+    const { childId, documentId } = parseInput(documentParamsSchema, request.params);
+    const input = decodeReferenceAttachment(parseInput(referenceAttachmentSchema, request.body));
+    const audit = auditContextFromRequest(request, app.config);
+    const idempotentResult = await withIdempotentTenantTransaction(app.db, request.actor, request, async (client) => {
+      const created = await createReferenceMaterialAttachment(client, request.actor, childId, documentId, input);
+      await writeAuditEvent(client, {
+        ...audit,
+        tenantId: request.actor.tenantId,
+        facilityId: created.facilityId,
+        actorUserId: request.actor.userId,
+        action: "reference_material.uploaded",
+        resourceType: "reference_material",
+        resourceId: created.attachment.id,
+        changedFields: ["attachment"],
+        metadata: { documentId, contentType: created.attachment.contentType, byteSize: created.attachment.byteSize },
+      });
+      return created.attachment;
+    });
+    reply.code(201);
+    return applyIdempotencyReply(reply, idempotentResult);
+  });
+
+  app.get("/children/:childId/documents/:documentId/reference-materials/:attachmentId/download", async (request, reply) => {
+    requirePermission(request.actor, PERMISSIONS.VIEW_DOCUMENTS);
+    const { childId, documentId, attachmentId } = parseInput(referenceAttachmentParamsSchema, request.params);
+    const attachment = await withTenantTransaction(app.db, request.actor, (client) =>
+      getReferenceMaterialAttachmentContent(client, request.actor.tenantId, childId, documentId, attachmentId),
+    );
+    const encodedName = encodeURIComponent(attachment.fileName).replace(/['()]/g, (character) => `%${character.charCodeAt(0).toString(16).toUpperCase()}`);
+    reply
+      .header("Cache-Control", "private, no-store")
+      .header("X-Content-Type-Options", "nosniff")
+      .header("Content-Disposition", `attachment; filename="reference-material"; filename*=UTF-8''${encodedName}`)
+      .type("application/octet-stream");
+    return reply.send(attachment.bytes);
+  });
+
+  app.delete("/children/:childId/documents/:documentId/reference-materials/:attachmentId", async (request, reply) => {
+    requirePermission(request.actor, PERMISSIONS.EDIT_DOCUMENTS);
+    const { childId, documentId, attachmentId } = parseInput(referenceAttachmentParamsSchema, request.params);
+    const expectedVersion = parseIfMatch(request);
+    const audit = auditContextFromRequest(request, app.config);
+    const deleted = await withTenantTransaction(app.db, request.actor, async (client) => {
+      const result = await deleteReferenceMaterialAttachment(
+        client,
+        request.actor,
+        childId,
+        documentId,
+        attachmentId,
+        expectedVersion,
+      );
+      await writeAuditEvent(client, {
+        ...audit,
+        tenantId: request.actor.tenantId,
+        facilityId: result.facilityId,
+        actorUserId: request.actor.userId,
+        action: "reference_material.deleted",
+        resourceType: "reference_material",
+        resourceId: attachmentId,
+        changedFields: ["attachment"],
+        metadata: { documentId },
+      });
+      return result;
+    });
+    return reply.code(204).send(deleted);
+  });
+
+  app.delete("/children/:childId/documents/:documentId/reference-material", async (request, reply) => {
+    requirePermission(request.actor, PERMISSIONS.EDIT_DOCUMENTS);
+    const { childId, documentId } = parseInput(documentParamsSchema, request.params);
+    const expectedVersion = parseIfMatch(request);
+    const audit = auditContextFromRequest(request, app.config);
+    await withTenantTransaction(app.db, request.actor, async (client) => {
+      const removed = await transitionDocument(
+        client,
+        request.actor,
+        childId,
+        documentId,
+        expectedVersion,
+        { action: "void", reason: "利用者操作により参考資料を削除" },
+        { expectedDocumentKind: "consultation_plan" },
+      );
+      await writeAuditEvent(client, {
+        ...audit,
+        tenantId: request.actor.tenantId,
+        facilityId: removed.facilityId,
+        actorUserId: request.actor.userId,
+        action: "reference_material.removed",
+        resourceType: "reference_material",
+        resourceId: documentId,
+        changedFields: ["status"],
+        metadata: { documentKind: removed.documentKind, versionNumber: removed.versionNumber },
+      });
+    });
+    return reply.code(204).send();
   });
 
   app.patch("/children/:childId/documents/:documentId", async (request, reply) => {

@@ -29,53 +29,23 @@ export const PERMISSIONS = Object.freeze({
   VIEW_AUDIT_LOG: "audit.view"
 });
 
-const ALL_PERMISSIONS = Object.freeze(Object.values(PERMISSIONS));
+// 現在は一事業所での共同記録運用です。全職員が利用者情報・日誌・連絡帳・
+// 計画書を扱える一方、アカウントや事業所の管理権限は誰にも付与しません。
+const COMMON_OPERATION_PERMISSIONS = Object.freeze([
+  PERMISSIONS.VIEW_CLIENTS,
+  PERMISSIONS.EDIT_CLIENTS,
+  PERMISSIONS.EDIT_CASE_CONTEXT,
+  PERMISSIONS.VIEW_JOURNALS,
+  PERMISSIONS.EDIT_JOURNALS,
+  PERMISSIONS.VIEW_DOCUMENTS,
+  PERMISSIONS.EDIT_DOCUMENTS,
+  PERMISSIONS.APPROVE_DOCUMENTS,
+  PERMISSIONS.EXPORT_PDF,
+]);
 
-const grants = Object.freeze({
-  [ROLES.TENANT_ADMIN]: ALL_PERMISSIONS,
-  [ROLES.FACILITY_ADMIN]: Object.freeze([
-    PERMISSIONS.MANAGE_STAFF,
-    PERMISSIONS.VIEW_CLIENTS,
-    PERMISSIONS.EDIT_CLIENTS,
-    PERMISSIONS.EDIT_CASE_CONTEXT,
-    PERMISSIONS.VIEW_JOURNALS,
-    PERMISSIONS.EDIT_JOURNALS,
-    PERMISSIONS.VIEW_DOCUMENTS,
-    PERMISSIONS.EDIT_DOCUMENTS,
-    PERMISSIONS.APPROVE_DOCUMENTS,
-    PERMISSIONS.EXPORT_PDF,
-    PERMISSIONS.VIEW_AUDIT_LOG
-  ]),
-  [ROLES.PLAN_APPROVER]: Object.freeze([
-    PERMISSIONS.VIEW_CLIENTS,
-    PERMISSIONS.EDIT_CASE_CONTEXT,
-    PERMISSIONS.VIEW_JOURNALS,
-    PERMISSIONS.VIEW_DOCUMENTS,
-    PERMISSIONS.EDIT_DOCUMENTS,
-    PERMISSIONS.APPROVE_DOCUMENTS,
-    PERMISSIONS.EXPORT_PDF
-  ]),
-  [ROLES.SUPPORT_STAFF]: Object.freeze([
-    PERMISSIONS.VIEW_CLIENTS,
-    PERMISSIONS.VIEW_JOURNALS,
-    PERMISSIONS.EDIT_JOURNALS,
-    PERMISSIONS.VIEW_DOCUMENTS,
-    PERMISSIONS.EDIT_DOCUMENTS,
-    PERMISSIONS.EXPORT_PDF
-  ]),
-  [ROLES.VIEWER]: Object.freeze([
-    PERMISSIONS.VIEW_CLIENTS,
-    PERMISSIONS.VIEW_JOURNALS,
-    PERMISSIONS.VIEW_DOCUMENTS
-  ]),
-  [ROLES.AUDITOR]: Object.freeze([
-    PERMISSIONS.VIEW_CLIENTS,
-    PERMISSIONS.VIEW_JOURNALS,
-    PERMISSIONS.VIEW_DOCUMENTS,
-    PERMISSIONS.EXPORT_PDF,
-    PERMISSIONS.VIEW_AUDIT_LOG
-  ])
-});
+const grants = Object.freeze(
+  Object.fromEntries(Object.values(ROLES).map((role) => [role, COMMON_OPERATION_PERMISSIONS]))
+);
 
 /**
  * Boolean role/operation matrix. It is intentionally complete: new operations
@@ -89,7 +59,7 @@ export const PERMISSION_MATRIX = Object.freeze(
         role,
         Object.freeze(
           Object.fromEntries(
-            ALL_PERMISSIONS.map((permission) => [permission, permitted.has(permission)])
+            Object.values(PERMISSIONS).map((permission) => [permission, permitted.has(permission)])
           )
         )
       ];

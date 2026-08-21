@@ -9,15 +9,27 @@
   </head>
   <body class="login-page">
     <main class="login-card" aria-labelledby="login-title">
-      <p class="eyebrow">みちのーと</p>
-      <h1 id="login-title">ログイン</h1>
-      <p>事業所から発行されたメールアドレスとパスワードを入力してください。</p>
+      <header class="login-header">
+        <div class="login-brand" aria-label="放課後等デイサービス それいゆ">
+          <span class="login-brand-mark" aria-hidden="true">そ</span>
+          <span><small>放課後等デイサービス</small><strong>それいゆ</strong></span>
+        </div>
+        <p class="login-kicker">みちのーと</p>
+        <h1 id="login-title">ログイン</h1>
+        <p class="login-intro">登録したメールアドレスとパスワードを入力してください。</p>
+      </header>
       <form id="local-login-form" novalidate>
-        <label>メールアドレス<input name="email" type="email" autocomplete="username" required></label>
-        <label>パスワード<input name="password" type="password" autocomplete="current-password" required minlength="12"></label>
-        <p id="login-error" role="alert" hidden></p>
-        <button type="submit">ログイン</button>
+        <label for="login-email">メールアドレス</label>
+        <input id="login-email" name="email" type="email" autocomplete="username" required aria-describedby="login-error">
+        <label for="login-password">パスワード</label>
+        <input id="login-password" name="password" type="password" autocomplete="current-password" required minlength="8" aria-describedby="login-error">
+        <p id="login-error" role="alert" aria-live="assertive" hidden></p>
+        <button type="submit" class="login-submit">ログイン</button>
       </form>
+      <nav class="login-actions" aria-label="ログインに関する操作">
+        <a href="/reset-password.html">パスワードを忘れた場合</a>
+        <p><span>初めて利用する方</span><a href="/signup.html">新規登録</a></p>
+      </nav>
     </main>
     <script type="module" src="src/local-login.js"></script>
   </body>

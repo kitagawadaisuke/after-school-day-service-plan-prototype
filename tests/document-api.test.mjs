@@ -158,9 +158,9 @@ test("相談支援計画と事業所個別支援計画を分離し、下書き�
     assert.deepEqual(consultationList.json().items.map((item) => item.id), [consultation.json().id]);
     assert.equal(Object.hasOwn(consultationList.json().items[0], "payload"), false);
 
-    const duplicateDraft = await createPlan(app, "consultation_plan", { note: "別下書き" });
-    assert.equal(duplicateDraft.statusCode, 409);
-    assert.equal(duplicateDraft.json().error.code, "DRAFT_EXISTS");
+    const secondReference = await createPlan(app, "consultation_plan", { note: "別の参考資料" });
+    assert.equal(secondReference.statusCode, 201);
+    assert.equal(secondReference.json().versionNumber, 2);
 
     const updated = await app.inject({
       method: "PATCH",
@@ -230,6 +230,74 @@ test("相談支援計画と事業所個別支援計画を分離し、下書き�
   } finally {
     await app.close();
     await db.exec("reset role");
+    await db.close();
+  }
+});
+
+test("参考資料は下書きの有無にかかわらず添付・確認・削除できる", async () => {
+  const db = await setupDatabase();
+  const app = await buildApp({ config: testConfig(), pool: pglitePool(db) });
+  try {
+    const reference = await createPlan(app, "consultation_plan", { note: "受け取った相談支援計画" });
+    const documentId = reference.json().id;
+    const pdfBytes = Buffer.from("%PDF-1.7\n% reference-material\n", "utf8");
+
+    const uploaded = await app.inject({
+      method: "POST",
+      url: `/api/v1/children/${IDS.child}/documents/${documentId}/reference-materials`,
+      payload: {
+        fileName: "相談支援計画.pdf",
+        contentType: "application/pdf",
+        dataBase64: pdfBytes.toString("base64"),
+      },
+    });
+    assert.equal(uploaded.statusCode, 201);
+    assert.equal(uploaded.json().fileName, "相談支援計画.pdf");
+    assert.equal(uploaded.json().byteSize, pdfBytes.byteLength);
+
+    const detail = await app.inject({
+      method: "GET",
+      url: `/api/v1/children/${IDS.child}/documents/${documentId}`,
+    });
+    assert.equal(detail.statusCode, 200);
+    assert.equal(detail.json().attachments.length, 1);
+    assert.equal(detail.json().attachments[0].contentType, "application/pdf");
+
+    const downloaded = await app.inject({
+      method: "GET",
+      url: `/api/v1/children/${IDS.child}/documents/${documentId}/reference-materials/${uploaded.json().id}/download`,
+    });
+    assert.equal(downloaded.statusCode, 200);
+    assert.deepEqual(downloaded.rawPayload, pdfBytes);
+    assert.match(downloaded.headers["content-disposition"], /filename\*=UTF-8''/);
+
+    const deleted = await app.inject({
+      method: "DELETE",
+      url: `/api/v1/children/${IDS.child}/documents/${documentId}/reference-materials/${uploaded.json().id}`,
+      headers: { "if-match": `"${uploaded.json().rowVersion}"` },
+    });
+    assert.equal(deleted.statusCode, 204);
+
+    const afterDelete = await app.inject({
+      method: "GET",
+      url: `/api/v1/children/${IDS.child}/documents/${documentId}`,
+    });
+    assert.equal(afterDelete.json().attachments.length, 0);
+
+    const removedReference = await app.inject({
+      method: "DELETE",
+      url: `/api/v1/children/${IDS.child}/documents/${documentId}/reference-material`,
+      headers: { "if-match": reference.headers.etag },
+    });
+    assert.equal(removedReference.statusCode, 204);
+
+    const removedDetail = await app.inject({
+      method: "GET",
+      url: `/api/v1/children/${IDS.child}/documents/${documentId}`,
+    });
+    assert.equal(removedDetail.json().status, "void");
+  } finally {
+    await app.close();
     await db.close();
   }
 });

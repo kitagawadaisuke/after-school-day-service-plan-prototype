@@ -20,6 +20,10 @@ export function forbidden(message = "この操作を行う権限がありませ�
   return new AppError(403, "FORBIDDEN", message);
 }
 
+export function csrfInvalid(message = "安全確認用トークンが一致しません。画面を再読み込みしてください。") {
+  return new AppError(403, "CSRF_INVALID", message);
+}
+
 export function notFound(message = "対象のデータが見つかりません。") {
   return new AppError(404, "NOT_FOUND", message);
 }

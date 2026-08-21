@@ -179,6 +179,9 @@ export async function transitionDocument(
   options = {},
 ) {
   const current = await readDocument(client, actor.tenantId, childId, documentId, { forUpdate: true });
+  if (options.expectedDocumentKind && current.document_kind !== options.expectedDocumentKind) {
+    throw notFound("参考資料が見つかりません。");
+  }
   if (Number(current.row_version) !== expectedVersion) throw editConflict(current);
 
   const transition = transitionFor(input.action, current.status);

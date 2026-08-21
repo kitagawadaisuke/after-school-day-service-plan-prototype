@@ -54,18 +54,27 @@ export function firstValue(payload, keys, fallback = null) {
 }
 
 export function renderFieldRows(rows) {
-  return rows.map(([label, value, options = {}]) => `
-    <div class="field-row ${options.wide ? "field-row--wide" : ""}">
-      <dt>${escapeHtml(label)}</dt>
-      <dd>${escapeHtml(formatValue(value)).replaceAll("\n", "<br>")}</dd>
-    </div>`).join("");
+  const cell = ([label, value]) => `
+    <th scope="row">${escapeHtml(label)}</th>
+    <td>${escapeHtml(formatValue(value)).replaceAll("\n", "<br>")}</td>`;
+  const rendered = [];
+  for (let index = 0; index < rows.length; index += 2) {
+    const first = rows[index];
+    const second = rows[index + 1];
+    rendered.push(second
+      ? `<tr>${cell(first)}${cell(second)}</tr>`
+      : `<tr>${cell(first)}<td colspan="2"></td></tr>`);
+  }
+  return rendered.join("");
 }
 
 export function renderSection(title, rows, options = {}) {
   return `
     <section class="document-section ${options.breakBefore ? "page-break-before" : ""}">
-      <h2>${escapeHtml(title)}</h2>
-      <dl class="field-grid">${renderFieldRows(rows)}</dl>
+      <table class="field-table">
+        <thead><tr><th class="field-table-title" colspan="4"><h2>${escapeHtml(title)}</h2></th></tr></thead>
+        <tbody>${renderFieldRows(rows)}</tbody>
+      </table>
     </section>`;
 }
 
@@ -127,32 +136,39 @@ export function renderSchedules(schedules = []) {
 
 function commonCss(orientation) {
   return `
-    @page { size: A4 ${orientation}; margin: 17mm 11mm 15mm; }
+    @page { size: A4 ${orientation}; margin: 15mm 13mm 14mm; }
     * { box-sizing: border-box; }
-    html { color: #172c31; background: #fff; font-family: "Noto Sans CJK JP", "Yu Gothic", "Meiryo", sans-serif; }
-    body { margin: 0; font-size: 9.5pt; line-height: 1.55; -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+    html { color: #172c31; background: #fff; font-family: "IPAGothic", "Noto Sans CJK JP", "Yu Gothic", "Meiryo", sans-serif; }
+    body { margin: 0; font-size: 10.5pt; line-height: 1.65; -webkit-print-color-adjust: exact; print-color-adjust: exact; }
     .running-header { position: fixed; top: -12mm; left: 0; right: 0; display: flex; justify-content: space-between; border-bottom: .35mm solid #173d42; padding-bottom: 1.5mm; font-size: 7.5pt; color: #4b6265; }
     .running-footer { position: fixed; bottom: -10mm; left: 0; right: 0; display: flex; justify-content: space-between; border-top: .2mm solid #9eaaa8; padding-top: 1.5mm; font-size: 7pt; color: #667779; }
     .page-number::after { content: counter(page); }
-    .document-heading { display: grid; grid-template-columns: 1fr auto; align-items: end; gap: 8mm; border-bottom: 1mm solid #173d42; padding: 1mm 0 3mm; margin-bottom: 3mm; }
-    .eyebrow { color: #a85d3b; font-size: 8pt; font-weight: 700; letter-spacing: .12em; }
-    h1 { font-size: 20pt; line-height: 1.2; margin: 1mm 0 0; font-family: "Noto Serif CJK JP", "Yu Mincho", serif; }
-    h2 { margin: 0; padding: 1.8mm 2.5mm; background: #e7eeea; border-left: 1.2mm solid #a85d3b; font-size: 11pt; }
-    h3 { margin: 2mm 0 1mm; font-size: 9.5pt; }
+    .document-heading { display: grid; grid-template-columns: 1fr auto; align-items: end; gap: 8mm; border-bottom: .8mm solid #173d42; padding: 1mm 0 3.5mm; margin-bottom: 4mm; }
+    .eyebrow { color: #a85d3b; font-size: 8.5pt; font-weight: 700; letter-spacing: .1em; }
+    h1 { font-size: 22pt; line-height: 1.2; margin: 1mm 0 0; font-family: "Noto Serif CJK JP", "Yu Mincho", serif; }
+    .document-heading--plain { display: block; padding-top: 1.5mm; }
+    .document-heading--plain h1 { margin: 0; font-family: "IPAGothic", "Noto Sans CJK JP", "Yu Gothic", "Meiryo", sans-serif; font-size: 19pt; font-weight: 700; letter-spacing: .025em; }
+    .document-heading-status { margin: 1.2mm 0 0; color: #52686b; font-size: 8.5pt; font-weight: 700; }
+    h2 { margin: 0; padding: 2mm 3mm; background: #e7eeea; border-left: 1.2mm solid #a85d3b; font-size: 12pt; }
+    h3 { margin: 2.5mm 0 1.5mm; font-size: 10.5pt; }
     .status-box { min-width: 42mm; border: .35mm solid #173d42; padding: 2mm 3mm; text-align: right; }
-    .status-box strong { display: block; font-size: 11pt; }
-    .identity-grid { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); border: .3mm solid #697b7d; margin-bottom: 3mm; }
-    .identity-grid div { min-height: 13mm; padding: 1.5mm 2mm; border-right: .2mm solid #aeb9b7; }
-    .identity-grid div:last-child { border-right: 0; }
-    .identity-grid span { display: block; font-size: 7pt; color: #617173; }
-    .identity-grid strong { display: block; margin-top: .6mm; font-size: 9pt; overflow-wrap: anywhere; }
-    .certificate-grid { grid-template-columns: repeat(4, minmax(0, 1fr)); margin-top: -2mm; }
-    .document-section { border: .3mm solid #aab5b3; margin: 0 0 3mm; break-inside: avoid; }
-    .field-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); margin: 0; }
-    .field-row { display: grid; grid-template-columns: 35mm 1fr; min-height: 14mm; border-right: .2mm solid #c5cecc; border-bottom: .2mm solid #c5cecc; break-inside: avoid; }
-    .field-row--wide { grid-column: 1 / -1; }
-    .field-row dt { margin: 0; padding: 2mm; background: #f2f4f0; font-weight: 700; }
-    .field-row dd { margin: 0; padding: 2mm; white-space: normal; overflow-wrap: anywhere; }
+    .status-box strong { display: block; font-size: 11.5pt; }
+    .identity-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); border: .3mm solid #697b7d; margin-bottom: 3mm; }
+    .identity-grid div { min-height: 15mm; padding: 2mm 2.5mm; border-right: .2mm solid #aeb9b7; border-bottom: .2mm solid #aeb9b7; }
+    .identity-grid div:nth-child(even) { border-right: 0; }
+    .identity-grid div:nth-last-child(-n + 2) { border-bottom: 0; }
+    .identity-grid span { display: block; font-size: 8pt; color: #52686b; font-weight: 700; }
+    .identity-grid strong { display: block; margin-top: .8mm; font-size: 10.5pt; overflow-wrap: anywhere; }
+    .certificate-grid { margin-top: -1mm; }
+    .document-section { margin: 0 0 4mm; }
+    .document-section h2 { position: relative; z-index: 1; display: block; line-height: 1.35; break-after: avoid-page; }
+    .field-table { width: 100%; border: .3mm solid #aab5b3; border-collapse: collapse; table-layout: fixed; }
+    .field-table tr { break-inside: avoid; }
+    .field-table th, .field-table td { border: .2mm solid #c5cecc; padding: 2.2mm; vertical-align: top; overflow-wrap: anywhere; }
+    .field-table .field-table-title { padding: 0; border: 0; background: #e7eeea; }
+    .field-table .field-table-title h2 { margin: 0; padding: 2mm 3mm; border-left: 1.2mm solid #a85d3b; text-align: left; }
+    .field-table th { width: 12%; background: #f2f4f0; font-size: 9pt; font-weight: 700; text-align: left; }
+    .field-table td { width: 38%; }
     .record-table { width: 100%; border-collapse: collapse; table-layout: fixed; }
     .record-table th, .record-table td { border: .25mm solid #7f8c8a; padding: 1.5mm; vertical-align: top; overflow-wrap: anywhere; }
     .record-table th { background: #e7eeea; font-size: 8pt; }
@@ -161,18 +177,21 @@ function commonCss(orientation) {
     .subtle, .empty { color: #647476; font-size: 8pt; }
     .schedule-block { margin: 0 2mm 3mm; break-inside: avoid; }
     .page-break-before { break-before: page; }
-    .draft-watermark { position: fixed; inset: 36% 5% auto; transform: rotate(-18deg); text-align: center; font-size: 30pt; font-weight: 800; letter-spacing: .12em; color: rgba(166, 77, 49, .13); border: 2mm solid rgba(166, 77, 49, .10); z-index: 999; pointer-events: none; }
     .official-mark { color: #315e4c; }
   `;
 }
 
-export function buildDocumentHtml({ source, snapshotKind, title, subtitle, orientation, bodyHtml }) {
+export function buildDocumentHtml({ source, snapshotKind, title, subtitle, orientation, bodyHtml, plainHeading = false }) {
   const document = source.document;
   const child = source.child;
   const guardian = source.guardian;
   const isDraft = snapshotKind === "draft";
-  const variantLabel = isDraft ? "下書き" : snapshotKind === "corrected" ? "訂正版" : "正式版";
-  const headingLabel = `${title} / 第${Number(document.version_number)}版 / ${variantLabel}`;
+  const usePlainHeading = plainHeading || document.document_kind === "basic_assessment";
+  const variantLabel = snapshotKind === "corrected" ? "訂正版" : "正式版";
+  const plainStatus = !isDraft && document.document_kind !== "basic_assessment"
+    ? `<p class="document-heading-status">${escapeHtml(variantLabel)} / ${escapeHtml(STATUS_LABELS[document.status] || document.status)}</p>`
+    : "";
+  const headingLabel = usePlainHeading ? title : `${title} / 第${Number(document.version_number)}版`;
   const childIdentifier = child.management_code || child.id;
   const certificateNumber = child.recipient_certificate_number
     || (child.recipient_certificate_last4 ? `••••${child.recipient_certificate_last4}` : null);
@@ -181,23 +200,30 @@ export function buildDocumentHtml({ source, snapshotKind, title, subtitle, orien
     : `${Number(child.copayment_limit_yen).toLocaleString("ja-JP")}円`;
   const consent = source.consent || {};
   const distribution = source.distribution || {};
-  const formalizationHtml = renderSection("承認・説明・同意・交付の記録", [
+  // 画面から確認する編集用PDFには、まだ実施していない正式工程の欄を混在させない。
+  // 正式交付の帳票だけは、将来の交付記録として必要な場合に残せる。
+  const formalizationHtml = !isDraft && document.document_kind !== "basic_assessment" ? renderSection("承認・説明・同意・交付の記録", [
     ["承認者 / 承認日", `${formatValue(source.approval?.approved_by_name)} / ${formatDate(source.approval?.approved_at)}`],
     ["説明方法 / 説明日", `${formatValue(consent.explanation_method)} / ${formatDate(consent.explained_at)}`],
     ["同意者（続柄） / 同意日", `${formatValue(consent.signer_name)}（${formatValue(consent.signer_relationship)}） / ${formatDate(consent.consented_at)}`],
     ["交付先 / 方法 / 交付日", `${formatValue(distribution.recipient_name)} / ${formatValue(distribution.delivery_method)} / ${formatDate(distribution.distributed_at)}`],
-  ]);
+  ]) : "";
   return `<!doctype html>
   <html lang="ja" data-document-kind="${escapeHtml(document.document_kind)}" data-orientation="${orientation}">
   <head><meta charset="utf-8"><title>${escapeHtml(headingLabel)}</title><style>${commonCss(orientation)}</style></head>
   <body>
-    <div class="running-header"><span>${escapeHtml(headingLabel)}</span><span>${escapeHtml(source.organization?.name || "")} / ${escapeHtml(source.facility?.name || "")}</span></div>
-    <div class="running-footer"><span>機密情報・取扱注意</span><span>ページ <span class="page-number"></span></span></div>
-    ${isDraft ? '<div class="draft-watermark">下書き・正式帳票ではありません</div>' : ""}
+    ${usePlainHeading ? "" : `<div class="running-header"><span>${escapeHtml(headingLabel)}</span><span>${escapeHtml(source.organization?.name || "")} / ${escapeHtml(source.facility?.name || "")}</span></div>
+    <div class="running-footer"><span>機密情報・取扱注意</span><span>ページ <span class="page-number"></span></span></div>`}
     <main>
-      <header class="document-heading">
-        <div><div class="eyebrow">MICHI-NOTE / ${escapeHtml(subtitle)}</div><h1>${escapeHtml(title)}</h1></div>
-        <div class="status-box"><span>${escapeHtml(variantLabel)}</span><strong class="${isDraft ? "" : "official-mark"}">${escapeHtml(STATUS_LABELS[document.status] || document.status)}</strong><span>第${Number(document.version_number)}版・帳票 ${escapeHtml(document.template_version)}</span></div>
+      <header class="document-heading${usePlainHeading ? " document-heading--plain" : ""}">
+        ${usePlainHeading
+          ? `<h1>${escapeHtml(title)}</h1>${plainStatus}`
+          : `<div><div class="eyebrow">MICHI-NOTE / ${escapeHtml(subtitle)}</div><h1>${escapeHtml(title)}</h1></div>
+        <div class="status-box">${isDraft
+          ? `<strong>第${Number(document.version_number)}版</strong>`
+          : `<span>${escapeHtml(variantLabel)}</span><strong class="official-mark">${escapeHtml(STATUS_LABELS[document.status] || document.status)}</strong><span>第${Number(document.version_number)}版</span>`
+        }</div>`
+        }
       </header>
       <section class="identity-grid" aria-label="利用児と計画の基本情報">
         <div><span>利用児氏名（識別コード）</span><strong>${escapeHtml(child.legal_name || child.display_name)}（${escapeHtml(childIdentifier)}）</strong></div>
