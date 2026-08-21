@@ -11,7 +11,7 @@
       content="相談支援計画から日々の記録、個別支援計画までを安全につなぐ放課後等デイサービス向け業務システム"
     >
     <link rel="stylesheet" href="/styles/saas.css">
-    <script type="module" src="/src/saas-app.js"></script>
+    <script type="module" src="/src/saas-app.js?v=20260821-journal-contact"></script>
   </head>
   <body>
     <a class="skip-link" href="#main-content">本文へ移動</a>
@@ -282,7 +282,7 @@
         <div id="contact-error" class="form-error" role="alert" hidden></div>
         <div class="field-grid">
           <label class="field"><span>日付 <em>必須</em></span><input name="entryDate" type="date" required></label>
-          <label class="field field-wide"><span>家庭からの連絡</span><textarea name="familyMessage" maxlength="4000" rows="4"></textarea></label>
+          <label id="contact-family-message-field" class="field field-wide" hidden><span>家庭からの連絡</span><textarea name="familyMessage" maxlength="4000" rows="4"></textarea></label>
           <div class="field field-wide journal-writing-field">
             <label for="contact-facility-reply"><span>事業所からの返信</span></label><textarea id="contact-facility-reply" name="facilityReply" maxlength="4000" rows="4"></textarea>
             <div class="journal-writing-tools"><label>目標文字数 <select data-contact-reply-length aria-describedby="contact-reply-count"><option value="100">100字</option><option value="200" selected>200字</option><option value="300">300字</option><option value="400">400字</option></select></label><output id="contact-reply-count" class="journal-character-count" aria-live="polite"></output><button id="expand-contact-draft" class="button button-quiet" type="button" title="入力内容をもとに、目標文字数を目安に返信文を整えます">返信文を整える</button></div>

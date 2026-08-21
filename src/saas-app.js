@@ -1924,7 +1924,9 @@ async function submitJournal(event) {
     await loadActiveResource();
     state.conflictReload = null;
     state.conflictResumeDialog = null;
-    announce(journalId ? "日誌を変更しました。" : "日誌を保存しました。");
+    if (journalId) return announce("日誌を変更しました。");
+    announce("日誌を保存しました。連絡帳の下書きを作成しています。");
+    await openContactDraftFromJournal($("#main-content"), savedJournal || body);
   } catch (error) {
     if (error.status !== 409) showFormError(form, errorContainer, errorMessage(error), []);
   }
@@ -1983,25 +1985,53 @@ async function saveJournalDraft() {
   }
 }
 
-function openContactDialog(trigger, entry = null) {
+function journalContactSourceText(journal) {
+  const sentences = [
+    journal.activity ? `本日は${journal.activity}を行いました` : "",
+    journal.observation,
+    journal.supportProvided,
+    journal.childResponse,
+    journal.healthNote ? `健康面では${journal.healthNote}` : "",
+  ]
+    .map((value) => completeJapaneseSentence(String(value || "").trim()))
+    .filter(Boolean);
+  return sentences.join("\n");
+}
+
+async function openContactDraftFromJournal(trigger, journal) {
+  openContactDialog(trigger, null, journal);
+  const button = $("#expand-contact-draft");
+  if (button && $("#contact-form").elements.facilityReply.value.trim()) await generateContactDraft(button);
+}
+
+function openContactDialog(trigger, entry = null, sourceJournal = null) {
   if (!state.selectedChild) return announce("先に利用児を選択してください。");
   const form = $("#contact-form");
+  const journalBased = sourceJournal !== null;
   form.reset();
   form.dataset.contactEntryId = entry?.id || "";
   form.dataset.contactRowVersion = entry?.rowVersion || "";
+  form.dataset.contactSource = journalBased ? "journal" : "";
+  $("#contact-family-message-field").hidden = journalBased;
   if (entry) {
     form.elements.entryDate.value = entry.entryDate || "";
     form.elements.familyMessage.value = entry.familyMessage || "";
     form.elements.facilityReply.value = entry.facilityReply || "";
     form.elements.requestSummary.value = entry.requestSummary || "";
     form.elements.reflectedInSupport.checked = Boolean(entry.reflectedInSupport);
+  } else if (journalBased) {
+    form.elements.entryDate.value = String(sourceJournal.occurredAt || "").slice(0, 10);
+    form.elements.facilityReply.value = journalContactSourceText(sourceJournal);
   } else {
     const today = new Date();
     today.setMinutes(today.getMinutes() - today.getTimezoneOffset());
     form.elements.entryDate.value = today.toISOString().slice(0, 10);
   }
-  $("#contact-form-title").textContent = entry ? "連絡帳を編集" : "連絡を登録";
-  $("#save-contact-button").textContent = entry ? "変更を保存" : "連絡を保存";
+  $("#contact-form-title").textContent = entry ? "連絡帳を編集" : journalBased ? "連絡帳を確認" : "連絡を登録";
+  $("#contact-form-description").textContent = journalBased
+    ? "同じ日の日誌をもとに、事業所からの連絡を作成しました。家庭からの連絡は不要です。内容を確認してから保存してください。"
+    : "家庭からの要望を支援に反映した場合は、その旨も残します。";
+  $("#save-contact-button").textContent = entry ? "変更を保存" : journalBased ? "連絡帳を保存" : "連絡を保存";
   updateContactReplyCharacterCount(form);
   clearFormError(form, $("#contact-error"));
   openDialog($("#contact-dialog"), trigger);
@@ -2022,7 +2052,8 @@ function updateContactReplyCharacterCount(form = $("#contact-form")) {
 
 async function generateContactDraft(button) {
   const form = $("#contact-form");
-  const familyMessage = form.elements.familyMessage.value.trim();
+  const journalBased = form.dataset.contactSource === "journal";
+  const familyMessage = journalBased ? "" : form.elements.familyMessage.value.trim();
   const requestSummary = form.elements.requestSummary.value.trim();
   const facilityReply = form.elements.facilityReply.value.trim();
   const reflectedInSupport = form.elements.reflectedInSupport.checked;
@@ -2057,10 +2088,14 @@ async function submitContact(event) {
   const errorContainer = $("#contact-error");
   if (!validateForm(form, errorContainer)) return;
   const values = new FormData(form);
-  const familyMessage = values.get("familyMessage").trim();
+  const journalBased = form.dataset.contactSource === "journal";
+  const familyMessage = journalBased ? "" : values.get("familyMessage").trim();
   const facilityReply = values.get("facilityReply").trim();
   if (!familyMessage && !facilityReply) {
-    showFormError(form, errorContainer, "「家庭からの連絡」または「事業所からの返信」のどちらかを入力してください。", ["familyMessage", "facilityReply"]);
+    const message = journalBased
+      ? "日誌をもとにした事業所からの連絡を入力してください。"
+      : "「家庭からの連絡」または「事業所からの返信」のどちらかを入力してください。";
+    showFormError(form, errorContainer, message, journalBased ? ["facilityReply"] : ["familyMessage", "facilityReply"]);
     return;
   }
   const body = {
