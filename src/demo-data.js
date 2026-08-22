@@ -589,3 +589,80 @@ export function cloneDemoData(studentId = "demo-a") {
         })
   };
 }
+
+const DEMO_CHILDREN = [
+  DEMO_PROFILE,
+  {
+    ...DEMO_PROFILE,
+    id: "demo-b",
+    displayName: "Bさん",
+    legalName: "Bさん（仮名）",
+    grade: "小学2年生",
+    ageLabel: "7歳（デモ）",
+    birthDate: "2018-02-11",
+    recipientNumber: "DEMO-0002",
+    guardianName: "保護者B（仮名）",
+    interests: ["電車の図鑑", "音楽あそび", "ミニカー"],
+    strengths: ["好きなものをきっかけに、活動へ気持ちを向けられる", "写真や実物があると、次の行動を選びやすい", "安心できる大人とのやり取りを楽しめる"],
+    personWish: "電車や音楽の活動を楽しみたい。困ったときに先生へ伝えたい。",
+    familyWish: "予定が変わるときも安心して過ごせる方法を増やしたい。家でも気持ちを伝える場面を増やしたい。"
+  },
+  {
+    ...DEMO_PROFILE,
+    id: "demo-c",
+    displayName: "Cさん",
+    legalName: "Cさん（仮名）",
+    grade: "小学6年生",
+    ageLabel: "11歳（デモ）",
+    birthDate: "2014-06-23",
+    recipientNumber: "DEMO-0003",
+    guardianName: "保護者C（仮名）",
+    interests: ["イラスト", "料理", "ボードゲーム"],
+    strengths: ["興味のある活動では集中して取り組める", "自分なりの考えを丁寧に伝えようとする", "役割が明確だと集団にも参加しやすい"],
+    personWish: "好きなことを活かして、友達と一緒に活動したい。自分で予定を決めたい。",
+    familyWish: "中学校進学に向けて、生活の見通しを自分で持つ機会を増やしたい。"
+  },
+  {
+    ...DEMO_PROFILE,
+    id: "demo-d",
+    displayName: "Dさん",
+    legalName: "Dさん（仮名）",
+    grade: "小学3年生",
+    ageLabel: "8歳（デモ）",
+    birthDate: "2017-09-04",
+    recipientNumber: "DEMO-0004",
+    guardianName: "保護者D（仮名）",
+    interests: ["ダンス", "動物の本", "鬼ごっこ"],
+    strengths: ["体を動かす活動で意欲を発揮できる", "好きな話題では自分から関わろうとする", "繰り返しの手順を覚えて試せる"],
+    personWish: "友達と体を動かして遊びたい。休みたいときに自分から言いたい。",
+    familyWish: "疲れたときに無理をせず、気持ちを整える方法を一緒に見つけたい。"
+  }
+];
+
+const VARIANT_ACTIVITIES = {
+  "demo-b": ["電車の図鑑", "リズムあそび", "ミニカーの道づくり", "音楽ゲーム"],
+  "demo-c": ["ボードゲーム", "調理活動", "イラスト制作", "役割ミーティング"],
+  "demo-d": ["リズム運動", "動物クイズ", "サーキット遊び", "鬼ごっこ"],
+  "demo-a": []
+};
+
+function journalsForChild(profile) {
+  if (profile.id === "demo-a") return structuredClone(DEMO_JOURNALS);
+  const activities = VARIANT_ACTIVITIES[profile.id];
+  return DEMO_JOURNALS.map((journal, index) => ({
+    ...structuredClone(journal),
+    id: journal.id.replace("J-", `J-${profile.id.slice(-1).toUpperCase()}-`),
+    activity: activities[index % activities.length],
+    observation: `${profile.displayName}は${journal.observation}`,
+    support: journal.support,
+    response: `${profile.displayName}は${journal.response}`,
+    familyNote: journal.familyNote ? `${profile.displayName}について、${journal.familyNote}` : ""
+  }));
+}
+
+export function cloneDemoCases() {
+  return DEMO_CHILDREN.map((profile) => ({
+    profile: structuredClone(profile),
+    journals: journalsForChild(profile)
+  }));
+}

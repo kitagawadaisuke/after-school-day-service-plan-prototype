@@ -1,9 +1,21 @@
-# 参考資料には実在者の個人情報が含まれるため、リポジトリへ含めない。
+# 共有資料には実在者の個人情報が含まれるため、リポジトリへ含めない。
 /*.jpg
+**/*.jpg
+**/*.jpeg
+**/*.heic
+**/*.pem
+.env
+.env.*
+!.env.example
+private-materials/
+docs/private/
 
 # ローカル環境・テスト生成物
 .DS_Store
 node_modules/
 playwright-report/
 test-results/
+tmp/
+materials/rendered/
+materials/rendered-v2/
 *.log
