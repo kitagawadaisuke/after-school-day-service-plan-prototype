@@ -1,0 +1,25 @@
+<!doctype html>
+<html lang="ja">
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <meta name="robots" content="noindex,nofollow">
+    <title>みちのーと｜新規登録</title>
+    <link rel="stylesheet" href="styles/saas.css">
+  </head>
+  <body class="login-page">
+    <main class="login-card" aria-labelledby="signup-title">
+      <p class="eyebrow">みちのーと</p>
+      <h1 id="signup-title">新規登録</h1>
+      <p id="signup-description">お名前とメールアドレスを入力すると、パスワード設定用のメールをお送りします。</p>
+      <form id="local-signup-form" novalidate>
+        <label>お名前<input name="displayName" type="text" autocomplete="name" maxlength="100" required aria-describedby="signup-error"></label>
+        <label>メールアドレス<input name="email" type="email" autocomplete="email" maxlength="320" required aria-describedby="signup-error"></label>
+        <p id="signup-error" role="alert" aria-live="assertive" hidden></p>
+        <button type="submit">登録用メールを送る</button>
+      </form>
+      <p><a href="/login.html">ログインへ戻る</a></p>
+    </main>
+    <script type="module" src="src/local-signup.js"></script>
+  </body>
+</html>

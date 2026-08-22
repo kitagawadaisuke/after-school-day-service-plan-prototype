@@ -1,0 +1,636 @@
+{
+  "AWSTemplateFormatVersion": "2010-09-09",
+  "Description": "Michi-note production platform in ap-northeast-3: private ECS Fargate, ALB/ACM/WAF, Multi-AZ RDS PostgreSQL, Cognito, S3/KMS, backup and monitoring.",
+  "Metadata": {"Owner":"michi-note","DataClassification":"special-care-required-personal-information","RecoveryObjectives":{"RPO":"15 minutes","RTO":"4 hours"}},
+  "Parameters": {
+    "DeploymentRegion": {"Type":"String","Default":"ap-northeast-3","AllowedValues":["ap-northeast-3"],"Description":"Guard parameter. Deploy this stack in Asia Pacific (Osaka)."},
+    "Environment": {"Type":"String","Default":"production","AllowedValues":["staging","production"]},
+    "VpcCidr": {"Type":"String","Default":"10.80.0.0/16","AllowedPattern":"^(10|172\\.(1[6-9]|2[0-9]|3[0-1])|192\\.168)\\.[0-9]{1,3}\\.[0-9]{1,3}/(1[6-9]|2[0-8])$"},
+    "PublicSubnetACidr": {"Type":"String","Default":"10.80.0.0/24"},
+    "PublicSubnetBCidr": {"Type":"String","Default":"10.80.1.0/24"},
+    "ApplicationSubnetACidr": {"Type":"String","Default":"10.80.16.0/20"},
+    "ApplicationSubnetBCidr": {"Type":"String","Default":"10.80.32.0/20"},
+    "DatabaseSubnetACidr": {"Type":"String","Default":"10.80.48.0/24"},
+    "DatabaseSubnetBCidr": {"Type":"String","Default":"10.80.49.0/24"},
+    "ContainerImage": {"Type":"String","Description":"Immutable application image URI including a digest (recommended) or release tag."},
+    "ContainerPort": {"Type":"Number","Default":8015,"MinValue":1024,"MaxValue":65535},
+    "TaskCpu": {"Type":"String","Default":"512","AllowedValues":["256","512","1024","2048"]},
+    "TaskMemory": {"Type":"String","Default":"1024","AllowedValues":["512","1024","2048","3072","4096"]},
+    "TaskCpuArchitecture": {"Type":"String","Default":"ARM64","AllowedValues":["ARM64","X86_64"]},
+    "DesiredTaskCount": {"Type":"Number","Default":2,"MinValue":2,"MaxValue":20},
+    "DatabaseBootstrapMode": {"Type":"String","Default":"disabled","AllowedValues":["disabled","enabled"],"Description":"Set enabled only for initial DB bootstrap; web desired/minimum task counts become zero until migration succeeds."},
+    "MaximumTaskCount": {"Type":"Number","Default":8,"MinValue":2,"MaxValue":50},
+    "DatabaseName": {"Type":"String","Default":"michinote","AllowedPattern":"^[a-z][a-z0-9_]{0,62}$"},
+    "DatabaseMasterUsername": {"Type":"String","Default":"michinote_admin","MaxLength":16,"AllowedPattern":"^[a-zA-Z][a-zA-Z0-9_]{0,62}$"},
+    "DatabaseInstanceClass": {"Type":"String","Default":"db.t4g.medium","AllowedPattern":"^db\\.[a-z0-9.]+$"},
+    "DatabaseEngineVersion": {"Type":"String","Default":"16.8","AllowedPattern":"^16\\.[0-9]+$","Description":"PostgreSQL 16 minor version available in ap-northeast-3. Confirm availability before each deployment."},
+    "DatabaseAllocatedStorageGiB": {"Type":"Number","Default":100,"MinValue":20,"MaxValue":16384},
+    "DatabaseMaxAllocatedStorageGiB": {"Type":"Number","Default":500,"MinValue":100,"MaxValue":65536},
+    "DatabaseBackupRetentionDays": {"Type":"Number","Default":35,"MinValue":7,"MaxValue":35},
+    "DomainName": {"Type":"String","Description":"Public HTTPS host, for example app.example.jp.","AllowedPattern":"^(?=.{1,253}$)([a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?\\.)+[a-z]{2,63}$"},
+    "HostedZoneId": {"Type":"AWS::Route53::HostedZone::Id","Description":"Route 53 public hosted zone that contains DomainName."},
+    "CognitoDomainPrefix": {"Type":"String","Description":"Globally unique lower-case Cognito managed-login domain prefix.","AllowedPattern":"^[a-z0-9][a-z0-9-]{1,61}[a-z0-9]$"},
+    "CognitoCallbackUrl": {"Type":"String","Description":"BFF OAuth callback, for example https://app.example.jp/auth/callback.","AllowedPattern":"^https://.+$"},
+    "CognitoLogoutUrl": {"Type":"String","Description":"Post-logout URL.","AllowedPattern":"^https://.+$"},
+    "LogRetentionDays": {"Type":"Number","Default":365,"AllowedValues":[30,90,180,365,400,545,731,1827,3653]},
+    "WafRateLimitPerFiveMinutes": {"Type":"Number","Default":2000,"MinValue":100,"MaxValue":20000000},
+    "AlarmEmail": {"Type":"String","AllowedPattern":"^[^@\\s]+@[^@\\s]+\\.[^@\\s]+$","Description":"Required operational alert address. The recipient must confirm the SNS subscription before production launch."}
+  },
+  "Rules": {
+    "OsakaRegionOnly": {"Assertions":[{"Assert":{"Fn::Equals":[{"Ref":"DeploymentRegion"},{"Ref":"AWS::Region"}]},"AssertDescription":"DeploymentRegion and the active AWS Region must both be ap-northeast-3."}]},
+    "SupportedFargateTaskSize": {
+      "Assertions": [
+        {
+          "Assert": {
+            "Fn::Or": [
+              {"Fn::And":[{"Fn::Equals":[{"Ref":"TaskCpu"},"256"]},{"Fn::Contains":[["512","1024","2048"],{"Ref":"TaskMemory"}]}]},
+              {"Fn::And":[{"Fn::Equals":[{"Ref":"TaskCpu"},"512"]},{"Fn::Contains":[["1024","2048","3072","4096"],{"Ref":"TaskMemory"}]}]},
+              {"Fn::And":[{"Fn::Equals":[{"Ref":"TaskCpu"},"1024"]},{"Fn::Contains":[["2048","3072","4096"],{"Ref":"TaskMemory"}]}]},
+              {"Fn::And":[{"Fn::Equals":[{"Ref":"TaskCpu"},"2048"]},{"Fn::Equals":[{"Ref":"TaskMemory"},"4096"]}]}
+            ]
+          },
+          "AssertDescription": "TaskCpu and TaskMemory must be a supported AWS Fargate combination."
+        }
+      ]
+    }
+  },
+  "Conditions": {"IsProduction":{"Fn::Equals":[{"Ref":"Environment"},"production"]},"IsDatabaseBootstrap":{"Fn::Equals":[{"Ref":"DatabaseBootstrapMode"},"enabled"]}},
+  "Resources": {
+    "Vpc": {"Type":"AWS::EC2::VPC","Properties":{"CidrBlock":{"Ref":"VpcCidr"},"EnableDnsHostnames":true,"EnableDnsSupport":true,"InstanceTenancy":"default","Tags":[{"Key":"Name","Value":{"Fn::Sub":"${AWS::StackName}-vpc"}}]}},
+    "InternetGateway": {"Type":"AWS::EC2::InternetGateway"},
+    "InternetGatewayAttachment": {"Type":"AWS::EC2::VPCGatewayAttachment","Properties":{"InternetGatewayId":{"Ref":"InternetGateway"},"VpcId":{"Ref":"Vpc"}}},
+    "PublicSubnetA": {"Type":"AWS::EC2::Subnet","Properties":{"AvailabilityZone":{"Fn::Select":[0,{"Fn::GetAZs":""}]},"CidrBlock":{"Ref":"PublicSubnetACidr"},"MapPublicIpOnLaunch":false,"VpcId":{"Ref":"Vpc"},"Tags":[{"Key":"Name","Value":{"Fn::Sub":"${AWS::StackName}-public-a"}}]}},
+    "PublicSubnetB": {"Type":"AWS::EC2::Subnet","Properties":{"AvailabilityZone":{"Fn::Select":[1,{"Fn::GetAZs":""}]},"CidrBlock":{"Ref":"PublicSubnetBCidr"},"MapPublicIpOnLaunch":false,"VpcId":{"Ref":"Vpc"},"Tags":[{"Key":"Name","Value":{"Fn::Sub":"${AWS::StackName}-public-b"}}]}},
+    "ApplicationSubnetA": {"Type":"AWS::EC2::Subnet","Properties":{"AvailabilityZone":{"Fn::Select":[0,{"Fn::GetAZs":""}]},"CidrBlock":{"Ref":"ApplicationSubnetACidr"},"MapPublicIpOnLaunch":false,"VpcId":{"Ref":"Vpc"},"Tags":[{"Key":"Name","Value":{"Fn::Sub":"${AWS::StackName}-app-a"}}]}},
+    "ApplicationSubnetB": {"Type":"AWS::EC2::Subnet","Properties":{"AvailabilityZone":{"Fn::Select":[1,{"Fn::GetAZs":""}]},"CidrBlock":{"Ref":"ApplicationSubnetBCidr"},"MapPublicIpOnLaunch":false,"VpcId":{"Ref":"Vpc"},"Tags":[{"Key":"Name","Value":{"Fn::Sub":"${AWS::StackName}-app-b"}}]}},
+    "DatabaseSubnetA": {"Type":"AWS::EC2::Subnet","Properties":{"AvailabilityZone":{"Fn::Select":[0,{"Fn::GetAZs":""}]},"CidrBlock":{"Ref":"DatabaseSubnetACidr"},"MapPublicIpOnLaunch":false,"VpcId":{"Ref":"Vpc"},"Tags":[{"Key":"Name","Value":{"Fn::Sub":"${AWS::StackName}-db-a"}}]}},
+    "DatabaseSubnetB": {"Type":"AWS::EC2::Subnet","Properties":{"AvailabilityZone":{"Fn::Select":[1,{"Fn::GetAZs":""}]},"CidrBlock":{"Ref":"DatabaseSubnetBCidr"},"MapPublicIpOnLaunch":false,"VpcId":{"Ref":"Vpc"},"Tags":[{"Key":"Name","Value":{"Fn::Sub":"${AWS::StackName}-db-b"}}]}},
+    "NatEipA": {"Type":"AWS::EC2::EIP","DependsOn":"InternetGatewayAttachment","Properties":{"Domain":"vpc"}},
+    "NatEipB": {"Type":"AWS::EC2::EIP","DependsOn":"InternetGatewayAttachment","Properties":{"Domain":"vpc"}},
+    "NatGatewayA": {"Type":"AWS::EC2::NatGateway","Properties":{"AllocationId":{"Fn::GetAtt":["NatEipA","AllocationId"]},"SubnetId":{"Ref":"PublicSubnetA"}}},
+    "NatGatewayB": {"Type":"AWS::EC2::NatGateway","Properties":{"AllocationId":{"Fn::GetAtt":["NatEipB","AllocationId"]},"SubnetId":{"Ref":"PublicSubnetB"}}},
+    "PublicRouteTable": {"Type":"AWS::EC2::RouteTable","Properties":{"VpcId":{"Ref":"Vpc"}}},
+    "PublicDefaultRoute": {"Type":"AWS::EC2::Route","DependsOn":"InternetGatewayAttachment","Properties":{"DestinationCidrBlock":"0.0.0.0/0","GatewayId":{"Ref":"InternetGateway"},"RouteTableId":{"Ref":"PublicRouteTable"}}},
+    "PublicSubnetARouteTableAssociation": {"Type":"AWS::EC2::SubnetRouteTableAssociation","Properties":{"RouteTableId":{"Ref":"PublicRouteTable"},"SubnetId":{"Ref":"PublicSubnetA"}}},
+    "PublicSubnetBRouteTableAssociation": {"Type":"AWS::EC2::SubnetRouteTableAssociation","Properties":{"RouteTableId":{"Ref":"PublicRouteTable"},"SubnetId":{"Ref":"PublicSubnetB"}}},
+    "ApplicationRouteTableA": {"Type":"AWS::EC2::RouteTable","Properties":{"VpcId":{"Ref":"Vpc"}}},
+    "ApplicationRouteTableB": {"Type":"AWS::EC2::RouteTable","Properties":{"VpcId":{"Ref":"Vpc"}}},
+    "ApplicationDefaultRouteA": {"Type":"AWS::EC2::Route","Properties":{"DestinationCidrBlock":"0.0.0.0/0","NatGatewayId":{"Ref":"NatGatewayA"},"RouteTableId":{"Ref":"ApplicationRouteTableA"}}},
+    "ApplicationDefaultRouteB": {"Type":"AWS::EC2::Route","Properties":{"DestinationCidrBlock":"0.0.0.0/0","NatGatewayId":{"Ref":"NatGatewayB"},"RouteTableId":{"Ref":"ApplicationRouteTableB"}}},
+    "ApplicationSubnetARouteTableAssociation": {"Type":"AWS::EC2::SubnetRouteTableAssociation","Properties":{"RouteTableId":{"Ref":"ApplicationRouteTableA"},"SubnetId":{"Ref":"ApplicationSubnetA"}}},
+    "ApplicationSubnetBRouteTableAssociation": {"Type":"AWS::EC2::SubnetRouteTableAssociation","Properties":{"RouteTableId":{"Ref":"ApplicationRouteTableB"},"SubnetId":{"Ref":"ApplicationSubnetB"}}},
+    "DatabaseRouteTable": {"Type":"AWS::EC2::RouteTable","Properties":{"VpcId":{"Ref":"Vpc"}}},
+    "DatabaseSubnetARouteTableAssociation": {"Type":"AWS::EC2::SubnetRouteTableAssociation","Properties":{"RouteTableId":{"Ref":"DatabaseRouteTable"},"SubnetId":{"Ref":"DatabaseSubnetA"}}},
+    "DatabaseSubnetBRouteTableAssociation": {"Type":"AWS::EC2::SubnetRouteTableAssociation","Properties":{"RouteTableId":{"Ref":"DatabaseRouteTable"},"SubnetId":{"Ref":"DatabaseSubnetB"}}},
+    "S3VpcEndpoint": {"Type":"AWS::EC2::VPCEndpoint","Properties":{"ServiceName":{"Fn::Sub":"com.amazonaws.${AWS::Region}.s3"},"VpcEndpointType":"Gateway","VpcId":{"Ref":"Vpc"},"RouteTableIds":[{"Ref":"ApplicationRouteTableA"},{"Ref":"ApplicationRouteTableB"}]}},
+    "LoadBalancerSecurityGroup": {"Type":"AWS::EC2::SecurityGroup","Properties":{"GroupDescription":"Public HTTPS ingress to the application load balancer","SecurityGroupEgress":[{"IpProtocol":"-1","CidrIp":"127.0.0.1/32","Description":"Placeholder that prevents the default allow-all egress rule"}],"VpcId":{"Ref":"Vpc"}}},
+    "ApplicationSecurityGroup": {
+      "Type": "AWS::EC2::SecurityGroup",
+      "Properties": {
+        "GroupDescription": "Private ECS tasks; ingress only from the load balancer",
+        "SecurityGroupEgress": [{"IpProtocol":"tcp","FromPort":443,"ToPort":443,"CidrIp":"0.0.0.0/0","Description":"AWS APIs through NAT or VPC endpoints"},{"IpProtocol":"udp","FromPort":53,"ToPort":53,"CidrIp":{"Ref":"VpcCidr"},"Description":"VPC DNS"},{"IpProtocol":"tcp","FromPort":53,"ToPort":53,"CidrIp":{"Ref":"VpcCidr"},"Description":"VPC DNS fallback"}],
+        "VpcId": {"Ref":"Vpc"}
+      }
+    },
+    "DatabaseSecurityGroup": {"Type":"AWS::EC2::SecurityGroup","Properties":{"GroupDescription":"RDS PostgreSQL; ingress only from ECS tasks","SecurityGroupEgress":[{"IpProtocol":"-1","CidrIp":"127.0.0.1/32","Description":"Placeholder that prevents the default allow-all egress rule"}],"VpcId":{"Ref":"Vpc"}}},
+    "LoadBalancerHttpsIngress": {"Type":"AWS::EC2::SecurityGroupIngress","Properties":{"GroupId":{"Ref":"LoadBalancerSecurityGroup"},"IpProtocol":"tcp","FromPort":443,"ToPort":443,"CidrIp":"0.0.0.0/0","Description":"Public HTTPS"}},
+    "LoadBalancerHttpIngress": {"Type":"AWS::EC2::SecurityGroupIngress","Properties":{"GroupId":{"Ref":"LoadBalancerSecurityGroup"},"IpProtocol":"tcp","FromPort":80,"ToPort":80,"CidrIp":"0.0.0.0/0","Description":"Public HTTP redirect only"}},
+    "LoadBalancerToApplicationEgress": {"Type":"AWS::EC2::SecurityGroupEgress","Properties":{"GroupId":{"Ref":"LoadBalancerSecurityGroup"},"IpProtocol":"tcp","FromPort":{"Ref":"ContainerPort"},"ToPort":{"Ref":"ContainerPort"},"DestinationSecurityGroupId":{"Ref":"ApplicationSecurityGroup"},"Description":"Application target port"}},
+    "ApplicationFromLoadBalancerIngress": {"Type":"AWS::EC2::SecurityGroupIngress","Properties":{"GroupId":{"Ref":"ApplicationSecurityGroup"},"IpProtocol":"tcp","FromPort":{"Ref":"ContainerPort"},"ToPort":{"Ref":"ContainerPort"},"SourceSecurityGroupId":{"Ref":"LoadBalancerSecurityGroup"},"Description":"Load balancer health checks and traffic"}},
+    "ApplicationToDatabaseEgress": {"Type":"AWS::EC2::SecurityGroupEgress","Properties":{"GroupId":{"Ref":"ApplicationSecurityGroup"},"IpProtocol":"tcp","FromPort":5432,"ToPort":5432,"DestinationSecurityGroupId":{"Ref":"DatabaseSecurityGroup"},"Description":"PostgreSQL TLS"}},
+    "DatabaseFromApplicationIngress": {"Type":"AWS::EC2::SecurityGroupIngress","Properties":{"GroupId":{"Ref":"DatabaseSecurityGroup"},"IpProtocol":"tcp","FromPort":5432,"ToPort":5432,"SourceSecurityGroupId":{"Ref":"ApplicationSecurityGroup"},"Description":"Application runtime only"}},
+    "DataKey": {
+      "Type": "AWS::KMS::Key",
+      "DeletionPolicy": "Retain",
+      "UpdateReplacePolicy": "Retain",
+      "Properties": {
+        "Description": "Customer-managed key for Michi-note production data",
+        "EnableKeyRotation": true,
+        "KeyPolicy": {
+          "Version": "2012-10-17",
+          "Statement": [
+            {"Sid":"AccountAdministrationThroughIAM","Effect":"Allow","Principal":{"AWS":{"Fn::Sub":"arn:${AWS::Partition}:iam::${AWS::AccountId}:root"}},"Action":"kms:*","Resource":"*"},
+            {
+              "Sid": "CloudWatchLogsEncryption",
+              "Effect": "Allow",
+              "Principal": {"Service":{"Fn::Sub":"logs.${AWS::Region}.amazonaws.com"}},
+              "Action": ["kms:Encrypt","kms:Decrypt","kms:ReEncrypt*","kms:GenerateDataKey*","kms:DescribeKey"],
+              "Resource": "*",
+              "Condition": {"ArnLike":{"kms:EncryptionContext:aws:logs:arn":{"Fn::Sub":"arn:${AWS::Partition}:logs:${AWS::Region}:${AWS::AccountId}:log-group:*"}}}
+            }
+          ]
+        },
+        "PendingWindowInDays": 30
+      }
+    },
+    "DataKeyAlias": {"Type":"AWS::KMS::Alias","Properties":{"AliasName":{"Fn::Sub":"alias/${AWS::StackName}-data"},"TargetKeyId":{"Ref":"DataKey"}}},
+    "DocumentBucket": {
+      "Type": "AWS::S3::Bucket",
+      "DeletionPolicy": "Retain",
+      "UpdateReplacePolicy": "Retain",
+      "Properties": {
+        "ObjectLockEnabled": true,
+        "ObjectLockConfiguration": {"ObjectLockEnabled":"Enabled","Rule":{"DefaultRetention":{"Mode":"COMPLIANCE","Days":2555}}},
+        "BucketEncryption": {"ServerSideEncryptionConfiguration":[{"BucketKeyEnabled":true,"ServerSideEncryptionByDefault":{"KMSMasterKeyID":{"Fn::GetAtt":["DataKey","Arn"]},"SSEAlgorithm":"aws:kms"}}]},
+        "LifecycleConfiguration": {"Rules":[{"Id":"AbortIncompleteUploads","Status":"Enabled","AbortIncompleteMultipartUpload":{"DaysAfterInitiation":7}},{"Id":"RetainNoncurrentDocumentVersions","Status":"Enabled","NoncurrentVersionTransitions":[{"StorageClass":"GLACIER","TransitionInDays":90}],"NoncurrentVersionExpiration":{"NoncurrentDays":2555}}]},
+        "OwnershipControls": {"Rules":[{"ObjectOwnership":"BucketOwnerEnforced"}]},
+        "PublicAccessBlockConfiguration": {"BlockPublicAcls":true,"BlockPublicPolicy":true,"IgnorePublicAcls":true,"RestrictPublicBuckets":true},
+        "VersioningConfiguration": {"Status":"Enabled"}
+      }
+    },
+    "DocumentBucketPolicy": {
+      "Type": "AWS::S3::BucketPolicy",
+      "Properties": {
+        "Bucket": {"Ref":"DocumentBucket"},
+        "PolicyDocument": {
+          "Version": "2012-10-17",
+          "Statement": [
+            {"Sid":"DenyInsecureTransport","Effect":"Deny","Principal":"*","Action":"s3:*","Resource":[{"Fn::GetAtt":["DocumentBucket","Arn"]},{"Fn::Sub":"${DocumentBucket.Arn}/*"}],"Condition":{"Bool":{"aws:SecureTransport":"false"}}},
+            {"Sid":"DenyUnencryptedObjectUploads","Effect":"Deny","Principal":"*","Action":"s3:PutObject","Resource":{"Fn::Sub":"${DocumentBucket.Arn}/*"},"Condition":{"StringNotEquals":{"s3:x-amz-server-side-encryption":"aws:kms"}}},
+            {"Sid":"DenyWrongKmsKey","Effect":"Deny","Principal":"*","Action":"s3:PutObject","Resource":{"Fn::Sub":"${DocumentBucket.Arn}/*"},"Condition":{"StringNotEquals":{"s3:x-amz-server-side-encryption-aws-kms-key-id":{"Fn::GetAtt":["DataKey","Arn"]}}}}
+          ]
+        }
+      }
+    },
+    "DatabaseRuntimeSecret": {
+      "Type": "AWS::SecretsManager::Secret",
+      "DeletionPolicy": "Retain",
+      "UpdateReplacePolicy": "Retain",
+      "Properties": {"Description":"Least-privilege PostgreSQL LOGIN configured only by the one-off migration task.","GenerateSecretString":{"ExcludeCharacters":"'\\\"@/\\","GenerateStringKey":"password","PasswordLength":48,"SecretStringTemplate":"{\"username\":\"michinote_runtime\"}"},"KmsKeyId":{"Fn::GetAtt":["DataKey","Arn"]}}
+    },
+    "DatabaseProvisionerSecret": {
+      "Type": "AWS::SecretsManager::Secret",
+      "DeletionPolicy": "Retain",
+      "UpdateReplacePolicy": "Retain",
+      "Properties": {"Description":"Dedicated PostgreSQL LOGIN for the ephemeral initial-tenant onboarding task only.","GenerateSecretString":{"ExcludeCharacters":"'\\\"@/\\","GenerateStringKey":"password","PasswordLength":48,"SecretStringTemplate":"{\"username\":\"michinote_provisioner\"}"},"KmsKeyId":{"Fn::GetAtt":["DataKey","Arn"]}}
+    },
+    "PdfFinalizationSecret": {"Type":"AWS::SecretsManager::Secret","DeletionPolicy":"Retain","UpdateReplacePolicy":"Retain","Properties":{"Description":"Independent key attesting verified PDF uploads before DB finalization","GenerateSecretString":{"ExcludePunctuation":true,"GenerateStringKey":"key","PasswordLength":64,"SecretStringTemplate":"{}"},"KmsKeyId":{"Fn::GetAtt":["DataKey","Arn"]}}},
+    "AuditHashSecret": {
+      "Type": "AWS::SecretsManager::Secret",
+      "DeletionPolicy": "Retain",
+      "UpdateReplacePolicy": "Retain",
+      "Properties": {"Description":"Independent HMAC key used to pseudonymize network identifiers in audit events","GenerateSecretString":{"ExcludePunctuation":true,"GenerateStringKey":"auditHashKey","PasswordLength":64,"SecretStringTemplate":"{}"},"KmsKeyId":{"Fn::GetAtt":["DataKey","Arn"]}}
+    },
+    "SessionSecret": {"Type":"AWS::SecretsManager::Secret","DeletionPolicy":"Retain","UpdateReplacePolicy":"Retain","Properties":{"Description":"BFF session-cookie signing and encryption material","GenerateSecretString":{"ExcludePunctuation":true,"GenerateStringKey":"cookieSecret","PasswordLength":64,"SecretStringTemplate":"{}"},"KmsKeyId":{"Fn::GetAtt":["DataKey","Arn"]}}},
+    "DatabaseSubnetGroup": {"Type":"AWS::RDS::DBSubnetGroup","Properties":{"DBSubnetGroupDescription":"Private database subnets in two Availability Zones","SubnetIds":[{"Ref":"DatabaseSubnetA"},{"Ref":"DatabaseSubnetB"}]}},
+    "DatabaseParameterGroup": {"Type":"AWS::RDS::DBParameterGroup","Properties":{"Description":"Michi-note PostgreSQL security and observability settings","Family":"postgres16","Parameters":{"rds.force_ssl":"1","log_connections":"1","log_disconnections":"1","log_lock_waits":"1","log_min_duration_statement":"1000"}}},
+    "RdsMonitoringRole": {"Type":"AWS::IAM::Role","Properties":{"AssumeRolePolicyDocument":{"Version":"2012-10-17","Statement":[{"Effect":"Allow","Principal":{"Service":"monitoring.rds.amazonaws.com"},"Action":"sts:AssumeRole"}]},"ManagedPolicyArns":[{"Fn::Sub":"arn:${AWS::Partition}:iam::aws:policy/service-role/AmazonRDSEnhancedMonitoringRole"}]}},
+    "Database": {
+      "Type": "AWS::RDS::DBInstance",
+      "DeletionPolicy": "Snapshot",
+      "UpdateReplacePolicy": "Snapshot",
+      "Properties": {
+        "AllocatedStorage": {"Ref":"DatabaseAllocatedStorageGiB"},
+        "AllowMajorVersionUpgrade": false,
+        "AutoMinorVersionUpgrade": true,
+        "BackupRetentionPeriod": {"Ref":"DatabaseBackupRetentionDays"},
+        "CACertificateIdentifier": "rds-ca-rsa2048-g1",
+        "CopyTagsToSnapshot": true,
+        "DBInstanceClass": {"Ref":"DatabaseInstanceClass"},
+        "DBName": {"Ref":"DatabaseName"},
+        "DBParameterGroupName": {"Ref":"DatabaseParameterGroup"},
+        "DBSubnetGroupName": {"Ref":"DatabaseSubnetGroup"},
+        "DeletionProtection": {"Fn::If":["IsProduction",true,false]},
+        "EnableCloudwatchLogsExports": ["postgresql","upgrade"],
+        "EnablePerformanceInsights": true,
+        "Engine": "postgres",
+        "EngineVersion": {"Ref":"DatabaseEngineVersion"},
+        "KmsKeyId": {"Fn::GetAtt":["DataKey","Arn"]},
+        "ManageMasterUserPassword": true,
+        "MasterUserSecret": {"KmsKeyId":{"Fn::GetAtt":["DataKey","Arn"]}},
+        "MasterUsername": {"Ref":"DatabaseMasterUsername"},
+        "MaxAllocatedStorage": {"Ref":"DatabaseMaxAllocatedStorageGiB"},
+        "MonitoringInterval": 60,
+        "MonitoringRoleArn": {"Fn::GetAtt":["RdsMonitoringRole","Arn"]},
+        "MultiAZ": true,
+        "PerformanceInsightsKMSKeyId": {"Fn::GetAtt":["DataKey","Arn"]},
+        "PerformanceInsightsRetentionPeriod": 7,
+        "PreferredBackupWindow": "17:00-17:30",
+        "PreferredMaintenanceWindow": "sun:18:00-sun:19:00",
+        "PubliclyAccessible": false,
+        "StorageEncrypted": true,
+        "StorageType": "gp3",
+        "VPCSecurityGroups": [{"Fn::GetAtt":["DatabaseSecurityGroup","GroupId"]}]
+      }
+    },
+    "UserPool": {
+      "Type": "AWS::Cognito::UserPool",
+      "DeletionPolicy": "Retain",
+      "UpdateReplacePolicy": "Retain",
+      "Properties": {
+        "AccountRecoverySetting": {"RecoveryMechanisms":[{"Name":"verified_email","Priority":1}]},
+        "AdminCreateUserConfig": {"AllowAdminCreateUserOnly":true},
+        "AutoVerifiedAttributes": ["email"],
+        "DeletionProtection": "ACTIVE",
+        "EnabledMfas": ["SOFTWARE_TOKEN_MFA"],
+        "MfaConfiguration": "ON",
+        "Policies": {"PasswordPolicy":{"MinimumLength":14,"RequireLowercase":true,"RequireNumbers":true,"RequireSymbols":true,"RequireUppercase":true,"TemporaryPasswordValidityDays":3}},
+        "Schema": [{"Name":"email","AttributeDataType":"String","Mutable":true,"Required":true}],
+        "UserPoolName": {"Fn::Sub":"${AWS::StackName}-users"},
+        "UsernameConfiguration": {"CaseSensitive":false},
+        "UsernameAttributes": ["email"],
+        "UserPoolAddOns": {"AdvancedSecurityMode":"ENFORCED"},
+        "UserPoolTier": "PLUS"
+      }
+    },
+    "UserPoolClient": {
+      "Type": "AWS::Cognito::UserPoolClient",
+      "Properties": {
+        "AccessTokenValidity": 60,
+        "AllowedOAuthFlows": ["code"],
+        "AllowedOAuthFlowsUserPoolClient": true,
+        "AllowedOAuthScopes": ["openid","email","profile"],
+        "CallbackURLs": [{"Ref":"CognitoCallbackUrl"}],
+        "EnableTokenRevocation": true,
+        "ExplicitAuthFlows": ["ALLOW_REFRESH_TOKEN_AUTH","ALLOW_USER_SRP_AUTH"],
+        "GenerateSecret": false,
+        "IdTokenValidity": 60,
+        "LogoutURLs": [{"Ref":"CognitoLogoutUrl"}],
+        "PreventUserExistenceErrors": "ENABLED",
+        "RefreshTokenValidity": 30,
+        "SupportedIdentityProviders": ["COGNITO"],
+        "TokenValidityUnits": {"AccessToken":"minutes","IdToken":"minutes","RefreshToken":"days"},
+        "UserPoolId": {"Ref":"UserPool"}
+      }
+    },
+    "UserPoolDomain": {"Type":"AWS::Cognito::UserPoolDomain","Properties":{"Domain":{"Ref":"CognitoDomainPrefix"},"UserPoolId":{"Ref":"UserPool"}}},
+    "Certificate": {"Type":"AWS::CertificateManager::Certificate","Properties":{"DomainName":{"Ref":"DomainName"},"DomainValidationOptions":[{"DomainName":{"Ref":"DomainName"},"HostedZoneId":{"Ref":"HostedZoneId"}}],"ValidationMethod":"DNS"}},
+    "ApplicationLogGroup": {"Type":"AWS::Logs::LogGroup","DeletionPolicy":"Retain","Properties":{"KmsKeyId":{"Fn::GetAtt":["DataKey","Arn"]},"LogGroupName":{"Fn::Sub":"/michinote/${Environment}/application"},"RetentionInDays":{"Ref":"LogRetentionDays"}}},
+    "WafLogGroup": {"Type":"AWS::Logs::LogGroup","DeletionPolicy":"Retain","Properties":{"KmsKeyId":{"Fn::GetAtt":["DataKey","Arn"]},"LogGroupName":{"Fn::Sub":"aws-waf-logs-${AWS::StackName}"},"RetentionInDays":{"Ref":"LogRetentionDays"}}},
+    "VpcFlowLogGroup": {"Type":"AWS::Logs::LogGroup","DeletionPolicy":"Retain","Properties":{"KmsKeyId":{"Fn::GetAtt":["DataKey","Arn"]},"LogGroupName":{"Fn::Sub":"/michinote/${Environment}/vpc-flow"},"RetentionInDays":{"Ref":"LogRetentionDays"}}},
+    "VpcFlowLogRole": {
+      "Type": "AWS::IAM::Role",
+      "Properties": {
+        "AssumeRolePolicyDocument": {"Version":"2012-10-17","Statement":[{"Effect":"Allow","Principal":{"Service":"vpc-flow-logs.amazonaws.com"},"Action":"sts:AssumeRole"}]},
+        "Policies": [{"PolicyName":"WriteFlowLogs","PolicyDocument":{"Version":"2012-10-17","Statement":[{"Effect":"Allow","Action":["logs:CreateLogStream","logs:PutLogEvents","logs:DescribeLogGroups","logs:DescribeLogStreams"],"Resource":{"Fn::Sub":"${VpcFlowLogGroup.Arn}:*"}}]}}]
+      }
+    },
+    "VpcFlowLog": {"Type":"AWS::EC2::FlowLog","Properties":{"DeliverLogsPermissionArn":{"Fn::GetAtt":["VpcFlowLogRole","Arn"]},"LogDestinationType":"cloud-watch-logs","LogGroupName":{"Ref":"VpcFlowLogGroup"},"MaxAggregationInterval":60,"ResourceId":{"Ref":"Vpc"},"ResourceType":"VPC","TrafficType":"REJECT"}},
+    "TaskExecutionRole": {
+      "Type": "AWS::IAM::Role",
+      "Properties": {
+        "AssumeRolePolicyDocument": {"Version":"2012-10-17","Statement":[{"Effect":"Allow","Principal":{"Service":"ecs-tasks.amazonaws.com"},"Action":"sts:AssumeRole"}]},
+        "ManagedPolicyArns": [{"Fn::Sub":"arn:${AWS::Partition}:iam::aws:policy/service-role/AmazonECSTaskExecutionRolePolicy"}],
+        "Policies": [{"PolicyName":"ReadApplicationSecrets","PolicyDocument":{"Version":"2012-10-17","Statement":[{"Effect":"Allow","Action":"secretsmanager:GetSecretValue","Resource":[{"Ref":"DatabaseRuntimeSecret"},{"Ref":"SessionSecret"},{"Ref":"AuditHashSecret"},{"Ref":"PdfFinalizationSecret"}]},{"Effect":"Allow","Action":"kms:Decrypt","Resource":{"Fn::GetAtt":["DataKey","Arn"]}}]}}]
+      }
+    },
+    "TaskRole": {
+      "Type": "AWS::IAM::Role",
+      "Properties": {
+        "AssumeRolePolicyDocument": {"Version":"2012-10-17","Statement":[{"Effect":"Allow","Principal":{"Service":"ecs-tasks.amazonaws.com"},"Action":"sts:AssumeRole"}]},
+        "Policies": [
+          {
+            "PolicyName": "TenantDocumentObjects",
+            "PolicyDocument": {
+              "Version": "2012-10-17",
+              "Statement": [
+                {"Effect":"Allow","Action":["s3:GetBucketLocation","s3:ListBucket"],"Resource":{"Fn::GetAtt":["DocumentBucket","Arn"]},"Condition":{"StringLike":{"s3:prefix":["tenants/*"]}}},
+                {"Effect":"Allow","Action":["s3:GetObject","s3:GetObjectVersion","s3:PutObject"],"Resource":{"Fn::Sub":"${DocumentBucket.Arn}/tenants/*"}},
+                {"Effect":"Allow","Action":["kms:Decrypt","kms:Encrypt","kms:GenerateDataKey"],"Resource":{"Fn::GetAtt":["DataKey","Arn"]}},
+                {"Effect":"Allow","Action":["cognito-idp:AdminCreateUser","cognito-idp:AdminDisableUser","cognito-idp:AdminEnableUser","cognito-idp:AdminGetUser"],"Resource":{"Fn::GetAtt":["UserPool","Arn"]}}
+              ]
+            }
+          }
+        ]
+      }
+    },
+    "EcsCluster": {"Type":"AWS::ECS::Cluster","Properties":{"ClusterName":{"Fn::Sub":"${AWS::StackName}-cluster"},"ClusterSettings":[{"Name":"containerInsights","Value":"enabled"}]}},
+    "TaskDefinition": {
+      "Type": "AWS::ECS::TaskDefinition",
+      "Properties": {
+        "ContainerDefinitions": [
+          {
+            "Environment": [
+              {"Name":"NODE_ENV","Value":"production"},
+              {"Name":"HOST","Value":"0.0.0.0"},
+              {"Name":"PORT","Value":{"Fn::Sub":"${ContainerPort}"}},
+              {"Name":"DATABASE_HOST","Value":{"Fn::GetAtt":["Database","Endpoint.Address"]}},
+              {"Name":"DATABASE_PORT","Value":{"Fn::GetAtt":["Database","Endpoint.Port"]}},
+              {"Name":"DATABASE_NAME","Value":{"Ref":"DatabaseName"}},
+              {"Name":"DATABASE_SSL","Value":"require"},
+              {"Name":"DATABASE_CA_FILE","Value":"/opt/michinote/certs/aws-rds-ap-northeast-3-bundle.pem"},
+              {"Name":"DB_POOL_MAX","Value":"20"},
+              {"Name":"AUTH_MODE","Value":"cognito"},
+              {"Name":"AWS_REGION","Value":{"Ref":"AWS::Region"}},
+              {"Name":"COGNITO_USER_POOL_ID","Value":{"Ref":"UserPool"}},
+              {"Name":"COGNITO_CLIENT_ID","Value":{"Ref":"UserPoolClient"}},
+              {"Name":"COGNITO_DOMAIN","Value":{"Fn::Sub":"https://${CognitoDomainPrefix}.auth.${AWS::Region}.amazoncognito.com"}},
+              {"Name":"COGNITO_CALLBACK_URL","Value":{"Ref":"CognitoCallbackUrl"}},
+              {"Name":"COGNITO_LOGOUT_URL","Value":{"Ref":"CognitoLogoutUrl"}},
+              {"Name":"DOCUMENT_BUCKET","Value":{"Ref":"DocumentBucket"}},
+              {"Name":"DOCUMENT_KMS_KEY_ARN","Value":{"Fn::GetAtt":["DataKey","Arn"]}},
+              {"Name":"PDF_RENDER_CONCURRENCY","Value":"1"},
+              {"Name":"PDF_RENDER_QUEUE_LIMIT","Value":"1"},
+              {"Name":"PDF_RENDER_RETRY_AFTER_SECONDS","Value":"5"},
+              {"Name":"PDF_JOB_LEASE_SECONDS","Value":"120"},
+              {"Name":"APP_BASE_URL","Value":{"Fn::Sub":"https://${DomainName}"}},
+              {"Name":"HOME","Value":"/tmp/home"},
+              {"Name":"XDG_CACHE_HOME","Value":"/tmp/xdg-cache"},
+              {"Name":"SESSION_TTL_HOURS","Value":"12"}
+            ],
+            "Essential": true,
+            "HealthCheck": {"Command":["CMD-SHELL","node -e \"fetch('http://127.0.0.1:' + process.env.PORT + '/health/live').then(r=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))\""],"Interval":30,"Retries":3,"StartPeriod":60,"Timeout":5},
+            "Image": {"Ref":"ContainerImage"},
+            "LinuxParameters": {"InitProcessEnabled":true},
+            "LogConfiguration": {"LogDriver":"awslogs","Options":{"awslogs-group":{"Ref":"ApplicationLogGroup"},"awslogs-region":{"Ref":"AWS::Region"},"awslogs-stream-prefix":"web"}},
+            "MountPoints": [{"SourceVolume":"scratch","ContainerPath":"/tmp","ReadOnly":false}],
+            "Name": "web",
+            "PortMappings": [{"ContainerPort":{"Ref":"ContainerPort"},"Name":"http","Protocol":"tcp"}],
+            "ReadonlyRootFilesystem": true,
+            "Secrets": [
+              {"Name":"DATABASE_USER","ValueFrom":{"Fn::Join":["",[{"Ref":"DatabaseRuntimeSecret"},":username::"]]}},
+              {"Name":"DATABASE_PASSWORD","ValueFrom":{"Fn::Join":["",[{"Ref":"DatabaseRuntimeSecret"},":password::"]]}},
+              {"Name":"PDF_FINALIZATION_SECRET","ValueFrom":{"Fn::Join":["",[{"Ref":"PdfFinalizationSecret"},":key::"]]}},
+              {"Name":"COOKIE_SECRET","ValueFrom":{"Fn::Join":["",[{"Ref":"SessionSecret"},":cookieSecret::"]]}},
+              {"Name":"AUDIT_HASH_KEY","ValueFrom":{"Fn::Join":["",[{"Ref":"AuditHashSecret"},":auditHashKey::"]]}}
+            ],
+            "StopTimeout": 60
+          }
+        ],
+        "Cpu": {"Ref":"TaskCpu"},
+        "ExecutionRoleArn": {"Fn::GetAtt":["TaskExecutionRole","Arn"]},
+        "Family": {"Fn::Sub":"${AWS::StackName}-web"},
+        "Memory": {"Ref":"TaskMemory"},
+        "NetworkMode": "awsvpc",
+        "RequiresCompatibilities": ["FARGATE"],
+        "RuntimePlatform": {"CpuArchitecture":{"Ref":"TaskCpuArchitecture"},"OperatingSystemFamily":"LINUX"},
+        "TaskRoleArn": {"Fn::GetAtt":["TaskRole","Arn"]},
+        "Volumes": [{"Name":"scratch"}]
+      }
+    },
+    "LoadBalancer": {
+      "Type": "AWS::ElasticLoadBalancingV2::LoadBalancer",
+      "Properties": {
+        "IpAddressType": "ipv4",
+        "LoadBalancerAttributes": [{"Key":"deletion_protection.enabled","Value":{"Fn::If":["IsProduction","true","false"]}},{"Key":"routing.http.drop_invalid_header_fields.enabled","Value":"true"}],
+        "Scheme": "internet-facing",
+        "SecurityGroups": [{"Ref":"LoadBalancerSecurityGroup"}],
+        "Subnets": [{"Ref":"PublicSubnetA"},{"Ref":"PublicSubnetB"}],
+        "Type": "application"
+      }
+    },
+    "TargetGroup": {
+      "Type": "AWS::ElasticLoadBalancingV2::TargetGroup",
+      "Properties": {
+        "HealthCheckEnabled": true,
+        "HealthCheckIntervalSeconds": 30,
+        "HealthCheckPath": "/health/ready",
+        "HealthCheckProtocol": "HTTP",
+        "HealthCheckTimeoutSeconds": 5,
+        "HealthyThresholdCount": 2,
+        "Matcher": {"HttpCode":"200-399"},
+        "Port": {"Ref":"ContainerPort"},
+        "Protocol": "HTTP",
+        "TargetGroupAttributes": [{"Key":"deregistration_delay.timeout_seconds","Value":"30"}],
+        "TargetType": "ip",
+        "UnhealthyThresholdCount": 3,
+        "VpcId": {"Ref":"Vpc"}
+      }
+    },
+    "HttpListener": {"Type":"AWS::ElasticLoadBalancingV2::Listener","Properties":{"DefaultActions":[{"Type":"redirect","RedirectConfig":{"Port":"443","Protocol":"HTTPS","StatusCode":"HTTP_301"}}],"LoadBalancerArn":{"Ref":"LoadBalancer"},"Port":80,"Protocol":"HTTP"}},
+    "HttpsListener": {"Type":"AWS::ElasticLoadBalancingV2::Listener","Properties":{"Certificates":[{"CertificateArn":{"Ref":"Certificate"}}],"DefaultActions":[{"Type":"forward","TargetGroupArn":{"Ref":"TargetGroup"}}],"LoadBalancerArn":{"Ref":"LoadBalancer"},"Port":443,"Protocol":"HTTPS","SslPolicy":"ELBSecurityPolicy-TLS13-1-2-2021-06"}},
+    "DnsRecord": {"Type":"AWS::Route53::RecordSet","Properties":{"AliasTarget":{"DNSName":{"Fn::GetAtt":["LoadBalancer","DNSName"]},"EvaluateTargetHealth":true,"HostedZoneId":{"Fn::GetAtt":["LoadBalancer","CanonicalHostedZoneID"]}},"HostedZoneId":{"Ref":"HostedZoneId"},"Name":{"Ref":"DomainName"},"Type":"A"}},
+    "WebAcl": {
+      "Type": "AWS::WAFv2::WebACL",
+      "Properties": {
+        "DefaultAction": {"Allow":{}},
+        "Description": "Managed protections and per-IP rate limit for Michi-note",
+        "Rules": [
+          {"Name":"AWSManagedCommon","Priority":0,"OverrideAction":{"None":{}},"Statement":{"ManagedRuleGroupStatement":{"Name":"AWSManagedRulesCommonRuleSet","VendorName":"AWS"}},"VisibilityConfig":{"CloudWatchMetricsEnabled":true,"MetricName":"managed-common","SampledRequestsEnabled":true}},
+          {"Name":"AWSManagedKnownBadInputs","Priority":1,"OverrideAction":{"None":{}},"Statement":{"ManagedRuleGroupStatement":{"Name":"AWSManagedRulesKnownBadInputsRuleSet","VendorName":"AWS"}},"VisibilityConfig":{"CloudWatchMetricsEnabled":true,"MetricName":"known-bad-inputs","SampledRequestsEnabled":true}},
+          {"Name":"AWSManagedIpReputation","Priority":2,"OverrideAction":{"None":{}},"Statement":{"ManagedRuleGroupStatement":{"Name":"AWSManagedRulesAmazonIpReputationList","VendorName":"AWS"}},"VisibilityConfig":{"CloudWatchMetricsEnabled":true,"MetricName":"ip-reputation","SampledRequestsEnabled":true}},
+          {"Name":"PerIpRateLimit","Priority":3,"Action":{"Block":{}},"Statement":{"RateBasedStatement":{"AggregateKeyType":"IP","Limit":{"Ref":"WafRateLimitPerFiveMinutes"}}},"VisibilityConfig":{"CloudWatchMetricsEnabled":true,"MetricName":"per-ip-rate-limit","SampledRequestsEnabled":true}}
+        ],
+        "Scope": "REGIONAL",
+        "VisibilityConfig": {"CloudWatchMetricsEnabled":true,"MetricName":{"Fn::Sub":"${AWS::StackName}-waf"},"SampledRequestsEnabled":true}
+      }
+    },
+    "WebAclAssociation": {"Type":"AWS::WAFv2::WebACLAssociation","Properties":{"ResourceArn":{"Ref":"LoadBalancer"},"WebACLArn":{"Fn::GetAtt":["WebAcl","Arn"]}}},
+    "WafLogging": {
+      "Type": "AWS::WAFv2::LoggingConfiguration",
+      "Properties": {
+        "LogDestinationConfigs": [{"Fn::GetAtt":["WafLogGroup","Arn"]}],
+        "LoggingFilter": {"DefaultBehavior":"DROP","Filters":[{"Behavior":"KEEP","Conditions":[{"ActionCondition":{"Action":"BLOCK"}}],"Requirement":"MEETS_ANY"}]},
+        "RedactedFields": [{"SingleHeader":{"Name":"authorization"}},{"SingleHeader":{"Name":"cookie"}}],
+        "ResourceArn": {"Fn::GetAtt":["WebAcl","Arn"]}
+      }
+    },
+    "EcsService": {
+      "Type": "AWS::ECS::Service",
+      "DependsOn": ["HttpsListener"],
+      "Properties": {
+        "CapacityProviderStrategy": [{"Base":2,"CapacityProvider":"FARGATE","Weight":1}],
+        "Cluster": {"Ref":"EcsCluster"},
+        "DeploymentConfiguration": {"DeploymentCircuitBreaker":{"Enable":true,"Rollback":true},"MaximumPercent":200,"MinimumHealthyPercent":100},
+        "DesiredCount": {"Fn::If":["IsDatabaseBootstrap",0,{"Ref":"DesiredTaskCount"}]},
+        "EnableECSManagedTags": true,
+        "EnableExecuteCommand": false,
+        "HealthCheckGracePeriodSeconds": 90,
+        "LoadBalancers": [{"ContainerName":"web","ContainerPort":{"Ref":"ContainerPort"},"TargetGroupArn":{"Ref":"TargetGroup"}}],
+        "NetworkConfiguration": {"AwsvpcConfiguration":{"AssignPublicIp":"DISABLED","SecurityGroups":[{"Ref":"ApplicationSecurityGroup"}],"Subnets":[{"Ref":"ApplicationSubnetA"},{"Ref":"ApplicationSubnetB"}]}},
+        "PlatformVersion": "LATEST",
+        "PropagateTags": "SERVICE",
+        "ServiceName": {"Fn::Sub":"${AWS::StackName}-web"},
+        "TaskDefinition": {"Ref":"TaskDefinition"}
+      }
+    },
+    "EcsScalableTarget": {"Type":"AWS::ApplicationAutoScaling::ScalableTarget","Properties":{"MaxCapacity":{"Ref":"MaximumTaskCount"},"MinCapacity":{"Fn::If":["IsDatabaseBootstrap",0,{"Ref":"DesiredTaskCount"}]},"ResourceId":{"Fn::Sub":"service/${EcsCluster}/${EcsService.Name}"},"ScalableDimension":"ecs:service:DesiredCount","ServiceNamespace":"ecs"}},
+    "EcsCpuScalingPolicy": {
+      "Type": "AWS::ApplicationAutoScaling::ScalingPolicy",
+      "Properties": {"PolicyName":{"Fn::Sub":"${AWS::StackName}-cpu"},"PolicyType":"TargetTrackingScaling","ScalingTargetId":{"Ref":"EcsScalableTarget"},"TargetTrackingScalingPolicyConfiguration":{"PredefinedMetricSpecification":{"PredefinedMetricType":"ECSServiceAverageCPUUtilization"},"ScaleInCooldown":300,"ScaleOutCooldown":60,"TargetValue":65}}
+    },
+    "EcsMemoryScalingPolicy": {
+      "Type": "AWS::ApplicationAutoScaling::ScalingPolicy",
+      "Properties": {"PolicyName":{"Fn::Sub":"${AWS::StackName}-memory"},"PolicyType":"TargetTrackingScaling","ScalingTargetId":{"Ref":"EcsScalableTarget"},"TargetTrackingScalingPolicyConfiguration":{"PredefinedMetricSpecification":{"PredefinedMetricType":"ECSServiceAverageMemoryUtilization"},"ScaleInCooldown":300,"ScaleOutCooldown":60,"TargetValue":70}}
+    },
+    "BackupVault": {"Type":"AWS::Backup::BackupVault","DeletionPolicy":"Retain","UpdateReplacePolicy":"Retain","Properties":{"BackupVaultName":{"Fn::Sub":"${AWS::StackName}-vault"},"EncryptionKeyArn":{"Fn::GetAtt":["DataKey","Arn"]}}},
+    "BackupPlan": {
+      "Type": "AWS::Backup::BackupPlan",
+      "Properties": {
+        "BackupPlan": {
+          "BackupPlanName": {"Fn::Sub":"${AWS::StackName}-rds"},
+          "BackupPlanRule": [
+            {"RuleName":"ContinuousAndDaily","TargetBackupVault":{"Ref":"BackupVault"},"ScheduleExpression":"cron(0 17 * * ? *)","StartWindowMinutes":60,"CompletionWindowMinutes":180,"EnableContinuousBackup":true,"Lifecycle":{"DeleteAfterDays":35}},
+            {"RuleName":"MonthlyArchive","TargetBackupVault":{"Ref":"BackupVault"},"ScheduleExpression":"cron(0 18 1 * ? *)","StartWindowMinutes":60,"CompletionWindowMinutes":360,"Lifecycle":{"MoveToColdStorageAfterDays":90,"DeleteAfterDays":2555}}
+          ]
+        }
+      }
+    },
+    "BackupRole": {
+      "Type": "AWS::IAM::Role",
+      "Properties": {
+        "AssumeRolePolicyDocument": {"Version":"2012-10-17","Statement":[{"Effect":"Allow","Principal":{"Service":"backup.amazonaws.com"},"Action":"sts:AssumeRole"}]},
+        "ManagedPolicyArns": [{"Fn::Sub":"arn:${AWS::Partition}:iam::aws:policy/service-role/AWSBackupServiceRolePolicyForBackup"},{"Fn::Sub":"arn:${AWS::Partition}:iam::aws:policy/service-role/AWSBackupServiceRolePolicyForRestores"}]
+      }
+    },
+    "BackupSelection": {"Type":"AWS::Backup::BackupSelection","Properties":{"BackupPlanId":{"Ref":"BackupPlan"},"BackupSelection":{"IamRoleArn":{"Fn::GetAtt":["BackupRole","Arn"]},"ListOfResourceArns":[{"Fn::Sub":"arn:${AWS::Partition}:rds:${AWS::Region}:${AWS::AccountId}:db:${Database}"}],"SelectionName":"rds-database"}}},
+    "AlarmKey": {
+      "Type": "AWS::KMS::Key",
+      "DeletionPolicy": "Retain",
+      "UpdateReplacePolicy": "Retain",
+      "Properties": {
+        "Description": "Customer-managed key dedicated to operational alarm notifications",
+        "EnableKeyRotation": true,
+        "PendingWindowInDays": 30,
+        "KeyPolicy": {
+          "Version": "2012-10-17",
+          "Statement": [
+            {"Sid":"AccountAdministrationThroughIAM","Effect":"Allow","Principal":{"AWS":{"Fn::Sub":"arn:${AWS::Partition}:iam::${AWS::AccountId}:root"}},"Action":"kms:*","Resource":"*"},
+            {"Sid":"CloudWatchAlarmEncryption","Effect":"Allow","Principal":{"Service":"cloudwatch.amazonaws.com"},"Action":["kms:GenerateDataKey*","kms:Decrypt"],"Resource":"*","Condition":{"StringEquals":{"aws:SourceAccount":{"Ref":"AWS::AccountId"}},"ArnLike":{"aws:SourceArn":{"Fn::Sub":"arn:${AWS::Partition}:cloudwatch:${AWS::Region}:${AWS::AccountId}:alarm:*"}}}},
+            {"Sid":"EventBridgeAlarmEncryption","Effect":"Allow","Principal":{"Service":"events.amazonaws.com"},"Action":["kms:GenerateDataKey*","kms:Decrypt"],"Resource":"*"}
+          ]
+        }
+      }
+    },
+    "AlarmTopic": {"Type":"AWS::SNS::Topic","Properties":{"KmsMasterKeyId":{"Fn::GetAtt":["AlarmKey","Arn"]},"TopicName":{"Fn::Sub":"${AWS::StackName}-alarms"}}},
+    "AlarmTopicPolicy": {
+      "Type": "AWS::SNS::TopicPolicy",
+      "Properties": {"Topics":[{"Ref":"AlarmTopic"}],"PolicyDocument":{"Version":"2012-10-17","Statement":[{"Sid":"EventBridgePublish","Effect":"Allow","Principal":{"Service":"events.amazonaws.com"},"Action":"sns:Publish","Resource":{"Ref":"AlarmTopic"}},{"Sid":"CloudWatchAlarmPublish","Effect":"Allow","Principal":{"Service":"cloudwatch.amazonaws.com"},"Action":"sns:Publish","Resource":{"Ref":"AlarmTopic"},"Condition":{"StringEquals":{"aws:SourceAccount":{"Ref":"AWS::AccountId"}},"ArnLike":{"aws:SourceArn":{"Fn::Sub":"arn:${AWS::Partition}:cloudwatch:${AWS::Region}:${AWS::AccountId}:alarm:*"}}}}]}}
+    },
+    "AlarmEmailSubscription": {"Type":"AWS::SNS::Subscription","Properties":{"Endpoint":{"Ref":"AlarmEmail"},"Protocol":"email","TopicArn":{"Ref":"AlarmTopic"}}},
+    "BackupFailureEventRule": {"Type":"AWS::Events::Rule","Properties":{"Description":"Notify operators when an AWS Backup job does not complete successfully","EventPattern":{"source":["aws.backup"],"detail-type":["Backup Job State Change"],"detail":{"state":["FAILED","ABORTED","EXPIRED"]}},"State":"ENABLED","Targets":[{"Arn":{"Ref":"AlarmTopic"},"Id":"AlarmTopic"}]}},
+    "EcsCpuAlarm": {
+      "Type": "AWS::CloudWatch::Alarm",
+      "Properties": {
+        "AlarmActions": [{"Ref":"AlarmTopic"}],
+        "AlarmDescription": "ECS CPU >= 80% for 15 minutes",
+        "ComparisonOperator": "GreaterThanOrEqualToThreshold",
+        "Dimensions": [{"Name":"ClusterName","Value":{"Fn::Sub":"${AWS::StackName}-cluster"}},{"Name":"ServiceName","Value":{"Fn::Sub":"${AWS::StackName}-web"}}],
+        "EvaluationPeriods": 3,
+        "MetricName": "CPUUtilization",
+        "Namespace": "AWS/ECS",
+        "Period": 300,
+        "Statistic": "Average",
+        "Threshold": 80,
+        "TreatMissingData": "breaching"
+      }
+    },
+    "EcsMemoryAlarm": {
+      "Type": "AWS::CloudWatch::Alarm",
+      "Properties": {
+        "AlarmActions": [{"Ref":"AlarmTopic"}],
+        "AlarmDescription": "ECS memory >= 85% for 15 minutes",
+        "ComparisonOperator": "GreaterThanOrEqualToThreshold",
+        "Dimensions": [{"Name":"ClusterName","Value":{"Fn::Sub":"${AWS::StackName}-cluster"}},{"Name":"ServiceName","Value":{"Fn::Sub":"${AWS::StackName}-web"}}],
+        "EvaluationPeriods": 3,
+        "MetricName": "MemoryUtilization",
+        "Namespace": "AWS/ECS",
+        "Period": 300,
+        "Statistic": "Average",
+        "Threshold": 85,
+        "TreatMissingData": "breaching"
+      }
+    },
+    "AlbFiveHundredAlarm": {
+      "Type": "AWS::CloudWatch::Alarm",
+      "Properties": {
+        "AlarmActions": [{"Ref":"AlarmTopic"}],
+        "AlarmDescription": "ALB target 5xx responses",
+        "ComparisonOperator": "GreaterThanOrEqualToThreshold",
+        "Dimensions": [{"Name":"LoadBalancer","Value":{"Fn::GetAtt":["LoadBalancer","LoadBalancerFullName"]}}],
+        "EvaluationPeriods": 2,
+        "MetricName": "HTTPCode_Target_5XX_Count",
+        "Namespace": "AWS/ApplicationELB",
+        "Period": 60,
+        "Statistic": "Sum",
+        "Threshold": 5,
+        "TreatMissingData": "notBreaching"
+      }
+    },
+    "UnhealthyTargetAlarm": {
+      "Type": "AWS::CloudWatch::Alarm",
+      "Properties": {
+        "AlarmActions": [{"Ref":"AlarmTopic"}],
+        "AlarmDescription": "One or more application targets are unhealthy",
+        "ComparisonOperator": "GreaterThanOrEqualToThreshold",
+        "Dimensions": [{"Name":"LoadBalancer","Value":{"Fn::GetAtt":["LoadBalancer","LoadBalancerFullName"]}},{"Name":"TargetGroup","Value":{"Fn::GetAtt":["TargetGroup","TargetGroupFullName"]}}],
+        "EvaluationPeriods": 2,
+        "MetricName": "UnHealthyHostCount",
+        "Namespace": "AWS/ApplicationELB",
+        "Period": 60,
+        "Statistic": "Maximum",
+        "Threshold": 1,
+        "TreatMissingData": "breaching"
+      }
+    },
+    "NoHealthyTargetAlarm": {
+      "Type": "AWS::CloudWatch::Alarm",
+      "Properties": {
+        "AlarmActions": [{"Ref":"AlarmTopic"}],
+        "AlarmDescription": "No healthy application target is available",
+        "ComparisonOperator": "LessThanOrEqualToThreshold",
+        "Dimensions": [{"Name":"LoadBalancer","Value":{"Fn::GetAtt":["LoadBalancer","LoadBalancerFullName"]}},{"Name":"TargetGroup","Value":{"Fn::GetAtt":["TargetGroup","TargetGroupFullName"]}}],
+        "EvaluationPeriods": 2,
+        "MetricName": "HealthyHostCount",
+        "Namespace": "AWS/ApplicationELB",
+        "Period": 60,
+        "Statistic": "Minimum",
+        "Threshold": 0,
+        "TreatMissingData": "breaching"
+      }
+    },
+    "RdsCpuAlarm": {
+      "Type": "AWS::CloudWatch::Alarm",
+      "Properties": {
+        "AlarmActions": [{"Ref":"AlarmTopic"}],
+        "AlarmDescription": "RDS CPU >= 80% for 15 minutes",
+        "ComparisonOperator": "GreaterThanOrEqualToThreshold",
+        "Dimensions": [{"Name":"DBInstanceIdentifier","Value":{"Ref":"Database"}}],
+        "EvaluationPeriods": 3,
+        "MetricName": "CPUUtilization",
+        "Namespace": "AWS/RDS",
+        "Period": 300,
+        "Statistic": "Average",
+        "Threshold": 80,
+        "TreatMissingData": "breaching"
+      }
+    },
+    "RdsFreeStorageAlarm": {
+      "Type": "AWS::CloudWatch::Alarm",
+      "Properties": {
+        "AlarmActions": [{"Ref":"AlarmTopic"}],
+        "AlarmDescription": "RDS free storage below 20 GiB",
+        "ComparisonOperator": "LessThanOrEqualToThreshold",
+        "Dimensions": [{"Name":"DBInstanceIdentifier","Value":{"Ref":"Database"}}],
+        "EvaluationPeriods": 1,
+        "MetricName": "FreeStorageSpace",
+        "Namespace": "AWS/RDS",
+        "Period": 300,
+        "Statistic": "Minimum",
+        "Threshold": 21474836480,
+        "TreatMissingData": "breaching"
+      }
+    },
+    "ServerErrorMetric": {"Type":"AWS::Logs::MetricFilter","Properties":{"FilterPattern":"{ $.level = 50 || $.level = 60 }","LogGroupName":{"Ref":"ApplicationLogGroup"},"MetricTransformations":[{"MetricName":"ServerErrors","MetricNamespace":"MichiNote/Application","MetricValue":"1","DefaultValue":0}]}},
+    "ServerErrorAlarm": {
+      "Type": "AWS::CloudWatch::Alarm",
+      "Properties": {"AlarmActions":[{"Ref":"AlarmTopic"}],"AlarmDescription":"Application emitted five or more error logs in five minutes","ComparisonOperator":"GreaterThanOrEqualToThreshold","EvaluationPeriods":1,"MetricName":"ServerErrors","Namespace":"MichiNote/Application","Period":300,"Statistic":"Sum","Threshold":5,"TreatMissingData":"notBreaching"}
+    }
+  },
+  "Outputs": {
+    "ApplicationUrl": {"Value":{"Fn::Sub":"https://${DomainName}"}},
+    "LoadBalancerDnsName": {"Value":{"Fn::GetAtt":["LoadBalancer","DNSName"]}},
+    "EcsClusterName": {"Value":{"Fn::Sub":"${AWS::StackName}-cluster"}},
+    "EcsServiceName": {"Value":{"Fn::Sub":"${AWS::StackName}-web"}},
+    "ApplicationSubnetIds": {"Value":{"Fn::Join":[",",[{"Ref":"ApplicationSubnetA"},{"Ref":"ApplicationSubnetB"}]]}},
+    "ApplicationSecurityGroupId": {"Value":{"Ref":"ApplicationSecurityGroup"}},
+    "VpcId": {"Value":{"Ref":"Vpc"}},
+    "VpcCidr": {"Value":{"Ref":"VpcCidr"}},
+    "DatabaseSecurityGroupId": {"Value":{"Ref":"DatabaseSecurityGroup"}},
+    "ApplicationLogGroupName": {"Value":{"Ref":"ApplicationLogGroup"}},
+    "DatabaseEndpoint": {"Value":{"Fn::GetAtt":["Database","Endpoint.Address"]}},
+    "DatabaseName": {"Value":{"Ref":"DatabaseName"}},
+    "DatabaseAdminSecretArn": {"Value":{"Fn::GetAtt":["Database","MasterUserSecret.SecretArn"]}},
+    "DatabaseRuntimeSecretArn": {"Value":{"Ref":"DatabaseRuntimeSecret"}},
+    "DatabaseProvisionerSecretArn": {"Value":{"Ref":"DatabaseProvisionerSecret"}},
+    "PdfFinalizationSecretArn": {"Value":{"Ref":"PdfFinalizationSecret"}},
+    "DataKeyArn": {"Value":{"Fn::GetAtt":["DataKey","Arn"]}},
+    "AuditHashSecretArn": {"Value":{"Ref":"AuditHashSecret"}},
+    "DocumentBucketName": {"Value":{"Ref":"DocumentBucket"}},
+    "CognitoUserPoolId": {"Value":{"Ref":"UserPool"}},
+    "CognitoUserPoolArn": {"Value":{"Fn::GetAtt":["UserPool","Arn"]}},
+    "CognitoUserPoolClientId": {"Value":{"Ref":"UserPoolClient"}},
+    "AlarmTopicArn": {"Value":{"Ref":"AlarmTopic"}},
+    "BackupVaultName": {"Value":{"Ref":"BackupVault"}}
+  }
+}

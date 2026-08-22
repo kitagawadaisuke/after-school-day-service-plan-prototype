@@ -1,0 +1,17 @@
+.git
+.env
+.env.*
+!.env.example
+node_modules
+test-results
+playwright-report
+materials
+docs
+infra
+deploy
+tests
+*.pem
+*.jpg
+*.jpeg
+*.heic
+*.log

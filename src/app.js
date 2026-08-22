@@ -1,4 +1,4 @@
-import { cloneDemoData, DEMO_PROFILES, DOMAIN_META, INDICATOR_META, LEGACY_DEMO_JOURNALS } from "./demo-data.js";
+import { cloneDemoCases, cloneDemoData, DOMAIN_META, INDICATOR_META } from "./demo-data.js";
 import {
   MAX_ANALYSIS_DAYS,
   analyzeJournals,
@@ -10,30 +10,18 @@ import {
   isPlanSourceFresh,
   validatePlan
 } from "./plan-engine.js";
-import {
-  FAMILY_DRAFT_MAX_LENGTH,
-  STAFF_DRAFT_MAX_LENGTH,
-  canShareFamilyRecord,
-  createFamilyDraft,
-  createStaffDraft,
-  invalidateDerivedWorkflow,
-  normalizeFamilyShareStatus,
-  normalizeRecordStatus,
-  reconcileRecordDrafts,
-  sanitizePlainText
-} from "./record-workflow.js";
-import { createJournalChatReply, JOURNAL_CHAT_SUGGESTIONS } from "./journal-chat.js";
 import { isValidIsoDate, toCsvCell, toLocalIsoDate } from "./utils.js";
 
 const STORAGE_KEY = "michi-note-demo-v1";
 const VIEW_TITLES = {
-  dashboard: { title: "今日の状況", breadcrumb: "記録 / 今日の状況" },
-  compose: { title: "日誌を書く", breadcrumb: "記録 / 用途別の下書き" },
-  journals: { title: "児童・日誌", breadcrumb: "日誌 / 観察記録" },
-  analysis: { title: "日誌をふり返る", breadcrumb: "モニタリング / 計画書づくりのヒント" },
-  chat: { title: "日誌に聞く", breadcrumb: "日誌 / 記録チャット（デモ）" },
-  plan: { title: "個別支援計画", breadcrumb: "計画作成 / 見直し原案" },
-  family: { title: "保護者への共有", breadcrumb: "放課後のあゆみ / 共有確認" }
+  childProfile: { title: "利用児情報", breadcrumb: "利用児 / 基本情報・利用情報" },
+  consultation: { title: "サービス等利用計画案", breadcrumb: "相談支援 / サービス等利用計画案" },
+  contactBook: { title: "連絡帳", breadcrumb: "日々の連携 / 保護者との連絡帳" },
+  dashboard: { title: "支援サマリー", breadcrumb: "支援サマリー" },
+  journals: { title: "日誌を確認", breadcrumb: "日誌 / 観察記録" },
+  analysis: { title: "モニタリング", breadcrumb: "モニタリング / 日誌のふり返り" },
+  assessment: { title: "アセスメント", breadcrumb: "アセスメント / 支援の見立て" },
+  plan: { title: "個別支援計画書", breadcrumb: "計画作成 / 見直し原案" }
 };
 
 const PATTERN_SUPPORT_IDS = {
@@ -46,8 +34,6 @@ const PATTERN_SUPPORT_IDS = {
 let toastTimer;
 let saveTimer;
 let loadWarning = "";
-let composeDirty = false;
-let activeSpeechRecognition;
 
 function localDateFromIso(value) {
   if (!isValidIsoDate(value)) return null;
@@ -81,54 +67,64 @@ function journalsInRange(journals, range) {
   return journals.filter((journal) => journal.date >= range.start && journal.date <= range.end);
 }
 
-function matchesBundledJournalContent(candidateJournals, sourceJournals) {
-  if (!Array.isArray(candidateJournals)) return false;
-  if (candidateJournals.length !== sourceJournals.length) return false;
-  const fields = ["id", "date", "time", "activity", "mood", "physical", "observation", "support", "response", "familyNote", "staff"];
-  const candidatesById = new Map(candidateJournals.map((journal) => [journal?.id, journal]));
-  return sourceJournals.every((demoJournal) => {
-    const candidate = candidatesById.get(demoJournal.id);
-    if (!candidate || fields.some((field) => candidate[field] !== demoJournal[field])) return false;
-    return JSON.stringify(candidate.domains) === JSON.stringify(demoJournal.domains)
-      && JSON.stringify(candidate.indicators) === JSON.stringify(demoJournal.indicators);
-  });
-}
-
-function isBundledDemoJournalContent(candidateJournals) {
-  return matchesBundledJournalContent(candidateJournals, cloneDemoData().journals);
-}
-
-function isLegacyBundledDemoJournalContent(candidateJournals) {
-  return matchesBundledJournalContent(candidateJournals, LEGACY_DEMO_JOURNALS);
-}
-
-function createInitialState(studentId = "demo-a") {
-  const { profile, journals: sourceJournals } = cloneDemoData(studentId);
-  const journals = sourceJournals.map(normalizeSavedJournal).filter(Boolean);
-  const analysisRange = getDefaultAnalysisRange(journals);
-  const planSourceJournals = journalsInRange(journals, analysisRange);
-  const latestPending = [...journals].reverse().find((journal) => journal.recordStatus !== "confirmed") ?? journals.at(-1);
-  const latestFamily = [...journals].reverse().find((journal) => canShareFamilyRecord(journal));
+function createInitialState() {
+  const { profile, journals } = cloneDemoData();
+  const workspace = createChildWorkspace(profile, journals);
   return {
-    schemaVersion: 1,
-    workflowVersion: 1,
-    demoDataVersion: 2,
-    studentId,
-    studentSnapshots: {},
+    schemaVersion: 3,
+    activeChildId: profile.id,
+    childWorkspaces: createDefaultChildWorkspaces(),
+    ...workspace
+  };
+}
+
+function createChildWorkspace(profile, journals, { isDemo = true } = {}) {
+  const analysisRange = getDefaultAnalysisRange(journals);
+  const sourceJournals = journalsInRange(journals, analysisRange);
+  const monitoringDraft = createMonitoringDraft(profile, sourceJournals);
+  const consultationPlanDraft = createConsultationPlanDraft(profile);
+  const contactBookEntries = isDemo ? createContactBookEntries(profile) : [];
+  return {
     profile,
     journals,
-    plan: generatePlan(profile, planSourceJournals),
+    plan: {
+      ...generatePlan(profile, sourceJournals),
+      consultationPlanReference: {
+        agencyName: consultationPlanDraft.agencyName,
+        preparedDate: consultationPlanDraft.preparedDate,
+        overallGoal: consultationPlanDraft.overallGoal
+      }
+    },
+    consultationPlanDraft,
+    contactBookEntries,
+    monitoringDraft,
+    assessmentDraft: createAssessmentDraft(profile, monitoringDraft, consultationPlanDraft),
     analysisRange,
     selectedJournalId: journals.at(-1)?.id ?? "",
-    composeJournalId: latestPending?.id ?? "",
-    selectedFamilyJournalId: latestFamily?.id ?? "",
     filters: { search: "", domain: "all", month: "all" },
     activeView: "dashboard",
     planMode: "edit",
-    chatMessages: [],
     planStale: false,
     updatedAt: new Date().toISOString()
   };
+}
+
+function createDefaultChildWorkspaces() {
+  return Object.fromEntries(
+    cloneDemoCases().map(({ profile, journals }) => [profile.id, createChildWorkspace(profile, journals)])
+  );
+}
+
+const WORKSPACE_KEYS = ["profile", "journals", "plan", "consultationPlanDraft", "contactBookEntries", "monitoringDraft", "assessmentDraft", "analysisRange", "selectedJournalId", "filters", "activeView", "planMode", "planStale", "updatedAt"];
+
+function currentWorkspace() {
+  return Object.fromEntries(WORKSPACE_KEYS.map((key) => [key, structuredClone(state[key])]));
+}
+
+function syncActiveWorkspace() {
+  if (!state.activeChildId) return;
+  state.childWorkspaces ??= {};
+  state.childWorkspaces[state.activeChildId] = currentWorkspace();
 }
 
 function normalizeSavedJournal(journal) {
@@ -145,7 +141,7 @@ function normalizeSavedJournal(journal) {
       return [key, value !== null && value !== "" && Number.isInteger(number) && number >= 1 && number <= 4 ? number : null];
     })
   );
-  const normalized = {
+  return {
     ...journal,
     id: journal.id.trim(),
     activity: journal.activity.trim().slice(0, 80),
@@ -153,26 +149,14 @@ function normalizeSavedJournal(journal) {
     support: journal.support.trim().slice(0, 1000),
     response: journal.response.trim().slice(0, 1000),
     physical: typeof journal.physical === "string" ? journal.physical.trim().slice(0, 120) : "未記入",
-    familyNote: typeof journal.familyNote === "string" ? sanitizePlainText(journal.familyNote).slice(0, FAMILY_DRAFT_MAX_LENGTH) : "",
+    familyNote: typeof journal.familyNote === "string" ? journal.familyNote.trim().slice(0, 1000) : "",
     mood: typeof journal.mood === "string" ? journal.mood : "未記入",
     time: typeof journal.time === "string" && /^\d{2}:\d{2}〜\d{2}:\d{2}$/.test(journal.time) ? journal.time : "15:30〜17:30",
     staff: typeof journal.staff === "string" && journal.staff.trim() ? journal.staff.trim().slice(0, 80) : "記録者未入力",
     domains,
     tags: Array.isArray(journal.tags) ? journal.tags.filter((tag) => typeof tag === "string") : [],
-    indicators,
-    recordStatus: Object.hasOwn(journal, "recordStatus") ? normalizeRecordStatus(journal.recordStatus) : "confirmed",
-    familyShareStatus: normalizeFamilyShareStatus(journal.familyShareStatus)
+    indicators
   };
-  normalized.staffDraft = typeof journal.staffDraft === "string"
-    ? sanitizePlainText(journal.staffDraft).slice(0, STAFF_DRAFT_MAX_LENGTH)
-    : createStaffDraft(normalized);
-  normalized.familyDraft = typeof journal.familyDraft === "string"
-    ? sanitizePlainText(journal.familyDraft).slice(0, FAMILY_DRAFT_MAX_LENGTH)
-    : normalized.familyNote;
-  if (normalized.familyShareStatus !== "private" && !canShareFamilyRecord(normalized)) {
-    normalized.familyShareStatus = "private";
-  }
-  return normalized;
 }
 
 function isUsableSavedPlan(plan) {
@@ -203,27 +187,28 @@ function sanitizeSavedPlanValue(value, depth = 0) {
   return null;
 }
 
-function normalizeChatMessages(messages, journals) {
-  const availableIds = new Set(journals.map((journal) => journal.id));
-  if (!Array.isArray(messages)) return [];
-  return messages.slice(-12).flatMap((message) => {
-    if (!message || typeof message !== "object" || typeof message.question !== "string" || typeof message.answer !== "string") return [];
-    const evidence = Array.isArray(message.evidence)
-      ? message.evidence.filter((item) => item && availableIds.has(item.id)).slice(0, 4).map((item) => ({
-          id: item.id,
-          date: typeof item.date === "string" ? item.date.slice(0, 10) : "",
-          activity: typeof item.activity === "string" ? item.activity.slice(0, 80) : "",
-          observation: typeof item.observation === "string" ? item.observation.slice(0, 140) : "",
-          support: typeof item.support === "string" ? item.support.slice(0, 140) : "",
-          response: typeof item.response === "string" ? item.response.slice(0, 160) : ""
-        }))
-      : [];
-    return [{
-      question: sanitizePlainText(message.question).slice(0, 240),
-      answer: sanitizePlainText(message.answer).slice(0, 800),
-      topic: typeof message.topic === "string" ? sanitizePlainText(message.topic).slice(0, 80) : "日誌の確認",
-      evidence
-    }];
+function sanitizeDraft(savedDraft, fallbackDraft) {
+  if (!savedDraft || typeof savedDraft !== "object") return fallbackDraft;
+  return Object.fromEntries(
+    Object.entries(fallbackDraft).map(([key, fallbackValue]) => {
+      const savedValue = savedDraft[key];
+      return [key, typeof fallbackValue === "string" && typeof savedValue === "string" ? savedValue.slice(0, 2000) : fallbackValue];
+    })
+  );
+}
+
+function sanitizeContactBookEntries(entries, fallbackEntries) {
+  if (!Array.isArray(entries)) return fallbackEntries;
+  return entries.slice(0, 100).map((entry, index) => {
+    const fallback = fallbackEntries[index] ?? fallbackEntries[0];
+    return {
+      id: typeof entry?.id === "string" ? entry.id.slice(0, 80) : `${fallback.id}-${index}`,
+      date: isValidIsoDate(entry?.date) ? entry.date : fallback.date,
+      familyMessage: typeof entry?.familyMessage === "string" ? entry.familyMessage.slice(0, 2000) : fallback.familyMessage,
+      serviceReply: typeof entry?.serviceReply === "string" ? entry.serviceReply.slice(0, 2000) : fallback.serviceReply,
+      request: typeof entry?.request === "string" ? entry.request.slice(0, 1000) : fallback.request,
+      reflected: Boolean(entry?.reflected)
+    };
   });
 }
 
@@ -232,11 +217,10 @@ function loadState() {
     const raw = localStorage.getItem(STORAGE_KEY);
     if (!raw) return createInitialState();
     const saved = JSON.parse(raw);
-    if (saved?.schemaVersion !== 1 || !saved.profile || !Array.isArray(saved.journals)) {
+    if (![1, 2, 3].includes(saved?.schemaVersion) || !saved.profile || !Array.isArray(saved.journals)) {
       throw new Error("保存形式が現在のデモと一致しません");
     }
-    const studentId = DEMO_PROFILES[saved.studentId] ? saved.studentId : "demo-a";
-    const fallback = createInitialState(studentId);
+    const fallback = createInitialState();
     const profile = Object.fromEntries(Object.entries(fallback.profile).map(([key, fallbackValue]) => {
       const savedValue = saved.profile[key];
       if (typeof fallbackValue === "string" && typeof savedValue === "string") return [key, savedValue.slice(0, 2000)];
@@ -245,24 +229,16 @@ function loadState() {
       }
       return [key, fallbackValue];
     }));
-    const upgradeBundledDemo = saved.demoDataVersion !== 2 && isLegacyBundledDemoJournalContent(saved.journals);
-    const sourceForJournals = upgradeBundledDemo ? cloneDemoData().journals : saved.journals;
-    const applyBundledDemoWorkflow = saved.workflowVersion !== 1 && isBundledDemoJournalContent(sourceForJournals);
-    const journals = sourceForJournals.map(normalizeSavedJournal).filter(Boolean);
-    if (applyBundledDemoWorkflow) {
-      const demoWorkflowById = new Map(cloneDemoData().journals.map((journal) => [journal.id, journal]));
-      journals.forEach((journal) => {
-        const demoJournal = demoWorkflowById.get(journal.id);
-        journal.recordStatus = normalizeRecordStatus(demoJournal?.recordStatus);
-        journal.familyShareStatus = normalizeFamilyShareStatus(demoJournal?.familyShareStatus);
-        journal.familyDraft = journal.familyNote;
-      });
-    }
-    const candidateRange = upgradeBundledDemo ? {} : { start: saved.analysisRange?.start, end: saved.analysisRange?.end };
+    const journals = saved.journals.map(normalizeSavedJournal).filter(Boolean);
+    const candidateRange = { start: saved.analysisRange?.start, end: saved.analysisRange?.end };
     const analysisRange = isUsableAnalysisRange(candidateRange) ? candidateRange : getDefaultAnalysisRange(journals);
     const sourceJournals = journalsInRange(journals, analysisRange);
     const generatedPlan = generatePlan(profile, sourceJournals);
-    const savedPlan = upgradeBundledDemo ? null : sanitizeSavedPlanValue(saved.plan);
+    const generatedMonitoringDraft = createMonitoringDraft(profile, sourceJournals);
+    const generatedConsultationPlanDraft = createConsultationPlanDraft(profile);
+    const generatedContactBookEntries = createContactBookEntries(profile);
+    const generatedAssessmentDraft = createAssessmentDraft(profile, generatedMonitoringDraft, generatedConsultationPlanDraft);
+    const savedPlan = sanitizeSavedPlanValue(saved.plan);
     const filters = {
       search: typeof saved.filters?.search === "string" ? saved.filters.search.slice(0, 200) : "",
       domain: saved.filters?.domain === "all" || DOMAIN_META[saved.filters?.domain] ? saved.filters.domain : "all",
@@ -292,34 +268,43 @@ function loadState() {
           }))
         }
       : generatedPlan;
+    plan.consultationPlanReference ??= {
+      agencyName: generatedConsultationPlanDraft.agencyName,
+      preparedDate: generatedConsultationPlanDraft.preparedDate,
+      overallGoal: generatedConsultationPlanDraft.overallGoal
+    };
     plan.child.ageLabel = calculateAgeLabel(plan.child.birthDate, plan.planStart) || plan.child.ageLabel || "";
-    return {
-      ...fallback,
-      ...saved,
-      workflowVersion: 1,
-      demoDataVersion: 2,
-      studentId,
-      studentSnapshots: saved.studentSnapshots && typeof saved.studentSnapshots === "object" ? saved.studentSnapshots : {},
+    const activeChildId = typeof saved.activeChildId === "string" && profile.id === saved.activeChildId ? saved.activeChildId : profile.id;
+    const childWorkspaces = {
+      ...createDefaultChildWorkspaces(),
+      ...(saved.childWorkspaces && typeof saved.childWorkspaces === "object" ? saved.childWorkspaces : {})
+    };
+    const activeWorkspace = {
       profile,
       journals,
       filters,
       analysisRange,
       plan,
-      chatMessages: normalizeChatMessages(saved.chatMessages, journals),
+      consultationPlanDraft: sanitizeDraft(saved.consultationPlanDraft, generatedConsultationPlanDraft),
+      contactBookEntries: sanitizeContactBookEntries(saved.contactBookEntries, generatedContactBookEntries),
+      monitoringDraft: sanitizeDraft(saved.monitoringDraft, generatedMonitoringDraft),
+      assessmentDraft: sanitizeDraft(saved.assessmentDraft, generatedAssessmentDraft),
       planStale: !isPlanSourceFresh(plan, sourceJournals),
       selectedJournalId: journals.some((journal) => journal.id === saved.selectedJournalId)
         ? saved.selectedJournalId
         : journals.at(-1)?.id || "",
-      composeJournalId: journals.some((journal) => journal.id === saved.composeJournalId)
-        ? saved.composeJournalId
-        : [...journals].reverse().find((journal) => journal.recordStatus !== "confirmed")?.id || journals.at(-1)?.id || "",
-      selectedFamilyJournalId: journals.some(
-        (journal) => journal.id === saved.selectedFamilyJournalId && canShareFamilyRecord(journal)
-      )
-        ? saved.selectedFamilyJournalId
-        : [...journals].reverse().find((journal) => canShareFamilyRecord(journal))?.id || "",
       activeView: VIEW_TITLES[saved.activeView] ? saved.activeView : "dashboard",
-      planMode: saved.planMode === "preview" ? "preview" : "edit"
+      planMode: saved.planMode === "preview" ? "preview" : "edit",
+      updatedAt: saved.updatedAt
+    };
+    childWorkspaces[activeChildId] = activeWorkspace;
+    return {
+      ...fallback,
+      ...saved,
+      schemaVersion: 3,
+      activeChildId,
+      childWorkspaces,
+      ...activeWorkspace
     };
   } catch (error) {
     loadWarning = `保存データを読み込めなかったため、デモを初期状態で開きました（${error.message}）。`;
@@ -331,6 +316,178 @@ let state = loadState();
 
 function getAnalysisJournals() {
   return journalsInRange(state.journals, state.analysisRange);
+}
+
+function createConsultationPlanDraft(profile) {
+  return {
+    agencyName: "相談支援事業所 ひなた（デモ）",
+    preparedDate: "2026-05-20",
+    period: `${formatDateJP(profile.planStart)}〜${formatDateJP(profile.planEnd)}`,
+    serviceCategory: `障害児通所支援 / ${profile.serviceType}`,
+    personWish: profile.personWish,
+    guardianWish: profile.familyWish,
+    overallGoal: "安心して放課後の時間を過ごし、好きな活動や友だちとの関わりを通して、自分でできることを少しずつ増やす。",
+    oneYearVision: "見通しが持てる場面では、自分で選んだ活動に取り組み、困ったときには自分に合う方法で助けを求められる。家庭・学校・事業所で安心して過ごす時間を増やす。",
+    currentSituation: `${profile.strengths[0]}。一方で、活動の切り替えや集団参加の場面では、見通しや伝え方の工夫が必要なことがあります。運動・移動・健康面・社会参加の状態は、日々の様子と本人・家族の実感を合わせて確認します。`,
+    serviceNeed: "見通しを持てる環境と、本人が選んで伝えられる機会を整えながら、集団の中で安心して参加できる経験を重ねる。",
+    dayServiceRole: "放課後等デイサービスでは、視覚的な見通し・選択肢・必要な休憩を用意し、本人の成功体験を日々の記録で確かめる。",
+    selfCareRole: "本人が選べる場面をつくり、カード・言葉・身振りなど本人に合う方法で希望や困りごとを伝える。",
+    familyRole: "家庭での様子や本人の変化を共有し、本人が安心して取り組めた関わり方を事業所・学校と一緒に確認する。",
+    communityRole: "学校、相談支援事業所、必要に応じた地域資源と情報を共有し、本人にとって一貫した支援となるよう調整する。",
+    assessmentProcess: "本人・家族から希望や困りごとを聴き取り、学校・事業所での様子と日誌の記録を確認する。",
+    draftProcess: "相談支援専門員と事業所の支援者が、生活目標と必要なサービス・役割分担を調整して原案を作成する。",
+    consentProcess: "本人・家族へ内容を説明し、意向を確認したうえで同意・交付の記録を残して支援を開始する。",
+    considerations: "本人・家族の意向を優先し、学校や相談支援事業所と必要な情報を共有する。内容は関係者で確認して決定する。"
+  };
+}
+
+function createContactBookEntries(profile) {
+  return [
+    {
+      id: "CB-20260414",
+      date: "2026-04-14",
+      familyMessage: "家庭でも予定が分かると安心して準備できています。事業所でも次の活動を前もって伝えてもらえると助かります。",
+      serviceReply: "活動の前に予定カードで流れを確認し、切り替え前には個別に声をかけます。日誌で本人の反応も確認します。",
+      request: "見通しの伝え方を家庭・事業所でそろえたい。",
+      reflected: false
+    },
+    {
+      id: "CB-20260508",
+      date: "2026-05-08",
+      familyMessage: `${profile.displayName}が家で学校の出来事を話す場面が少し増えました。事業所で楽しかったことも、伝えるきっかけがあるとよさそうです。`,
+      serviceReply: "帰りの会で『今日よかったこと』をカードとことばで選ぶ機会をつくり、家庭への共有につなげます。",
+      request: "本人が一日の出来事を伝える機会を増やしたい。",
+      reflected: false
+    },
+    {
+      id: "CB-20260527",
+      date: "2026-05-27",
+      familyMessage: "疲れている日は、無理をしないで少し休めるようにしてほしいです。",
+      serviceReply: "来所時の様子を確認し、必要に応じて静かな場所での休憩や活動量の調整を行います。",
+      request: "体調や疲れに合わせて活動量を調整したい。",
+      reflected: false
+    }
+  ];
+}
+
+function createMonitoringDraft(profile, journals) {
+  const analysis = analyzeJournals(journals);
+  const confirmedPatterns = analysis.patterns.filter((pattern) => pattern.isConfirmed);
+  const patternNames = confirmedPatterns.map((pattern) => pattern.title);
+  const sourcePeriod = journals.length ? `${formatDateJP(analysis.startDate)}〜${formatDateJP(analysis.endDate)}の${journals.length}件の日誌` : "対象となる日誌";
+  const indicatorChanges = Object.values(analysis.indicators)
+    .filter((item) => Number.isFinite(item.delta) && Math.abs(item.delta) >= 0.05)
+    .map((item) => `${item.name}は後半${item.delta > 0 ? "で高く" : "で低く"}記録されています`);
+  return {
+    sourcePeriod,
+    summary: `${sourcePeriod}をふり返り、日誌に繰り返し見られた場面と、支援後の本人の反応を整理した下書きです。`,
+    progress: indicatorChanges.length ? `${indicatorChanges.join("。 ")}。数値だけで結論づけず、元の日誌と本人・家族の実感を確認します。` : "指標の比較だけでは判断せず、元の日誌と本人・家族の実感を確認します。",
+    effectiveSupport: patternNames.length ? `繰り返し確認できた場面は「${patternNames.join("」「")}」です。これらの場面で行った支援と本人の反応を読み返し、続けたい工夫を確認します。` : "繰り返し確認できた場面はまだ十分ではありません。日誌を追加しながら、本人に合う関わり方を確認します。",
+    reviewPoints: `次回は、${patternNames.length ? patternNames.join("、") : "日々の活動"}について、本人の感じ方、家庭での様子、場面による違いを確認します。`,
+    nextStep: "本人・家族との面談内容や支援者の観察を加え、アセスメントの下書きとして支援の方向を整理します。"
+  };
+}
+
+function createAssessmentDraft(profile, monitoringDraft, consultationPlanDraft = createConsultationPlanDraft(profile)) {
+  return {
+    sourcePeriod: monitoringDraft.sourcePeriod,
+    consultationAgency: consultationPlanDraft.agencyName,
+    consultationGoal: consultationPlanDraft.overallGoal,
+    personWish: consultationPlanDraft.personWish || profile.personWish,
+    familyWish: consultationPlanDraft.guardianWish || profile.familyWish,
+    strengths: profile.strengths.join("。 "),
+    needs: `${monitoringDraft.reviewPoints} 日誌で確認できた内容と、面談で把握した本人・家族の意向を合わせて、生活上の課題を整理します。`,
+    supportDirection: `${consultationPlanDraft.dayServiceRole}\n\n${monitoringDraft.effectiveSupport} 本人が選びやすい方法や安心して参加できる環境を一緒に確かめ、支援内容は本人・家族と確認して決めます。`,
+    planningNote: `相談支援事業所のサービス等利用計画案の目標「${consultationPlanDraft.overallGoal}」を踏まえ、個別支援会議等で目標・支援方法・担当・評価方法を具体化し、個別支援計画の原案へ反映します。`
+  };
+}
+
+function draftTextarea(root, path, label, value, rows = 3, hint = "") {
+  return `<label class="draft-field"><span>${escapeHtml(label)}</span>${hint ? `<small>${escapeHtml(hint)}</small>` : ""}<textarea data-draft-root="${escapeAttribute(root)}" data-draft-path="${escapeAttribute(path)}" rows="${rows}" maxlength="2000">${escapeHtml(value ?? "")}</textarea></label>`;
+}
+
+function renderMonitoringDraft() {
+  const draft = state.monitoringDraft;
+  $("#monitoring-source-status").textContent = draft.sourcePeriod;
+  $("#monitoring-draft-fields").innerHTML = [
+    draftTextarea("monitoringDraft", "summary", "モニタリングの概要", draft.summary, 3),
+    draftTextarea("monitoringDraft", "progress", "本人の変化・できたこと", draft.progress, 3, "日誌で確認した事実をもとに、本人・家族と確かめます。"),
+    draftTextarea("monitoringDraft", "effectiveSupport", "続けたい支援・役立った工夫", draft.effectiveSupport, 4),
+    draftTextarea("monitoringDraft", "reviewPoints", "見直したいこと・追加で確認したいこと", draft.reviewPoints, 3),
+    draftTextarea("monitoringDraft", "nextStep", "次のアセスメントへの申し送り", draft.nextStep, 2)
+  ].join("");
+}
+
+function renderConsultationDraft() {
+  const draft = state.consultationPlanDraft;
+  $("#consultation-source-status").textContent = `${draft.agencyName} / ${formatDateJP(draft.preparedDate)}作成`;
+  $("#consultation-period").textContent = draft.period;
+  $("#consultation-profile-strip").innerHTML = `
+    <article><span>利用児</span><strong>${escapeHtml(state.profile.displayName)}</strong><small>${escapeHtml(state.profile.grade)}</small></article>
+    <article><span>支給決定・利用サービス</span><strong>${escapeHtml(draft.serviceCategory)}</strong><small>受給者証番号 ${escapeHtml(state.profile.recipientNumber)}</small></article>
+    <article><span>作成日</span><strong>${escapeHtml(formatDateJP(draft.preparedDate))}</strong><small>${escapeHtml(draft.agencyName)}</small></article>`;
+  const section = (number, title, description, fields) => `
+    <section class="consultation-section">
+      <div class="consultation-section-heading"><span>${number}</span><div><h4>${title}</h4><p>${description}</p></div></div>
+      <div class="draft-fields consultation-fields">${fields.join("")}</div>
+    </section>`;
+  $("#consultation-draft-fields").innerHTML = [
+    section("01", "生活目標", "本人や家族が希望する毎日と、1年後に目指す生活のイメージです。", [
+      draftTextarea("consultationPlanDraft", "personWish", "本人が希望する1日", draft.personWish, 3),
+      draftTextarea("consultationPlanDraft", "guardianWish", "家族が希望する暮らし", draft.guardianWish, 3),
+      draftTextarea("consultationPlanDraft", "overallGoal", "総合的な目標", draft.overallGoal, 4),
+      draftTextarea("consultationPlanDraft", "oneYearVision", "1年後の生活イメージ", draft.oneYearVision, 4)
+    ]),
+    section("02", "現在の状況と課題", "運動・移動・健康管理・社会参加などを、本人の強みも含めて確認します。", [
+      draftTextarea("consultationPlanDraft", "currentSituation", "現在の状況・課題", draft.currentSituation, 5),
+      draftTextarea("consultationPlanDraft", "serviceNeed", "必要な支援の方向", draft.serviceNeed, 4)
+    ]),
+    section("03", "具体的な支援と役割分担", "フォーマルサービスだけでなく、本人・家族・地域の役割も一緒に整理します。", [
+      draftTextarea("consultationPlanDraft", "dayServiceRole", "放課後等デイサービスの役割", draft.dayServiceRole, 4),
+      draftTextarea("consultationPlanDraft", "selfCareRole", "本人・セルフケアの役割", draft.selfCareRole, 3),
+      draftTextarea("consultationPlanDraft", "familyRole", "家族の協力", draft.familyRole, 3),
+      draftTextarea("consultationPlanDraft", "communityRole", "学校・地域・相談支援との連携", draft.communityRole, 3),
+      draftTextarea("consultationPlanDraft", "considerations", "配慮・連携事項", draft.considerations, 3)
+    ]),
+    section("04", "作成から同意・交付まで", "自動作成できない、本人・家族と支援者が確認して進める工程です。", [
+      draftTextarea("consultationPlanDraft", "assessmentProcess", "情報収集（アセスメント）", draft.assessmentProcess, 3),
+      draftTextarea("consultationPlanDraft", "draftProcess", "原案の作成", draft.draftProcess, 3),
+      draftTextarea("consultationPlanDraft", "consentProcess", "同意と交付", draft.consentProcess, 3)
+    ])
+  ].join("");
+}
+
+function renderContactBook() {
+  const entries = [...state.contactBookEntries].sort((a, b) => b.date.localeCompare(a.date));
+  $("#nav-contact-count").textContent = String(entries.length);
+  $("#contact-book-status").textContent = `${entries.filter((entry) => entry.reflected).length}件を支援の検討へ反映`;
+  $("#contact-book-list").innerHTML = entries.length
+    ? entries.map((entry) => `
+      <article class="contact-book-entry ${entry.reflected ? "is-reflected" : ""}">
+        <div class="contact-book-date"><strong>${escapeHtml(formatDateJP(entry.date, { withYear: false }))}</strong><span>${entry.reflected ? "反映済み" : "要確認"}</span></div>
+        <div class="contact-book-message"><span>保護者から</span><p>${escapeHtml(entry.familyMessage)}</p></div>
+        <div class="contact-book-reply"><span>事業所の対応</span><p>${escapeHtml(entry.serviceReply)}</p></div>
+        <div class="contact-book-request"><strong>支援へ組み込む要望</strong><p>${escapeHtml(entry.request)}</p><button class="inline-link" type="button" data-apply-contact-entry="${escapeAttribute(entry.id)}" ${entry.reflected ? "disabled" : ""}>${entry.reflected ? "アセスメントへ反映済み" : "アセスメントの検討事項へ反映 →"}</button></div>
+      </article>`).join("")
+    : `<div class="empty-state"><div><strong>連絡帳の記録はまだありません</strong><p>保護者とのやりとりを追加すると、次の支援を考える際の確認事項として残せます。</p></div></div>`;
+}
+
+function renderAssessmentDraft() {
+  const draft = state.assessmentDraft;
+  $("#assessment-source-status").textContent = `${draft.sourcePeriod}の日誌・モニタリング + 相談支援案`;
+  $("#assessment-profile-strip").innerHTML = `
+    <article><span>本人</span><strong>${escapeHtml(state.profile.displayName)}さん</strong><small>${escapeHtml(state.profile.grade)}・${escapeHtml(state.profile.serviceType)}</small></article>
+    <article><span>日誌の根拠</span><strong>${escapeHtml(draft.sourcePeriod)}</strong><small>日誌だけで結論は出しません</small></article>
+    <article><span>次の工程</span><strong>個別支援計画の原案</strong><small>本人・家族・支援者で確認して決定</small></article>`;
+  $("#assessment-consultation-link").innerHTML = `<strong>相談支援案から引き継ぐ目標</strong><span>${escapeHtml(draft.consultationGoal || "相談支援事業所の案を確認してください。")} </span><button class="inline-link" type="button" data-view-target="consultation">相談支援案を確認する →</button>`;
+  $("#assessment-draft-fields").innerHTML = [
+    draftTextarea("assessmentDraft", "personWish", "本人の意向", draft.personWish, 3),
+    draftTextarea("assessmentDraft", "familyWish", "家族の意向", draft.familyWish, 3),
+    draftTextarea("assessmentDraft", "strengths", "本人の強み・活かせること", draft.strengths, 3),
+    draftTextarea("assessmentDraft", "needs", "生活上の課題・支援の必要性", draft.needs, 4),
+    draftTextarea("assessmentDraft", "supportDirection", "支援の方向性", draft.supportDirection, 4),
+    draftTextarea("assessmentDraft", "planningNote", "計画書へ引き継ぐこと", draft.planningNote, 3)
+  ].join("");
 }
 
 function refreshPlanStale() {
@@ -371,44 +528,30 @@ function setByPath(target, path, value) {
   current[keys.at(-1)] = value;
 }
 
-function persistState(status = $("#save-status")) {
-  saveTimer = undefined;
-  try {
-    localStorage.setItem(STORAGE_KEY, JSON.stringify(state));
-    if (status) {
-      status.classList.remove("is-saving");
-      status.lastChild.textContent = "自動保存済み";
-    }
-    return true;
-  } catch (error) {
-    if (status) {
-      status.classList.remove("is-saving");
-      status.lastChild.textContent = "保存できません";
-    }
-    showToast(`ブラウザ内へ保存できませんでした。この画面内の一時状態です。再読み込みで失われます：${error.message}`);
-    return false;
-  }
-}
-
-function saveState({ quiet = false, immediate = false } = {}) {
+function saveState({ quiet = false } = {}) {
   state.updatedAt = new Date().toISOString();
+  syncActiveWorkspace();
   const status = $("#save-status");
   if (!quiet && status) {
     status.classList.add("is-saving");
     status.lastChild.textContent = "保存中…";
   }
   window.clearTimeout(saveTimer);
-  if (immediate) {
-    return persistState(status);
-  }
-  saveTimer = window.setTimeout(() => persistState(status), quiet ? 0 : 180);
-  return true;
-}
-
-function flushPendingState() {
-  if (saveTimer === undefined) return;
-  window.clearTimeout(saveTimer);
-  persistState();
+  saveTimer = window.setTimeout(() => {
+    try {
+      localStorage.setItem(STORAGE_KEY, JSON.stringify(state));
+      if (status) {
+        status.classList.remove("is-saving");
+        status.lastChild.textContent = "自動保存済み";
+      }
+    } catch (error) {
+      if (status) {
+        status.classList.remove("is-saving");
+        status.lastChild.textContent = "保存できません";
+      }
+      showToast(`ブラウザ内へ保存できませんでした：${error.message}`);
+    }
+  }, quiet ? 0 : 180);
 }
 
 function showToast(message) {
@@ -445,19 +588,8 @@ function renderDomainToggles(name, selected = [], dataAttributes = "") {
     .join("");
 }
 
-function confirmDiscardComposeChanges() {
-  if (!composeDirty) return true;
-  const discard = window.confirm("日誌に未保存の変更があります。変更を破棄して移動しますか？");
-  if (discard) composeDirty = false;
-  return discard;
-}
-
 function navigate(view, { preserveScroll = false, focusHeading = true } = {}) {
   if (!VIEW_TITLES[view]) return;
-  if (state.activeView === "compose" && composeDirty) {
-    if (view === "compose") return;
-    if (!confirmDiscardComposeChanges()) return;
-  }
   state.activeView = view;
   $$(".view").forEach((section) => {
     const active = section.dataset.view === view;
@@ -473,13 +605,13 @@ function navigate(view, { preserveScroll = false, focusHeading = true } = {}) {
   $("#page-title").textContent = VIEW_TITLES[view].title;
   $("#breadcrumb-current").textContent = VIEW_TITLES[view].breadcrumb;
 
-  if (view === "dashboard") renderDashboard();
-  if (view === "compose") renderCompose();
   if (view === "journals") renderJournals();
+  if (view === "childProfile") renderChildProfile();
+  if (view === "consultation") renderConsultationDraft();
+  if (view === "contactBook") renderContactBook();
   if (view === "analysis") renderAnalysis();
-  if (view === "chat") renderJournalChat();
+  if (view === "assessment") renderAssessmentDraft();
   if (view === "plan") renderPlan();
-  if (view === "family") renderFamily();
   if (!preserveScroll) window.scrollTo({ top: 0, behavior: "smooth" });
   if (focusHeading) {
     const heading = $(`#view-${view} h2`);
@@ -492,143 +624,118 @@ function navigate(view, { preserveScroll = false, focusHeading = true } = {}) {
   saveState({ quiet: true });
 }
 
-const STUDENT_STATE_KEYS = [
-  "profile", "journals", "plan", "analysisRange", "selectedJournalId", "composeJournalId", "selectedFamilyJournalId",
-  "filters", "planMode", "planStale", "chatMessages", "workflowVersion", "demoDataVersion"
-];
-
-function snapshotActiveStudent() {
-  return structuredClone(Object.fromEntries(STUDENT_STATE_KEYS.map((key) => [key, state[key]])));
-}
-
-function switchStudent(nextStudentId) {
-  if (!DEMO_PROFILES[nextStudentId] || nextStudentId === state.studentId) return;
-  if (!confirmDiscardComposeChanges()) {
-    $("#child-select").value = state.studentId;
-    return;
-  }
-  const snapshots = { ...(state.studentSnapshots ?? {}), [state.studentId]: snapshotActiveStudent() };
-  const nextSnapshot = snapshots[nextStudentId];
-  const nextState = nextSnapshot ? structuredClone(nextSnapshot) : createInitialState(nextStudentId);
-  Object.assign(state, nextState, {
-    studentId: nextStudentId,
-    studentSnapshots: snapshots,
-    activeView: "dashboard",
-    updatedAt: new Date().toISOString()
-  });
-  composeDirty = false;
-  renderAll();
-  navigate("dashboard", { preserveScroll: true, focusHeading: false });
-  saveState({ immediate: true });
-  showToast(`${state.profile.displayName}のデモに切り替えました。`);
-}
-
 function renderSidebar() {
   $("#sidebar-child-name").innerHTML = `${escapeHtml(state.profile.displayName)} <small>（仮名）</small>`;
   $("#sidebar-child-meta").textContent = `${state.profile.grade}・利用週3回`;
-  $(".child-mini-card .avatar").textContent = state.profile.displayName.slice(0, 1);
-  $("#child-select").innerHTML = Object.values(DEMO_PROFILES)
-    .map((profile) => `<option value="${escapeAttribute(profile.id)}">${escapeHtml(profile.displayName)}（${escapeHtml(profile.grade)}）</option>`)
-    .join("");
-  $("#child-select").value = state.studentId;
+  $("#sidebar-child-avatar").textContent = state.profile.displayName.slice(0, 1);
   $("#nav-journal-count").textContent = String(state.journals.length);
-  $("#nav-family-count").textContent = String(
-    state.journals.filter((journal) => journal.familyShareStatus === "ready" && canShareFamilyRecord(journal)).length
-  );
+  $("#nav-contact-count").textContent = String(state.contactBookEntries?.length ?? 0);
+  const children = Object.values(state.childWorkspaces)
+    .map((workspace) => workspace.profile)
+    .filter((profile) => profile?.id && profile?.displayName)
+    .sort((a, b) => a.id.localeCompare(b.id));
+  $("#child-switcher-options").innerHTML = children
+    .map((profile) => `
+      <button class="child-switch-option ${profile.id === state.activeChildId ? "is-active" : ""}" type="button" data-child-id="${escapeAttribute(profile.id)}" aria-pressed="${profile.id === state.activeChildId}">
+        <span>${escapeHtml(profile.displayName.slice(0, 1))}</span><strong>${escapeHtml(profile.displayName)}</strong><small>${escapeHtml(profile.grade)}</small>
+      </button>`)
+    .join("");
 }
 
-function recordStatusLabel(status) {
-  return { draft: "下書き", review: "職員確認待ち", confirmed: "職員確認済み" }[normalizeRecordStatus(status)];
+function profileInput(path, label, value, type = "text", extra = "") {
+  const lengthLimit = type === "text" ? 'maxlength="200"' : "";
+  return `<label><span>${escapeHtml(label)}</span><input type="${type}" data-profile-path="${escapeAttribute(path)}" value="${escapeAttribute(value ?? "")}" ${lengthLimit} ${extra} /></label>`;
 }
 
-function familyShareStatusLabel(status) {
-  return { private: "共有対象外", ready: "共有準備済み", "shared-demo": "デモ共有済み" }[
-    normalizeFamilyShareStatus(status)
-  ];
+function profileTextarea(path, label, value, rows = 3) {
+  return `<label class="full-width"><span>${escapeHtml(label)}</span><textarea data-profile-path="${escapeAttribute(path)}" rows="${rows}" maxlength="2000">${escapeHtml(value ?? "")}</textarea></label>`;
 }
 
-function renderTodayStatus() {
-  const sorted = [...state.journals].sort((a, b) => b.date.localeCompare(a.date));
-  const reviewJournals = sorted.filter((journal) => journal.recordStatus !== "confirmed");
-  const readyJournals = sorted.filter(
-    (journal) => journal.familyShareStatus === "ready" && canShareFamilyRecord(journal)
-  );
-  const sharedJournals = sorted.filter((journal) => journal.familyShareStatus === "shared-demo");
-  const latest = sorted[0];
-  refreshPlanStale();
+function renderChildProfileSummary() {
+  const profile = state.profile;
+  $("#child-profile-summary").innerHTML = `
+    <div class="profile-identity"><span class="profile-avatar">${escapeHtml(profile.displayName.slice(0, 1) || "？")}</span><div><p class="eyebrow">現在選択中の利用児</p><h3>${escapeHtml(profile.displayName || "未登録")}</h3><p>${escapeHtml(profile.legalName || "帳票用氏名は未入力")} ・ ${escapeHtml(profile.grade || "学年未入力")}</p></div></div>
+    <dl class="profile-overview-list">
+      <div><dt>生年月日</dt><dd>${escapeHtml(profile.birthDate ? formatDateJP(profile.birthDate) : "未入力")}</dd></div>
+      <div><dt>保護者氏名</dt><dd>${escapeHtml(profile.guardianName || "未入力")}</dd></div>
+      <div><dt>受給者証番号</dt><dd>${escapeHtml(profile.recipientNumber || "未入力")}</dd></div>
+      <div><dt>利用サービス</dt><dd>${escapeHtml(profile.serviceType || "未入力")}</dd></div>
+      <div><dt>利用予定</dt><dd>${escapeHtml(profile.usePattern || "未入力")}</dd></div>
+      <div><dt>日誌の件数</dt><dd>${state.journals.length}件</dd></div>
+    </dl>`;
+}
 
-  $("#today-latest-date").textContent = latest
-    ? `${formatDateJP(latest.date, { withWeekday: true })}までのAさんの記録・共有・計画を確認します。`
-    : "Aさんの日誌を追加すると、確認状況がここに表示されます。";
+function renderChildProfile() {
+  const profile = state.profile;
+  renderChildProfileSummary();
+  $("#child-profile-fields").innerHTML = [
+    profileInput("displayName", "表示名（画面上の呼び名）", profile.displayName),
+    profileInput("legalName", "利用児氏名（帳票用）", profile.legalName),
+    profileInput("birthDate", "生年月日", profile.birthDate, "date"),
+    profileInput("grade", "学年", profile.grade),
+    profileInput("guardianName", "保護者氏名", profile.guardianName),
+    profileInput("recipientNumber", "受給者証番号", profile.recipientNumber),
+    profileInput("serviceType", "利用サービス", profile.serviceType),
+    profileInput("serviceName", "事業所名", profile.serviceName),
+    profileInput("usePattern", "利用予定", profile.usePattern),
+    profileInput("standardSchedule", "標準的な利用時間", profile.standardSchedule),
+    profileInput("managerName", "児童発達支援管理責任者", profile.managerName),
+    profileTextarea("personWish", "本人の希望・大切にしたいこと", profile.personWish, 3),
+    profileTextarea("familyWish", "家族の希望・心配ごと", profile.familyWish, 3),
+    profileTextarea("currentPlanContext", "現在の支援状況・引き継ぎ事項", profile.currentPlanContext, 3)
+  ].join("");
+}
 
-  const cards = [
-    {
-      label: "職員確認待ち",
-      value: reviewJournals.length,
-      unit: "件",
-      note: reviewJournals.length ? "原本と用途別下書きを確認" : "確認待ちはありません",
-      color: "#bd5b40"
-    },
-    {
-      label: "保護者共有の準備",
-      value: readyJournals.length,
-      unit: "件",
-      note: readyJournals.length ? "内容を見て、共有を明示" : "共有準備中はありません",
-      color: "#b58a44"
-    },
-    {
-      label: "デモ共有済み",
-      value: sharedJournals.length,
-      unit: "件",
-      note: "外部送信はしていません",
-      color: "#769072"
-    },
-    {
-      label: "個別支援計画",
-      value: state.planStale ? "要更新" : "原案あり",
-      unit: "",
-      note: state.planStale ? "日誌の変更を再反映してください" : `${state.plan.sourceCount ?? 0}件の根拠日誌を接続`,
-      color: "#4e7d89"
-    }
-  ];
-  $("#today-status-grid").innerHTML = cards.map((card) => `
-    <article class="today-status-card" style="--status-color:${card.color}">
-      <span>${escapeHtml(card.label)}</span>
-      <strong>${escapeHtml(card.value)}<small>${escapeHtml(card.unit)}</small></strong>
-      <p>${escapeHtml(card.note)}</p>
-    </article>`).join("");
+function syncProfileToPlan() {
+  const profile = state.profile;
+  if (!state.plan) return;
+  state.plan.child.name = profile.legalName || profile.displayName;
+  state.plan.child.guardianName = profile.guardianName;
+  state.plan.child.birthDate = profile.birthDate;
+  state.plan.child.grade = profile.grade;
+  state.plan.child.recipientNumber = profile.recipientNumber;
+  state.plan.child.ageLabel = calculateAgeLabel(profile.birthDate, state.plan.planStart) || profile.ageLabel || "";
+  state.plan.service.name = profile.serviceName;
+  state.plan.service.type = profile.serviceType;
+  state.plan.service.managerName = profile.managerName;
+  state.plan.service.usePattern = profile.usePattern;
+  state.plan.service.standardSchedule = profile.standardSchedule;
+}
 
-  const focus = reviewJournals[0] ?? readyJournals[0] ?? latest;
-  if (!focus) {
-    $("#today-focus-card").innerHTML = `
-      <div class="today-focus-copy"><span class="today-focus-index">01</span><div><strong>最初の日誌を書きましょう</strong><small>観察した事実・支援・本人の反応を残します。</small></div></div>
-      <button class="mini-button" type="button" data-view-target="compose">日誌を書く →</button>`;
-    return;
-  }
+function updateProfileAfterInput(input) {
+  const path = input.dataset.profilePath;
+  if (!path) return;
+  setByPath(state.profile, path, input.value);
+  syncProfileToPlan();
+  saveState({ quiet: true });
+  renderSidebar();
+  renderChildProfileSummary();
+}
 
-  const needsReview = focus.recordStatus !== "confirmed";
-  const needsShare = !needsReview && focus.familyShareStatus === "ready";
-  const action = needsReview
-    ? `<button class="mini-button" type="button" data-compose-journal="${escapeAttribute(focus.id)}">下書きを確認 →</button>`
-    : needsShare
-      ? `<button class="mini-button" type="button" data-open-family-journal="${escapeAttribute(focus.id)}">共有前に確認 →</button>`
-      : `<button class="mini-button" type="button" data-view-target="journals">日誌を確認 →</button>`;
-  const focusLabel = needsReview ? "職員確認待ち" : needsShare ? "保護者共有の準備" : "直近の日誌";
-  $("#today-focus-card").innerHTML = `
-    <div class="today-focus-copy">
-      <span class="today-focus-index">NEXT</span>
-      <div><strong>${escapeHtml(focusLabel)}：${escapeHtml(focus.activity)}</strong><small>${escapeHtml(formatDateJP(focus.date, { withWeekday: true }))}・${escapeHtml(focus.response)}</small></div>
-    </div>
-    ${action}`;
+function switchChild(childId) {
+  if (!state.childWorkspaces?.[childId] || childId === state.activeChildId) return;
+  syncActiveWorkspace();
+  const nextWorkspace = structuredClone(state.childWorkspaces[childId]);
+  state = {
+    ...state,
+    ...nextWorkspace,
+    activeChildId: childId,
+    childWorkspaces: state.childWorkspaces
+  };
+  state.consultationPlanDraft ??= createConsultationPlanDraft(state.profile);
+  state.contactBookEntries ??= createContactBookEntries(state.profile);
+  state.assessmentDraft ??= createAssessmentDraft(state.profile, state.monitoringDraft, state.consultationPlanDraft);
+  renderAll();
+  navigate(state.activeView, { preserveScroll: true, focusHeading: false });
+  saveState();
+  showToast(`${state.profile.displayName}のデモに切り替えました。日誌から各下書きまで、児童ごとの内容を確認できます。`);
 }
 
 function renderDashboard() {
-  renderTodayStatus();
   const analysis = analyzeJournals(state.journals);
   const indicatorDeltas = Object.values(analysis.indicators).map((item) => item.delta).filter(Number.isFinite);
   const meanDelta = indicatorDeltas.length ? indicatorDeltas.reduce((sum, value) => sum + value, 0) / indicatorDeltas.length : null;
   $("#hero-entry-count").textContent = String(analysis.count);
-  $("#hero-entry-count-visual").textContent = String(analysis.count).padStart(2, "0");
   $("#journey-period").textContent = analysis.period;
 
   const metrics = [
@@ -683,146 +790,6 @@ function renderDashboard() {
     .join("");
 }
 
-function getComposeJournal() {
-  return getJournalById(state.journals, state.composeJournalId);
-}
-
-function getStoredJournalById(id) {
-  return state.journals.find((journal) => journal.id === id) ?? null;
-}
-
-function replaceStoredJournal(id, changes) {
-  const index = state.journals.findIndex((journal) => journal.id === id);
-  if (index < 0) return null;
-  const next = normalizeSavedJournal({ ...state.journals[index], ...changes });
-  if (!next) return null;
-  state.journals.splice(index, 1, next);
-  return next;
-}
-
-function renderCompose() {
-  const sorted = [...state.journals].sort((a, b) => b.date.localeCompare(a.date));
-  if (state.composeJournalId && !sorted.some((journal) => journal.id === state.composeJournalId)) {
-    state.composeJournalId = "";
-  }
-  const journal = getComposeJournal();
-  const select = $("#compose-journal-select");
-  select.innerHTML = `<option value="">＋ 新しい日誌を書く</option>${sorted.map((item) => `
-    <option value="${escapeAttribute(item.id)}">${escapeHtml(formatDateJP(item.date, { withWeekday: false }))}　${escapeHtml(item.activity)}　／ ${escapeHtml(recordStatusLabel(item.recordStatus))}</option>`).join("")}`;
-  select.value = journal?.id ?? "";
-
-  $("#compose-journal-id").value = journal?.id ?? "";
-  $("#compose-date").value = journal?.date ?? toLocalIsoDate();
-  $("#compose-activity").value = journal?.activity ?? "";
-  $("#compose-mood").value = journal?.mood ?? "未記入";
-  $("#compose-staff").value = journal?.staff ?? "";
-  const [startTime = "", endTime = ""] = (journal?.time ?? "").split("〜");
-  $("#compose-start-time").value = startTime;
-  $("#compose-end-time").value = endTime;
-  $("#compose-observation").value = journal?.observation ?? "";
-  $("#compose-support").value = journal?.support ?? "";
-  $("#compose-response").value = journal?.response ?? "";
-  $("#compose-staff-draft").value = journal?.staffDraft || (journal ? createStaffDraft(journal) : "");
-  $("#compose-family-draft").value = journal?.familyDraft || journal?.familyNote || "";
-  $$("input[name='composeDomains']", $("#quick-record-form")).forEach((input) => {
-    input.checked = journal?.domains?.includes(input.value) ?? false;
-  });
-
-  const recordStatus = journal ? normalizeRecordStatus(journal.recordStatus) : "draft";
-  const familyStatus = journal ? normalizeFamilyShareStatus(journal.familyShareStatus) : "private";
-  const status = familyStatus === "shared-demo" ? familyStatus : recordStatus;
-  const statusElement = $("#compose-workflow-status");
-  statusElement.dataset.status = status;
-  statusElement.textContent = journal
-    ? familyStatus === "shared-demo"
-      ? "デモ共有済み"
-      : familyStatus === "ready"
-        ? "共有準備済み"
-        : recordStatusLabel(recordStatus)
-    : "新規入力";
-
-  const draftStep = $("#compose-step-draft");
-  const confirmStep = $("#compose-step-confirm");
-  const shareStep = $("#compose-step-share");
-  [draftStep, confirmStep, shareStep].forEach((step) => step.classList.remove("is-current", "is-complete"));
-  if (!journal || recordStatus === "draft") {
-    draftStep.classList.add("is-current");
-  } else {
-    draftStep.classList.add("is-complete");
-    if (recordStatus === "review") confirmStep.classList.add("is-current");
-    else {
-      confirmStep.classList.add("is-complete");
-      if (familyStatus === "shared-demo") shareStep.classList.add("is-complete");
-      else shareStep.classList.add("is-current");
-    }
-  }
-
-  $("#save-record-draft").textContent = journal ? "変更を保存" : "記録として保存";
-  $("#confirm-staff-record").disabled = !journal || recordStatus === "confirmed";
-  $("#prepare-family-share").disabled = !journal
-    || recordStatus !== "confirmed"
-    || familyStatus !== "private"
-    || !sanitizePlainText(journal.familyDraft || journal.familyNote);
-  $("#compose-action-note").textContent = !journal
-    ? "下書きを作成しても、保存・共有は自動では行われません。"
-    : recordStatus === "review"
-      ? "変更内容を職員が確認すると、保護者共有の準備へ進めます。"
-      : familyStatus === "private"
-        ? "職員確認済みです。保護者向け文章を確認して共有準備へ進めます。"
-        : familyStatus === "ready"
-          ? "共有準備済みです。「保護者への共有」で最終プレビューを確認してください。"
-          : "デモ共有済みです。外部サービスへの送信は行っていません。";
-  composeDirty = false;
-}
-
-function renderFamily() {
-  const candidates = [...state.journals]
-    .filter((journal) => canShareFamilyRecord(journal))
-    .sort((a, b) => b.date.localeCompare(a.date));
-  const readyCount = candidates.filter((journal) => journal.familyShareStatus === "ready").length;
-  $("#family-ready-count").textContent = `${readyCount}件`;
-  $("#nav-family-count").textContent = String(readyCount);
-
-  if (!candidates.some((journal) => journal.id === state.selectedFamilyJournalId)) {
-    state.selectedFamilyJournalId = candidates.find((journal) => journal.familyShareStatus === "ready")?.id
-      ?? candidates[0]?.id
-      ?? "";
-  }
-  const selected = getJournalById(candidates, state.selectedFamilyJournalId);
-
-  $("#family-share-list").innerHTML = candidates.length
-    ? candidates.map((journal) => `
-      <button class="family-share-item ${journal.id === selected?.id ? "is-selected" : ""}" type="button" data-family-select="${escapeAttribute(journal.id)}" aria-pressed="${journal.id === selected?.id}">
-        <span>${escapeHtml(formatDateJP(journal.date, { withYear: false }))}<i>${escapeHtml(familyShareStatusLabel(journal.familyShareStatus))}</i></span>
-        <strong>${escapeHtml(journal.activity)}</strong>
-      </button>`).join("")
-    : `<div class="family-share-empty"><strong>共有できる記録はありません</strong><small>日誌を職員確認し、保護者共有の準備へ進めてください。</small></div>`;
-
-  const actions = $("#family-share-actions");
-  const preview = $("#family-preview");
-  if (!selected) {
-    actions.innerHTML = `<button class="ghost-button" type="button" data-view-target="compose">日誌を書く</button>`;
-    preview.innerHTML = `<div class="family-share-empty"><strong>共有内容を選択してください</strong><small>内部記録はこの画面には表示されません。</small></div>`;
-    return;
-  }
-
-  actions.innerHTML = selected.familyShareStatus === "ready"
-    ? `<button class="ghost-button" type="button" data-compose-journal="${escapeAttribute(selected.id)}">文章を編集</button><button class="primary-button" type="button" data-family-share="${escapeAttribute(selected.id)}">デモ共有する</button>`
-    : `<button class="ghost-button" type="button" data-family-revoke="${escapeAttribute(selected.id)}">共有状態を取り消す</button>`;
-  const shareMessage = sanitizePlainText(selected.familyDraft || selected.familyNote);
-  preview.innerHTML = `
-    <article class="family-day-card">
-      <div class="family-day-date">
-        <strong>${escapeHtml(formatDateJP(selected.date, { withWeekday: true }))}</strong>
-        <span>${selected.familyShareStatus === "ready" ? "職員用・共有前プレビュー" : "デモ共有済み"}</span>
-      </div>
-      <p class="family-activity-label">TODAY'S ACTIVITY</p>
-      <h4>${escapeHtml(selected.activity)}</h4>
-      <p class="family-message">${escapeHtml(shareMessage)}</p>
-      <footer class="family-card-footer"><span>${escapeHtml(state.profile.serviceName)}</span><span>${selected.familyShareStatus === "ready" ? "まだ共有されていません" : "共有済み（デモ）"}</span></footer>
-    </article>`;
-}
-
 function populateMonthFilter() {
   const select = $("#journal-month-filter");
   const months = [...new Set(state.journals.map((journal) => journal.date.slice(0, 7)).filter((month) => /^\d{4}-\d{2}$/.test(month)))].sort();
@@ -867,7 +834,7 @@ function renderJournalList() {
             <button class="journal-card ${journal.id === state.selectedJournalId ? "is-selected" : ""}" type="button" data-journal-id="${escapeAttribute(journal.id)}" aria-pressed="${journal.id === state.selectedJournalId}">
               <span class="journal-card-date"><small>${date.month}月・${date.weekday}</small><strong>${date.day}</strong></span>
               <span>
-                <span class="journal-card-top"><strong>${escapeHtml(journal.activity)}</strong><span class="mood-chip">${escapeHtml(recordStatusLabel(journal.recordStatus))}</span></span>
+                <span class="journal-card-top"><strong>${escapeHtml(journal.activity)}</strong><span class="mood-chip">${escapeHtml(journal.mood || "未記入")}</span></span>
                 <p>${escapeHtml(journal.observation)}</p>
                 <span class="domain-chips">${renderDomainChips(journal.domains)}</span>
               </span>
@@ -891,7 +858,7 @@ function renderJournalDetail() {
     { label: "観察した事実", value: journal.observation },
     { label: "行った支援", value: journal.support },
     { label: "本人の反応・変化", value: journal.response },
-    { label: "保護者向け共有文", value: journal.familyNote || "共有文は未作成" }
+    { label: "家庭との共有", value: journal.familyNote || "共有事項なし" }
   ];
   detail.innerHTML = `
     <div class="detail-heading">
@@ -901,7 +868,6 @@ function renderJournalDetail() {
         <p>${escapeHtml(journal.time || "利用時間未記入")}・記録者 ${escapeHtml(journal.staff || "未記入")}</p>
       </div>
       <div class="detail-actions">
-        <button class="mini-button" type="button" data-compose-journal="${escapeAttribute(journal.id)}">用途別下書き</button>
         <button class="mini-button" type="button" data-edit-journal="${escapeAttribute(journal.id)}">編集</button>
         <button class="mini-button danger" type="button" data-delete-journal="${escapeAttribute(journal.id)}">削除</button>
       </div>
@@ -910,11 +876,6 @@ function renderJournalDetail() {
       <div><span>来所時</span><strong>${escapeHtml(journal.mood || "未記入")}</strong></div>
       <div><span>健康・体調</span><strong>${escapeHtml(journal.physical || "未記入")}</strong></div>
       <div><span>関連領域</span><strong>${journal.domains.length}領域</strong></div>
-    </div>
-    <div class="record-workflow-strip">
-      <span class="record-state is-${escapeAttribute(journal.recordStatus)}">${escapeHtml(recordStatusLabel(journal.recordStatus))}</span>
-      <span class="record-state is-${escapeAttribute(journal.familyShareStatus)}">${escapeHtml(familyShareStatusLabel(journal.familyShareStatus))}</span>
-      <small>職員確認と保護者共有は別々に管理します。</small>
     </div>
     <div class="domain-chips" style="margin-bottom:20px">${renderDomainChips(journal.domains)}</div>
     <div class="detail-flow">
@@ -1023,92 +984,7 @@ function renderAnalysis() {
         <p class="domain-analysis-summary">${escapeHtml(domain.count ? domain.summary : "この期間の日誌には、関連付けられた記録がありません。追加アセスメントで確認してください。")}</p>
       </div>`)
     .join("");
-}
-
-function renderJournalChat() {
-  const suggestions = $("#journal-chat-suggestions");
-  suggestions.innerHTML = JOURNAL_CHAT_SUGGESTIONS
-    .map((question) => `<button class="chat-suggestion" type="button" data-chat-suggestion="${escapeAttribute(question)}">${escapeHtml(question)}</button>`)
-    .join("");
-
-  const thread = $("#journal-chat-thread");
-  const messages = state.chatMessages ?? [];
-  thread.innerHTML = messages.length
-    ? messages.map((message) => `
-      <article class="chat-turn">
-        <div class="chat-question"><span>あなた</span><p>${escapeHtml(message.question)}</p></div>
-        <div class="chat-answer">
-          <div class="chat-answer-head"><span class="chat-orbit" aria-hidden="true">◎</span><div><span class="eyebrow">日誌の根拠から整理</span><strong>${escapeHtml(message.topic)}</strong></div></div>
-          <p>${escapeHtml(message.answer)}</p>
-          <div class="chat-evidence" aria-label="根拠になった日誌">
-            <span>根拠の日誌</span>
-            ${message.evidence.length ? message.evidence.map((journal) => `
-              <button type="button" data-evidence-journal-id="${escapeAttribute(journal.id)}">
-                <strong>${escapeHtml(formatDateJP(journal.date, { withYear: false, withWeekday: true }))}</strong>
-                <span>${escapeHtml(journal.activity)}</span><i aria-hidden="true">→</i>
-              </button>`).join("") : "<em>該当する日誌はありません</em>"}
-          </div>
-        </div>
-      </article>`).join("")
-    : `<article class="chat-welcome">
-        <div class="chat-orbit large" aria-hidden="true">◎</div>
-        <div><p class="eyebrow">JOURNAL Q&A / DEMO</p><h3>日誌の言葉から、<br />確認の手がかりを探します。</h3><p>質問に関連するAさんの日誌を整理し、根拠の記録を表示します。回答をそのまま判断や計画書に使わず、必ず元の日誌を確認してください。</p></div>
-      </article>`;
-  $("#journal-chat-count").textContent = `${state.journals.length}件の日誌を対象`;
-}
-
-function askJournalChat(question) {
-  const reply = createJournalChatReply(question, state.journals);
-  if (!reply) {
-    showToast("日誌について知りたいことを入力してください。");
-    return;
-  }
-  state.chatMessages = [...(state.chatMessages ?? []), reply].slice(-12);
-  $("#journal-chat-input").value = "";
-  renderJournalChat();
-  saveState();
-  announce("日誌をもとにした回答と根拠日誌を表示しました。");
-  window.requestAnimationFrame(() => $("#journal-chat-thread").lastElementChild?.scrollIntoView({ behavior: "smooth", block: "nearest" }));
-}
-
-function startVoiceInput(targetId) {
-  const Recognition = window.SpeechRecognition || window.webkitSpeechRecognition;
-  const target = document.getElementById(targetId);
-  if (!target) return;
-  if (!Recognition) {
-    showToast("このブラウザでは音声入力に対応していません。キーボード入力をご利用ください。");
-    target.focus();
-    return;
-  }
-  activeSpeechRecognition?.abort();
-  const recognition = new Recognition();
-  activeSpeechRecognition = recognition;
-  recognition.lang = "ja-JP";
-  recognition.interimResults = false;
-  recognition.continuous = false;
-  const button = $(`[data-voice-input="${targetId}"]`);
-  button?.classList.add("is-listening");
-  if (button) button.textContent = "● 聞き取り中…";
-  recognition.onresult = (event) => {
-    const spoken = Array.from(event.results).map((result) => result[0]?.transcript ?? "").join("").trim();
-    if (!spoken) return;
-    target.value = `${target.value.trim()}${target.value.trim() ? "\n" : ""}${spoken}`.slice(0, Number(target.maxLength) || 1000);
-    target.dispatchEvent(new Event("input", { bubbles: true }));
-    showToast("音声を文字として入力しました。内容を確認して保存してください。");
-  };
-  recognition.onerror = (event) => {
-    if (event.error !== "aborted") showToast("音声を認識できませんでした。マイクの許可と周囲の音を確認してください。");
-  };
-  recognition.onend = () => {
-    if (activeSpeechRecognition === recognition) activeSpeechRecognition = undefined;
-    button?.classList.remove("is-listening");
-    if (button) button.textContent = "● 音声入力";
-  };
-  try {
-    recognition.start();
-  } catch {
-    showToast("音声入力を開始できませんでした。少し待ってからもう一度お試しください。");
-  }
+  renderMonitoringDraft();
 }
 
 function planInput(path, label, value, type = "text", extra = "") {
@@ -1499,7 +1375,11 @@ function renderPlan() {
   const sourceSummary = sourceJournals.length
     ? `${formatDateJP(state.plan.sourceStartDate)}〜${formatDateJP(state.plan.sourceEndDate)}の${state.plan.sourceCount}件の日誌から、本人支援の候補と根拠日誌を表示しています。`
     : "対象となる日誌がないため、本人支援の候補は作成していません。";
-  $("#plan-source-summary").textContent = sourceSummary;
+ $("#plan-source-summary").textContent = sourceSummary;
+  const consultationReference = state.plan.consultationPlanReference ?? state.consultationPlanDraft;
+  $("#plan-origin-note").innerHTML = consultationReference
+    ? `<strong>相談支援案を起点にしています</strong><span>${escapeHtml(consultationReference.agencyName)}の目標「${escapeHtml(consultationReference.overallGoal)}」を、事業所のアセスメントで確認し、日誌の根拠と合わせて計画書へ反映します。</span><button class="inline-link" type="button" data-view-target="consultation">相談支援案を見る →</button>`
+    : "";
   renderPlanEditor();
   renderAudit();
   renderPlanSummary();
@@ -1594,14 +1474,12 @@ function handleJournalSubmit(event) {
     return;
   }
   const currentId = String(data.get("id") || "");
-  const existingJournal = getJournalById(state.journals, currentId);
   const indicators = Object.fromEntries(Object.keys(INDICATOR_META).map((key) => {
     const raw = String(data.get(key) ?? "");
     const value = Number(raw);
     return [key, raw === "" ? null : Number.isInteger(value) && value >= 1 && value <= 4 ? value : null];
   }));
-  const sourceRecord = {
-    ...existingJournal,
+  const journal = {
     id: createUniqueJournalId(String(data.get("date")), currentId),
     date: String(data.get("date")),
     attendance: "出席",
@@ -1622,40 +1500,18 @@ function handleJournalSubmit(event) {
     }),
     indicators
   };
-  const reconciledDrafts = reconcileRecordDrafts(existingJournal, sourceRecord, {
-    staffDraft: existingJournal?.staffDraft || (existingJournal ? createStaffDraft(existingJournal) : ""),
-    familyDraft: sourceRecord.familyNote
-  });
-  const journal = normalizeSavedJournal({
-    ...invalidateDerivedWorkflow({
-      ...sourceRecord,
-      familyNote: reconciledDrafts.familyDraft,
-      staffDraft: reconciledDrafts.staffDraft,
-      familyDraft: reconciledDrafts.familyDraft
-    }),
-    recordStatus: "review",
-  });
   const existingIndex = state.journals.findIndex((item) => item.id === currentId);
   if (existingIndex >= 0) state.journals.splice(existingIndex, 1, journal);
   else state.journals.push(journal);
   state.journals.sort((a, b) => a.date.localeCompare(b.date));
   state.selectedJournalId = journal.id;
-  state.composeJournalId = journal.id;
   refreshPlanStale();
   $("#journal-dialog").close();
-  const persisted = saveState({ immediate: true });
+  saveState();
   renderSidebar();
   renderDashboard();
-  renderCompose();
   renderJournals();
-  renderFamily();
-  if (!persisted) return;
-  const draftSyncNote = reconciledDrafts.regeneratedStaffDraft || reconciledDrafts.regeneratedFamilyDraft
-    ? " 元記録の変更に合わせて用途別下書きも更新しました。"
-    : "";
-  showToast(existingIndex >= 0
-    ? `日誌を更新しました。計画案は必要に応じて再作成してください。${draftSyncNote}`
-    : "日誌を追加しました。計画案は必要に応じて再作成してください。");
+  showToast(existingIndex >= 0 ? "日誌を更新しました。計画案は必要に応じて再作成してください。" : "日誌を追加しました。計画案は必要に応じて再作成してください。");
 }
 
 function deleteJournal(id) {
@@ -1664,24 +1520,16 @@ function deleteJournal(id) {
   if (!window.confirm(`${formatDateJP(journal.date)}「${journal.activity}」を削除しますか？\nこのブラウザ内の記録から削除され、元に戻せません。`)) return;
   state.journals = state.journals.filter((item) => item.id !== id);
   state.selectedJournalId = [...state.journals].sort((a, b) => b.date.localeCompare(a.date))[0]?.id ?? "";
-  if (state.composeJournalId === id) state.composeJournalId = state.selectedJournalId;
-  if (state.selectedFamilyJournalId === id) state.selectedFamilyJournalId = "";
   refreshPlanStale();
-  const persisted = saveState({ immediate: true });
+  saveState();
   renderSidebar();
   renderDashboard();
-  renderCompose();
   renderJournals();
-  renderFamily();
-  if (!persisted) return;
   showToast("日誌を削除しました。計画案の根拠を再確認してください。");
 }
 
 function exportJournalsCsv() {
-  const headers = [
-    "日付", "利用時間", "活動", "来所時", "健康・体調", "観察した事実", "行った支援", "本人の反応",
-    "職員記録の下書き", "保護者向け共有文", "記録確認状態", "保護者共有状態", "5領域", "記録者"
-  ];
+  const headers = ["日付", "利用時間", "活動", "来所時", "健康・体調", "観察した事実", "行った支援", "本人の反応", "家庭との共有", "5領域", "記録者"];
   const rows = [...state.journals]
     .sort((a, b) => a.date.localeCompare(b.date))
     .map((journal) => [
@@ -1693,10 +1541,7 @@ function exportJournalsCsv() {
       journal.observation,
       journal.support,
       journal.response,
-      journal.staffDraft || createStaffDraft(journal),
-      journal.familyDraft || journal.familyNote,
-      recordStatusLabel(journal.recordStatus),
-      familyShareStatusLabel(journal.familyShareStatus),
+      journal.familyNote,
       journal.domains.map((domain) => DOMAIN_META[domain]?.name ?? domain).join("／"),
       journal.staff
     ]);
@@ -1704,217 +1549,12 @@ function exportJournalsCsv() {
   const url = URL.createObjectURL(new Blob([csv], { type: "text/csv;charset=utf-8" }));
   const link = document.createElement("a");
   link.href = url;
-  link.download = `Aさん_日誌_NotebookLM用_${toLocalIsoDate()}.csv`;
+  link.download = `Aさん_日誌_${toLocalIsoDate()}.csv`;
   document.body.append(link);
   link.click();
   link.remove();
   URL.revokeObjectURL(url);
-  showToast(`${state.journals.length}件の日誌をNotebookLM用CSVとして出力しました。`);
-}
-
-function readComposeSource() {
-  const form = $("#quick-record-form");
-  const data = new FormData(form);
-  return {
-    id: String(data.get("id") ?? ""),
-    date: String(data.get("date") ?? ""),
-    activity: sanitizePlainText(data.get("activity")),
-    mood: sanitizePlainText(data.get("mood")) || "未記入",
-    staff: sanitizePlainText(data.get("staff")),
-    startTime: String(data.get("startTime") ?? ""),
-    endTime: String(data.get("endTime") ?? ""),
-    observation: sanitizePlainText(data.get("observation")),
-    support: sanitizePlainText(data.get("support")),
-    response: sanitizePlainText(data.get("response")),
-    staffDraft: sanitizePlainText(data.get("staffDraft")),
-    familyDraft: sanitizePlainText(data.get("familyDraft")),
-    domains: $$("input[name='composeDomains']:checked", form).map((input) => input.value)
-  };
-}
-
-function generateRecordDrafts() {
-  const source = readComposeSource();
-  $("#compose-staff-draft").value = createStaffDraft(source);
-  $("#compose-family-draft").value = createFamilyDraft(source);
-  composeDirty = true;
-  $("#compose-action-note").textContent = "下書きを作成しました。内容を読み、必要なら書き換えてから保存してください。まだ保存・共有はしていません。";
-  announce("職員記録と保護者向け文章のデモ下書きを作成しました。まだ保存されていません。");
-}
-
-function handleQuickRecordSubmit(event) {
-  event.preventDefault();
-  const form = event.currentTarget;
-  if (!form.reportValidity()) return;
-  const source = readComposeSource();
-  const blankField = ["activity", "observation", "support", "response", "staff"].find((name) => !source[name]);
-  if (blankField) {
-    showToast("必須項目に空白だけは保存できません。");
-    form.elements[blankField]?.focus();
-    return;
-  }
-  if (!isValidIsoDate(source.date)) {
-    showToast("利用日を正しく入力してください。");
-    $("#compose-date").focus();
-    return;
-  }
-  if (!/^\d{2}:\d{2}$/.test(source.startTime) || !/^\d{2}:\d{2}$/.test(source.endTime) || source.startTime >= source.endTime) {
-    showToast("利用終了時刻は、利用開始時刻より後に設定してください。");
-    $("#compose-end-time").focus();
-    return;
-  }
-  if (!source.domains.length) {
-    showToast("関連する5領域を1つ以上選んでください。");
-    $("#compose-domain-options input")?.focus();
-    return;
-  }
-
-  const existing = getJournalById(state.journals, source.id);
-  const nextSourceRecord = {
-    ...existing,
-    id: createUniqueJournalId(source.date, source.id),
-    date: source.date,
-    attendance: existing?.attendance ?? "出席",
-    time: `${source.startTime}〜${source.endTime}`,
-    activity: source.activity,
-    mood: source.mood,
-    physical: existing?.physical ?? "未記入",
-    observation: source.observation,
-    support: source.support,
-    response: source.response,
-    familyNote: source.familyDraft,
-    staff: source.staff,
-    domains: source.domains,
-    tags: inferJournalTags({ observation: source.observation, response: source.response, domains: source.domains }),
-    indicators: existing?.indicators ?? Object.fromEntries(Object.keys(INDICATOR_META).map((key) => [key, null])),
-    recordStatus: "review",
-    familyShareStatus: "private"
-  };
-  const reconciledDrafts = reconcileRecordDrafts(existing, nextSourceRecord, {
-    staffDraft: source.staffDraft,
-    familyDraft: source.familyDraft
-  });
-  const sourceRecord = {
-    ...nextSourceRecord,
-    familyNote: reconciledDrafts.familyDraft,
-    staffDraft: reconciledDrafts.staffDraft,
-    familyDraft: reconciledDrafts.familyDraft
-  };
-  const journal = normalizeSavedJournal(invalidateDerivedWorkflow(sourceRecord));
-  const existingIndex = state.journals.findIndex((item) => item.id === source.id);
-  if (existingIndex >= 0) state.journals.splice(existingIndex, 1, journal);
-  else state.journals.push(journal);
-  state.journals.sort((a, b) => a.date.localeCompare(b.date));
-  state.selectedJournalId = journal.id;
-  state.composeJournalId = journal.id;
-  state.selectedFamilyJournalId = state.selectedFamilyJournalId === journal.id ? "" : state.selectedFamilyJournalId;
-  refreshPlanStale();
-  composeDirty = false;
-  const persisted = saveState({ immediate: true });
-  renderAll();
-  if (!persisted) {
-    composeDirty = true;
-    $("#compose-action-note").textContent = "保存できていません。この画面を閉じず、ブラウザの保存領域を確認してから再度保存してください。";
-    return;
-  }
-  const draftSyncNote = reconciledDrafts.regeneratedStaffDraft || reconciledDrafts.regeneratedFamilyDraft
-    ? " 元記録の変更に合わせて用途別下書きも更新しました。"
-    : "";
-  showToast(existingIndex >= 0
-    ? `記録を更新し、職員確認待ちへ戻しました。保護者共有状態は解除されています。${draftSyncNote}`
-    : "記録を保存しました。職員確認を完了してから保護者共有へ進みます。");
-}
-
-function confirmStaffRecord() {
-  if (composeDirty) {
-    showToast("未保存の変更があります。先に「変更を保存」を押してください。");
-    $("#save-record-draft").focus();
-    return;
-  }
-  const journal = getStoredJournalById(state.composeJournalId);
-  if (!journal) {
-    showToast("先に記録を保存してください。");
-    return;
-  }
-  if (!replaceStoredJournal(journal.id, { recordStatus: "confirmed" })) {
-    showToast("記録の確認状態を更新できませんでした。");
-    return;
-  }
-  const persisted = saveState({ immediate: true });
-  renderSidebar();
-  renderDashboard();
-  renderCompose();
-  renderJournals();
-  if (!persisted) return;
-  showToast("職員確認を完了しました。保護者への共有はまだ行われていません。");
-}
-
-function prepareFamilyShare() {
-  if (composeDirty) {
-    showToast("未保存の変更があります。先に「変更を保存」を押してください。");
-    $("#save-record-draft").focus();
-    return;
-  }
-  const journal = getStoredJournalById(state.composeJournalId);
-  if (!journal || journal.recordStatus !== "confirmed") {
-    showToast("先に職員確認を完了してください。");
-    return;
-  }
-  if (!sanitizePlainText(journal.familyDraft || journal.familyNote)) {
-    showToast("保護者向け文章を入力して保存してください。");
-    $("#compose-family-draft").focus();
-    return;
-  }
-  const readyJournal = replaceStoredJournal(journal.id, { familyShareStatus: "ready" });
-  if (!readyJournal || !canShareFamilyRecord(readyJournal)) {
-    replaceStoredJournal(journal.id, { familyShareStatus: "private" });
-    showToast("共有条件を満たしていません。内容をもう一度確認してください。");
-    return;
-  }
-  state.selectedFamilyJournalId = journal.id;
-  const persisted = saveState({ immediate: true });
-  renderAll();
-  if (!persisted) return;
-  showToast("共有準備済みにしました。まだ共有はされていません。保護者画面で最終確認できます。");
-}
-
-function shareFamilyRecord(id) {
-  const journal = getStoredJournalById(id);
-  if (!journal || journal.familyShareStatus !== "ready" || !canShareFamilyRecord(journal)) {
-    showToast("職員確認済み・共有準備済みの記録だけをデモ共有できます。");
-    return;
-  }
-  const sharedJournal = replaceStoredJournal(id, { familyShareStatus: "shared-demo" });
-  if (!sharedJournal) {
-    showToast("共有状態を更新できませんでした。");
-    return;
-  }
-  state.selectedFamilyJournalId = sharedJournal.id;
-  const persisted = saveState({ immediate: true });
-  renderSidebar();
-  renderDashboard();
-  renderCompose();
-  renderJournals();
-  renderFamily();
-  if (!persisted) return;
-  showToast("デモ共有済みにしました。外部への送信は行っていません。");
-}
-
-function revokeFamilyShare(id) {
-  const journal = getStoredJournalById(id);
-  if (!journal) return;
-  if (!replaceStoredJournal(id, { familyShareStatus: "private" })) {
-    showToast("共有状態を更新できませんでした。");
-    return;
-  }
-  if (state.selectedFamilyJournalId === id) state.selectedFamilyJournalId = "";
-  const persisted = saveState({ immediate: true });
-  renderSidebar();
-  renderDashboard();
-  renderCompose();
-  renderJournals();
-  renderFamily();
-  if (!persisted) return;
-  showToast("デモ共有状態を取り消しました。保護者画面の候補から外れました。");
+  showToast(`${state.journals.length}件の日誌をCSV出力しました。`);
 }
 
 function updatePlanAfterInput(input) {
@@ -2096,10 +1736,13 @@ function applyAnalysisRange() {
   }
   state.analysisRange = nextRange;
   refreshPlanStale();
+  state.monitoringDraft = createMonitoringDraft(state.profile, getAnalysisJournals());
+  state.assessmentDraft = createAssessmentDraft(state.profile, state.monitoringDraft, state.consultationPlanDraft);
   saveState();
   renderAnalysis();
+  renderAssessmentDraft();
   renderPlan();
-  showToast(`${days}日間・${getAnalysisJournals().length}件の日誌をふり返ります。計画案は再作成してください。`);
+  showToast(`${days}日間・${getAnalysisJournals().length}件の日誌からモニタリングとアセスメントの下書きを更新しました。計画案は再作成してください。`);
 }
 
 function regeneratePlan() {
@@ -2108,81 +1751,199 @@ function regeneratePlan() {
     : "計画案を現在の日誌から作り直します。手編集した内容は上書きされます。続けますか？";
   if (!window.confirm(message)) return;
   const sourceJournals = getAnalysisJournals();
-  state.plan = generatePlan(state.profile, sourceJournals);
+  state.plan = {
+    ...generatePlan(state.profile, sourceJournals),
+    consultationPlanReference: {
+      agencyName: state.consultationPlanDraft.agencyName,
+      preparedDate: state.consultationPlanDraft.preparedDate,
+      overallGoal: state.consultationPlanDraft.overallGoal
+    }
+  };
   state.planStale = false;
   saveState();
   renderPlan();
   showToast(`${formatDateJP(state.analysisRange.start)}〜${formatDateJP(state.analysisRange.end)}の${sourceJournals.length}件から計画案を再作成しました。`);
 }
 
+function refreshMonitoringDraft() {
+  if (!window.confirm("日誌からモニタリング下書きを作り直します。手編集したモニタリングとアセスメントの内容は上書きされます。続けますか？")) return;
+  const sourceJournals = getAnalysisJournals();
+  state.monitoringDraft = createMonitoringDraft(state.profile, sourceJournals);
+  state.assessmentDraft = createAssessmentDraft(state.profile, state.monitoringDraft, state.consultationPlanDraft);
+  saveState();
+  renderAnalysis();
+  renderAssessmentDraft();
+  showToast(`${sourceJournals.length}件の日誌からモニタリングとアセスメントの下書きを作り直しました。`);
+}
+
+function refreshAssessmentDraft() {
+  if (!window.confirm("現在のモニタリング下書きからアセスメントを作り直します。手編集したアセスメントの内容は上書きされます。続けますか？")) return;
+  state.assessmentDraft = createAssessmentDraft(state.profile, state.monitoringDraft, state.consultationPlanDraft);
+  saveState();
+  renderAssessmentDraft();
+  showToast("モニタリング下書きからアセスメントを作り直しました。");
+}
+
+function updateDraftAfterInput(input) {
+  const root = input.dataset.draftRoot;
+  const path = input.dataset.draftPath;
+  if (!root || !path || !state[root]) return;
+  setByPath(state[root], path, input.value);
+  saveState({ quiet: true });
+}
+
+function applyAssessmentToPlan() {
+  const draft = state.assessmentDraft;
+  state.plan.personWish = draft.personWish;
+  state.plan.familyWish = draft.familyWish;
+  state.plan.qualityOfLifeNeeds = draft.needs;
+  state.plan.comprehensivePolicy = draft.supportDirection;
+  state.plan.status = "draft";
+  saveState();
+  renderPlan();
+  navigate("plan");
+  showToast("アセスメントの下書きを計画書の基本項目へ反映しました。目標・支援内容・担当は続けて確認してください。");
+}
+
+function applyConsultationToAssessment() {
+  const consultation = state.consultationPlanDraft;
+  state.assessmentDraft = createAssessmentDraft(state.profile, state.monitoringDraft, consultation);
+  state.plan.consultationPlanReference = {
+    agencyName: consultation.agencyName,
+    preparedDate: consultation.preparedDate,
+    overallGoal: consultation.overallGoal
+  };
+  saveState();
+  renderAssessmentDraft();
+  renderPlan();
+  navigate("assessment");
+  showToast("サービス等利用計画案の内容を、事業所のアセスメント下書きへ反映しました。");
+}
+
+function applyContactBookEntry(entryId) {
+  const entry = state.contactBookEntries.find((item) => item.id === entryId);
+  if (!entry || entry.reflected) return;
+  const prefix = state.assessmentDraft.needs.trim() ? "\n\n" : "";
+  state.assessmentDraft.needs += `${prefix}【連絡帳からの要望】${entry.request}\n家庭での様子：${entry.familyMessage}\n事業所の対応案：${entry.serviceReply}`;
+  state.assessmentDraft.planningNote += `\n\n連絡帳（${formatDateJP(entry.date)}）の要望を、次の個別支援計画の検討事項として確認する。`;
+  entry.reflected = true;
+  saveState();
+  renderContactBook();
+  renderAssessmentDraft();
+  showToast("連絡帳の要望をアセスメントの検討事項へ反映しました。本人・家族と確認して計画へ進めてください。");
+}
+
+function openChildDialog() {
+  const form = $("#child-form");
+  form.reset();
+  form.elements.serviceType.value = "放課後等デイサービス";
+  $("#child-dialog").showModal();
+  window.setTimeout(() => form.elements.displayName.focus(), 20);
+}
+
+function createRegisteredChildProfile(data) {
+  const today = new Date();
+  const planStart = toLocalIsoDate(today);
+  const planEndDate = new Date(today.getFullYear(), today.getMonth() + 6, today.getDate() - 1);
+  const displayName = String(data.get("displayName") ?? "").trim();
+  const legalName = String(data.get("legalName") ?? "").trim() || displayName;
+  return {
+    id: `child-${Date.now()}-${Math.random().toString(36).slice(2, 7)}`,
+    displayName,
+    legalName,
+    grade: String(data.get("grade") ?? "").trim(),
+    ageLabel: "",
+    birthDate: String(data.get("birthDate") ?? ""),
+    recipientNumber: String(data.get("recipientNumber") ?? "").trim(),
+    guardianName: String(data.get("guardianName") ?? "").trim(),
+    serviceName: "みらいステップ（登録事業所）",
+    serviceType: String(data.get("serviceType") ?? "").trim() || "放課後等デイサービス",
+    managerName: "未入力",
+    usePattern: String(data.get("usePattern") ?? "").trim(),
+    standardSchedule: "未入力",
+    planStart,
+    planEnd: toLocalIsoDate(planEndDate),
+    reviewDate: toLocalIsoDate(planEndDate),
+    createdDate: planStart,
+    assessmentDate: planStart,
+    currentPlanContext: "新規登録後、本人・家族・相談支援事業所からの情報を確認して支援の方向性を整理します。",
+    interests: [],
+    strengths: [],
+    personWish: String(data.get("personWish") ?? "").trim(),
+    familyWish: String(data.get("familyWish") ?? "").trim(),
+    caveat: "登録内容は下書きです。本人・家族・関係者との確認後に、必要な情報を整えてください。"
+  };
+}
+
+function handleChildSubmit(event) {
+  event.preventDefault();
+  const form = event.currentTarget;
+  if (!form.reportValidity()) return;
+  const profile = createRegisteredChildProfile(new FormData(form));
+  const workspace = createChildWorkspace(profile, [], { isDemo: false });
+  state.childWorkspaces[profile.id] = workspace;
+  state = {
+    ...state,
+    ...workspace,
+    activeChildId: profile.id,
+    childWorkspaces: state.childWorkspaces
+  };
+  $("#child-dialog").close();
+  saveState();
+  renderAll();
+  navigate("childProfile");
+  showToast(`${profile.displayName}さんを登録しました。利用児情報から内容を続けて確認・編集できます。`);
+}
+
 function resetDemo() {
-  if (!window.confirm(`追加・編集した内容をすべて破棄し、${state.profile.displayName}のデモを初期状態へ戻しますか？`)) return;
-  const studentId = state.studentId;
-  const studentSnapshots = { ...(state.studentSnapshots ?? {}) };
-  delete studentSnapshots[studentId];
-  state = createInitialState(studentId);
-  state.studentSnapshots = studentSnapshots;
+  if (!window.confirm("追加・編集した内容をすべて破棄し、4人分のデモを初期状態へ戻しますか？")) return;
+  state = createInitialState();
+  localStorage.removeItem(STORAGE_KEY);
   saveState({ quiet: true });
   renderAll();
   navigate("dashboard");
-  showToast(`${state.profile.displayName}のデモを初期状態へ戻しました。`);
+  showToast("デモを初期状態へ戻しました。");
 }
 
 function renderAll() {
   renderSidebar();
   renderDashboard();
-  renderCompose();
+  renderChildProfile();
   renderJournals();
+  renderConsultationDraft();
+  renderContactBook();
   renderAnalysis();
-  renderJournalChat();
+  renderAssessmentDraft();
   renderPlan();
-  renderFamily();
 }
 
 function initializeStaticControls() {
   $("#journal-domain-options").innerHTML = renderDomainToggles("journalDomains");
-  $("#compose-domain-options").innerHTML = renderDomainToggles("composeDomains");
-  $("#child-select").addEventListener("change", (event) => switchStudent(event.target.value));
+
+  $("#open-child-dialog").addEventListener("click", openChildDialog);
+  $("#open-child-dialog-from-profile").addEventListener("click", openChildDialog);
+  $("#child-form").addEventListener("submit", handleChildSubmit);
+  $$('[data-close-child-dialog]').forEach((button) => button.addEventListener("click", () => $("#child-dialog").close()));
+  $("#child-profile-fields").addEventListener("input", (event) => {
+    if (event.target.matches("[data-profile-path]")) updateProfileAfterInput(event.target);
+  });
 
   document.addEventListener("click", (event) => {
+    const childButton = event.target.closest("[data-child-id]");
+    if (childButton) {
+      switchChild(childButton.dataset.childId);
+      return;
+    }
+
+    const contactEntryButton = event.target.closest("[data-apply-contact-entry]");
+    if (contactEntryButton) {
+      applyContactBookEntry(contactEntryButton.dataset.applyContactEntry);
+      return;
+    }
+
     const viewButton = event.target.closest("[data-view-target]");
     if (viewButton) {
       navigate(viewButton.dataset.viewTarget);
-      return;
-    }
-
-    const composeButton = event.target.closest("[data-compose-journal]");
-    if (composeButton) {
-      if (state.activeView === "compose" && !confirmDiscardComposeChanges()) return;
-      state.composeJournalId = composeButton.dataset.composeJournal;
-      navigate("compose");
-      return;
-    }
-
-    const openFamilyButton = event.target.closest("[data-open-family-journal]");
-    if (openFamilyButton) {
-      state.selectedFamilyJournalId = openFamilyButton.dataset.openFamilyJournal;
-      navigate("family");
-      return;
-    }
-
-    const familySelectButton = event.target.closest("[data-family-select]");
-    if (familySelectButton) {
-      state.selectedFamilyJournalId = familySelectButton.dataset.familySelect;
-      renderFamily();
-      saveState({ quiet: true });
-      return;
-    }
-
-    const familyShareButton = event.target.closest("[data-family-share]");
-    if (familyShareButton) {
-      shareFamilyRecord(familyShareButton.dataset.familyShare);
-      return;
-    }
-
-    const familyRevokeButton = event.target.closest("[data-family-revoke]");
-    if (familyRevokeButton) {
-      revokeFamilyShare(familyRevokeButton.dataset.familyRevoke);
       return;
     }
 
@@ -2232,18 +1993,6 @@ function initializeStaticControls() {
     const patternPlanButton = event.target.closest("[data-edit-pattern-plan]");
     if (patternPlanButton) {
       openPatternPlanDialog(patternPlanButton.dataset.editPatternPlan);
-      return;
-    }
-
-    const chatSuggestion = event.target.closest("[data-chat-suggestion]");
-    if (chatSuggestion) {
-      askJournalChat(chatSuggestion.dataset.chatSuggestion);
-      return;
-    }
-
-    const voiceButton = event.target.closest("[data-voice-input]");
-    if (voiceButton) {
-      startVoiceInput(voiceButton.dataset.voiceInput);
     }
   });
 
@@ -2262,34 +2011,21 @@ function initializeStaticControls() {
     saveState({ quiet: true });
   });
   $("#apply-analysis-range").addEventListener("click", applyAnalysisRange);
-  $("#journal-chat-form").addEventListener("submit", (event) => {
-    event.preventDefault();
-    askJournalChat($("#journal-chat-input").value);
+  $("#monitoring-draft-fields").addEventListener("input", (event) => {
+    if (event.target.matches("[data-draft-root='monitoringDraft']")) updateDraftAfterInput(event.target);
   });
-  $("#clear-journal-chat").addEventListener("click", () => {
-    state.chatMessages = [];
-    renderJournalChat();
-    saveState({ quiet: true });
-    announce("日誌チャットの会話をリセットしました。");
+  $("#assessment-draft-fields").addEventListener("input", (event) => {
+    if (event.target.matches("[data-draft-root='assessmentDraft']")) updateDraftAfterInput(event.target);
   });
-
-  $("#compose-journal-select").addEventListener("change", (event) => {
-    if (!confirmDiscardComposeChanges()) {
-      event.target.value = state.composeJournalId;
-      return;
-    }
-    state.composeJournalId = event.target.value;
-    renderCompose();
-    saveState({ quiet: true });
+  $("#consultation-draft-fields").addEventListener("input", (event) => {
+    if (event.target.matches("[data-draft-root='consultationPlanDraft']")) updateDraftAfterInput(event.target);
   });
-  $("#quick-record-form").addEventListener("input", () => {
-    composeDirty = true;
-    $("#compose-action-note").textContent = "未保存の変更があります。保存すると職員確認・共有状態は安全のため解除されます。";
-  });
-  $("#quick-record-form").addEventListener("submit", handleQuickRecordSubmit);
-  $("#generate-record-drafts").addEventListener("click", generateRecordDrafts);
-  $("#confirm-staff-record").addEventListener("click", confirmStaffRecord);
-  $("#prepare-family-share").addEventListener("click", prepareFamilyShare);
+  $("#refresh-monitoring-draft").addEventListener("click", refreshMonitoringDraft);
+  $("#refresh-assessment-draft").addEventListener("click", refreshAssessmentDraft);
+  $("#apply-consultation-to-assessment").addEventListener("click", applyConsultationToAssessment);
+  $("#apply-consultation-to-assessment-bottom").addEventListener("click", applyConsultationToAssessment);
+  $("#apply-assessment-to-plan").addEventListener("click", applyAssessmentToPlan);
+  $("#apply-assessment-to-plan-bottom").addEventListener("click", applyAssessmentToPlan);
 
   $("#add-journal").addEventListener("click", () => openJournalDialog());
   $("#export-journals").addEventListener("click", exportJournalsCsv);
@@ -2322,16 +2058,6 @@ function initializeStaticControls() {
 
   $("#open-guide").addEventListener("click", () => $("#guide-dialog").showModal());
   $$('[data-close-guide]').forEach((button) => button.addEventListener("click", () => $("#guide-dialog").close()));
-
-  window.addEventListener("beforeunload", (event) => {
-    if (!composeDirty) return;
-    event.preventDefault();
-    event.returnValue = "";
-  });
-  window.addEventListener("pagehide", flushPendingState);
-  document.addEventListener("visibilitychange", () => {
-    if (document.visibilityState === "hidden") flushPendingState();
-  });
 }
 
 initializeStaticControls();
@@ -2344,7 +2070,7 @@ if (loadWarning) window.setTimeout(() => showToast(loadWarning), 250);
 window.michiNote = {
   getState: () => structuredClone(state),
   reset: () => {
-    state = createInitialState(state.studentId);
+    state = createInitialState();
     renderAll();
     navigate("dashboard");
   }
