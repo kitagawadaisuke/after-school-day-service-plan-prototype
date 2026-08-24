@@ -2509,6 +2509,15 @@ function renderContactPhotoPreview(form, existingPhotos = null) {
     image.src = contactPhotoPath(form.dataset.contactEntryId, photo.id);
     image.alt = `登録済みの写真 ${index + 1}枚目`;
     item.append(image, element("span", { text: "登録済み" }));
+    if (can("journals.edit")) {
+      const deleteButton = element("button", {
+        className: "contact-photo-remove",
+        text: "削除",
+        attributes: { type: "button", "aria-label": `登録済みの写真 ${index + 1}枚目を削除` },
+      });
+      deleteButton.addEventListener("click", () => runAsync(() => deleteContactPhoto(deleteButton, form, photo)));
+      item.append(deleteButton);
+    }
     preview.append(item);
   }
   for (const [index, file] of files.entries()) {
@@ -2520,6 +2529,37 @@ function renderContactPhotoPreview(form, existingPhotos = null) {
     image.addEventListener("load", () => URL.revokeObjectURL(objectUrl), { once: true });
     item.append(image, element("span", { text: file.name }));
     preview.append(item);
+  }
+}
+
+async function deleteContactPhoto(button, form, photo) {
+  const entryId = form.dataset.contactEntryId;
+  if (!entryId || !photo?.id || !Number.isInteger(Number(photo.rowVersion))) return;
+  if (!window.confirm("この写真を削除しますか？\n連絡帳には表示されなくなりますが、操作履歴は保存されます。")) return;
+  button.disabled = true;
+  state.conflictReload = loadActiveResource;
+  state.conflictResumeDialog = $("#contact-dialog");
+  try {
+    await api(
+      `/children/${encodeURIComponent(state.selectedChild.id)}/contact-book/${encodeURIComponent(entryId)}/photos/${encodeURIComponent(photo.id)}`,
+      { method: "DELETE", etag: `"${photo.rowVersion}"` },
+    );
+    let existingPhotos;
+    try { existingPhotos = JSON.parse(form.dataset.existingPhotos || "[]"); } catch { existingPhotos = []; }
+    const remainingPhotos = existingPhotos.filter((item) => item.id !== photo.id);
+    form.dataset.existingPhotos = JSON.stringify(remainingPhotos);
+    form.dataset.existingPhotoCount = String(remainingPhotos.length);
+    const entry = state.contactEntries.find((item) => item.id === entryId);
+    if (entry) entry.photos = remainingPhotos;
+    if (state.activeView === "contact") renderContactEntries();
+    renderContactPhotoPreview(form, remainingPhotos);
+    state.conflictReload = null;
+    state.conflictResumeDialog = null;
+    announce("写真を削除しました。");
+  } catch (error) {
+    if (error.status !== 409) showFormError(form, $("#contact-error"), errorMessage(error), []);
+  } finally {
+    if (button.isConnected) button.disabled = false;
   }
 }
 

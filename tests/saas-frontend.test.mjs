@@ -179,6 +179,10 @@ test("保護者・受給者証・現在と計画後の週間予定を利用者�
   assert.match(script, /function renderContactPhotoGallery\(/);
   assert.match(script, /function validateContactPhotos\(/);
   assert.match(script, /contact-book\/\$\{encodeURIComponent\(entryId\)\}\/photos/);
+  assert.match(script, /async function deleteContactPhoto\(/);
+  assert.match(script, /登録済みの写真 \$\{index \+ 1\}枚目を削除/);
+  assert.match(script, /method: "DELETE", etag: `"\$\{photo\.rowVersion\}"`/);
+  assert.match(css, /\.contact-photo-remove/);
   assert.match(script, /const journalBased = sourceJournal !== null/);
   assert.match(html, /事業所からの連絡 <em>必須<\/em>/);
   assert.match(script, /familyMessage: "", requestSummary, facilityReply/);
