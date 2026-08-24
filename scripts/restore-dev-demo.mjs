@@ -7,8 +7,8 @@ import { createPgPool } from "../server/db/pool.js";
 const projectRoot = resolve(fileURLToPath(new URL("..", import.meta.url)));
 const demoFacility = Object.freeze({
   id: "018f1db5-c170-7c35-a784-3cfc6f98c301",
-  code: "soleil-dev",
-  name: "放課後等デイサービス「それいゆ」",
+  code: "demo-dev",
+  name: "放課後等デイサービス「デモ」",
 });
 const demoUsers = Object.freeze([
   ["DEMO-20260821-001", "テストさくら", "テストさくら（デモ）", "2016-04-01", "小学4年生"],
