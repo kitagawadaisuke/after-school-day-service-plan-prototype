@@ -215,6 +215,13 @@ test("保護者・受給者証・現在と計画後の週間予定を利用者�
   assert.doesNotMatch(script, /updateRequestSummaryCharacterCount|generateRequestSummary|contact_request_summary/);
   assert.match(script, /writing-assist/);
   assert.match(script, /整えています/);
+  assert.match(script, /const WRITING_TARGET_MIN = 80/);
+  assert.match(script, /const WRITING_TARGET_MAX = 800/);
+  assert.match(script, /function installCustomTargetLength\(/);
+  assert.match(script, /function createWritingDisclosure\(/);
+  assert.match(script, /任意の目標文字数は\$\{WRITING_TARGET_MIN\}〜\$\{WRITING_TARGET_MAX\}字で入力してください。/);
+  assert.match(css, /\.writing-disclosure \{/);
+  assert.match(css, /\.journal-writing-tools \.writing-custom-target-length/);
 });
 
 test("ブラウザ内を正本にせず認証済みAPIとCSRF・ETagで保存する", () => {

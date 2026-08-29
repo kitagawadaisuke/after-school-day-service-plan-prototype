@@ -1987,6 +1987,7 @@ function openJournalDialog(trigger, journal = null) {
   if (!state.selectedChild) return announce("先に利用者を選択してください。");
   const form = $("#journal-form");
   form.reset();
+  $$('[data-journal-length]', form).forEach(syncCustomTargetLength);
   form.dataset.journalId = journal?.id || "";
   form.dataset.journalRowVersion = journal?.rowVersion ? String(journal.rowVersion) : "";
   form.dataset.journalGoalIds = JSON.stringify(journal?.relatedGoalIds || []);
@@ -2041,6 +2042,70 @@ function journalTextLength(value) {
   return [...String(value || "").trim()].length;
 }
 
+const WRITING_TARGET_MIN = 80;
+const WRITING_TARGET_MAX = 800;
+
+function writingTargetLength(select) {
+  if (!select) return null;
+  if (select.value !== "custom") return Number(select.value) || null;
+  const customInput = $(".writing-custom-target-length", select.parentElement);
+  const target = Number(customInput?.value);
+  return Number.isInteger(target) && target >= WRITING_TARGET_MIN && target <= WRITING_TARGET_MAX ? target : null;
+}
+
+function writingTargetMessage(length, target) {
+  return target ? `現在 ${length}字 ／ 目標 ${target}字` : `現在 ${length}字 ／ 目標文字数を入力`;
+}
+
+function syncCustomTargetLength(select) {
+  const customInput = $(".writing-custom-target-length", select?.parentElement);
+  if (!customInput) return;
+  const isCustom = select.value === "custom";
+  customInput.hidden = !isCustom;
+  customInput.required = isCustom;
+}
+
+function installCustomTargetLength(select, fieldLabel, className = "") {
+  const root = select?.parentElement;
+  if (!root || $(".writing-custom-target-length", root)) return;
+  const customOption = document.createElement("option");
+  customOption.value = "custom";
+  customOption.textContent = "任意";
+  select.append(customOption);
+
+  const customInput = document.createElement("input");
+  customInput.className = ["writing-custom-target-length", className].filter(Boolean).join(" ");
+  customInput.type = "number";
+  customInput.min = String(WRITING_TARGET_MIN);
+  customInput.max = String(WRITING_TARGET_MAX);
+  customInput.step = "1";
+  customInput.inputMode = "numeric";
+  customInput.placeholder = "80〜800";
+  customInput.hidden = true;
+  customInput.setAttribute("aria-label", `${fieldLabel}の任意の目標文字数`);
+  customInput.setAttribute("title", "80〜800字で入力できます");
+  select.after(customInput);
+  select.addEventListener("change", () => {
+    syncCustomTargetLength(select);
+    if (select.value === "custom") customInput.focus();
+  });
+}
+
+function focusCustomTarget(select) {
+  const root = select?.parentElement;
+  if (root) $(".writing-custom-target-length", root)?.focus();
+}
+
+function createWritingDisclosure(fieldName, fieldLabel, tools, dataAttribute) {
+  const disclosure = document.createElement("details");
+  disclosure.className = "writing-disclosure";
+  disclosure.dataset[dataAttribute] = fieldName;
+  const summary = document.createElement("summary");
+  summary.textContent = `「${fieldLabel}」の文章を調整・コピー`;
+  disclosure.append(summary, tools);
+  return disclosure;
+}
+
 async function copyFieldText(field, button, label) {
   const text = String(field?.value || "").trim();
   if (!text) {
@@ -2069,7 +2134,7 @@ async function copyFieldText(field, button, label) {
 }
 
 function journalTargetLength(fieldName, form = $("#journal-form")) {
-  return Number($(`[data-journal-length="${fieldName}"]`, form)?.value || 200);
+  return writingTargetLength($(`[data-journal-length="${fieldName}"]`, form));
 }
 
 function updateJournalCharacterCount(fieldName, form = $("#journal-form")) {
@@ -2078,8 +2143,8 @@ function updateJournalCharacterCount(fieldName, form = $("#journal-form")) {
   if (!field || !output) return;
   const length = journalTextLength(field.value);
   const target = journalTargetLength(fieldName, form);
-  output.textContent = `現在 ${length}字 ／ 目標 ${target}字`;
-  output.dataset.state = length >= target ? "met" : "short";
+  output.textContent = writingTargetMessage(length, target);
+  output.dataset.state = target && length >= target ? "met" : "short";
 }
 
 function updateAllJournalCharacterCounts(form = $("#journal-form")) {
@@ -2095,6 +2160,11 @@ async function generateJournalField(fieldName, button) {
     return;
   }
   const target = journalTargetLength(fieldName, form);
+  if (!target) {
+    showFormError(form, $("#journal-error"), `任意の目標文字数は${WRITING_TARGET_MIN}〜${WRITING_TARGET_MAX}字で入力してください。`, []);
+    focusCustomTarget($(`[data-journal-length="${fieldName}"]`, form));
+    return;
+  }
   const originalLabel = button.textContent;
   button.disabled = true;
   button.textContent = "整えています…";
@@ -2122,7 +2192,7 @@ async function generateJournalField(fieldName, button) {
 }
 
 function assessmentTargetLength(fieldName, form = $("#assessment-editor-form")) {
-  return Number($(`[data-assessment-length="${fieldName}"]`, form)?.value || 200);
+  return writingTargetLength($(`[data-assessment-length="${fieldName}"]`, form));
 }
 
 function updateAssessmentCharacterCount(fieldName, form = $("#assessment-editor-form")) {
@@ -2131,8 +2201,8 @@ function updateAssessmentCharacterCount(fieldName, form = $("#assessment-editor-
   if (!field || !output) return;
   const length = journalTextLength(field.value);
   const target = assessmentTargetLength(fieldName, form);
-  output.textContent = `現在 ${length}字 ／ 目標 ${target}字`;
-  output.dataset.state = length >= target ? "met" : "short";
+  output.textContent = writingTargetMessage(length, target);
+  output.dataset.state = target && length >= target ? "met" : "short";
 }
 
 function installAssessmentWritingTools(form = $("#assessment-editor-form")) {
@@ -2157,6 +2227,7 @@ function installAssessmentWritingTools(form = $("#assessment-editor-form")) {
       select.append(option);
     }
     lengthLabel.append(" ", select);
+    installCustomTargetLength(select, ASSESSMENT_FIELD_LABELS[fieldName], "assessment-custom-target-length");
 
     const output = document.createElement("output");
     output.className = "journal-character-count";
@@ -2190,7 +2261,7 @@ function installAssessmentWritingTools(form = $("#assessment-editor-form")) {
       contextNote.textContent = "上の「本人・家族から伺ったこと」と「現在の状況・強み・課題」をもとに下書きを作ります。";
       tools.append(contextNote);
     }
-    field.after(tools);
+    field.after(createWritingDisclosure(fieldName, ASSESSMENT_FIELD_LABELS[fieldName], tools, "assessmentWritingDisclosure"));
   }
 }
 
@@ -2210,6 +2281,11 @@ async function generateAssessmentField(fieldName, button) {
     return;
   }
   const target = assessmentTargetLength(fieldName, form);
+  if (!target) {
+    showFormError(form, $("#assessment-editor-error"), `任意の目標文字数は${WRITING_TARGET_MIN}〜${WRITING_TARGET_MAX}字で入力してください。`, []);
+    focusCustomTarget($(`[data-assessment-length="${fieldName}"]`, form));
+    return;
+  }
   const originalLabel = button.textContent;
   button.disabled = true;
   button.textContent = "整えています…";
@@ -2231,7 +2307,7 @@ async function generateAssessmentField(fieldName, button) {
 }
 
 function planTargetLength(fieldName, form = $("#plan-editor-form")) {
-  return Number($(`[data-plan-length="${fieldName}"]`, form)?.value || 300);
+  return writingTargetLength($(`[data-plan-length="${fieldName}"]`, form));
 }
 
 function updatePlanCharacterCount(fieldName, form = $("#plan-editor-form")) {
@@ -2240,8 +2316,8 @@ function updatePlanCharacterCount(fieldName, form = $("#plan-editor-form")) {
   if (!field || !output) return;
   const length = journalTextLength(field.value);
   const target = planTargetLength(fieldName, form);
-  output.textContent = `現在 ${length}字 ／ 目標 ${target}字`;
-  output.dataset.state = length >= target ? "met" : "short";
+  output.textContent = writingTargetMessage(length, target);
+  output.dataset.state = target && length >= target ? "met" : "short";
 }
 
 function updateAllPlanCharacterCounts(form = $("#plan-editor-form")) {
@@ -2270,6 +2346,7 @@ function installPlanWritingTools(form = $("#plan-editor-form")) {
       select.append(option);
     }
     lengthLabel.append(" ", select);
+    installCustomTargetLength(select, fieldLabel, "plan-custom-target-length");
 
     const output = document.createElement("output");
     output.className = "journal-character-count";
@@ -2294,7 +2371,7 @@ function installPlanWritingTools(form = $("#plan-editor-form")) {
     copyButton.addEventListener("click", () => runAsync(() => copyFieldText(field, copyButton, fieldLabel)));
 
     tools.append(lengthLabel, output, button, copyButton);
-    field.after(tools);
+    field.after(createWritingDisclosure(fieldName, fieldLabel, tools, "planWritingDisclosure"));
   }
 }
 
@@ -2307,6 +2384,11 @@ async function generatePlanField(fieldName, button) {
     return;
   }
   const target = planTargetLength(fieldName, form);
+  if (!target) {
+    showFormError(form, $("#plan-editor-error"), `任意の目標文字数は${WRITING_TARGET_MIN}〜${WRITING_TARGET_MAX}字で入力してください。`, []);
+    focusCustomTarget($(`[data-plan-length="${fieldName}"]`, form));
+    return;
+  }
   const originalLabel = button.textContent;
   button.disabled = true;
   button.textContent = "整えています…";
@@ -2455,6 +2537,7 @@ function openContactDialog(trigger, entry = null, sourceJournal = null) {
   const form = $("#contact-form");
   const journalBased = sourceJournal !== null;
   form.reset();
+  syncCustomTargetLength($("[data-contact-reply-length]", form));
   form.dataset.contactEntryId = entry?.id || "";
   form.dataset.contactRowVersion = entry?.rowVersion || "";
   form.dataset.contactSource = journalBased ? "journal" : "";
@@ -2608,7 +2691,7 @@ async function uploadContactPhotos(entryId, files) {
 }
 
 function contactReplyTargetLength(form = $("#contact-form")) {
-  return Number($("[data-contact-reply-length]", form)?.value || 200);
+  return writingTargetLength($("[data-contact-reply-length]", form));
 }
 
 function updateContactReplyCharacterCount(form = $("#contact-form")) {
@@ -2616,8 +2699,8 @@ function updateContactReplyCharacterCount(form = $("#contact-form")) {
   if (!output) return;
   const length = journalTextLength(form.elements.facilityReply.value);
   const target = contactReplyTargetLength(form);
-  output.textContent = `現在 ${length}字 ／ 目標 ${target}字`;
-  output.dataset.state = length >= target ? "met" : "short";
+  output.textContent = writingTargetMessage(length, target);
+  output.dataset.state = target && length >= target ? "met" : "short";
 }
 
 async function generateContactDraft(button) {
@@ -2630,6 +2713,11 @@ async function generateContactDraft(button) {
     return;
   }
   const target = contactReplyTargetLength(form);
+  if (!target) {
+    showFormError(form, $("#contact-error"), `任意の目標文字数は${WRITING_TARGET_MIN}〜${WRITING_TARGET_MAX}字で入力してください。`, []);
+    focusCustomTarget($("[data-contact-reply-length]", form));
+    return;
+  }
   const originalLabel = button.textContent;
   button.disabled = true;
   button.textContent = "整えています…";
@@ -2922,6 +3010,7 @@ async function openPlanEditor(documentRecord, trigger) {
   const suggestedValues = planIsEmpty ? planDraftValuesFromAssessment(assessmentDetail) : {};
   for (const [field] of INDIVIDUAL_PLAN_PAYLOAD_FIELDS) form.elements[field].value = detail.payload?.[field] || suggestedValues[field] || "";
   installPlanWritingTools(form);
+  $$('[data-plan-length]', form).forEach(syncCustomTargetLength);
   updateAllPlanCharacterCounts(form);
   renderPlanEditorGoals(detail.goals || []);
   clearFormError(form, $("#plan-editor-error"));
@@ -2964,6 +3053,7 @@ async function openAssessmentEditor(documentRecord, trigger) {
     form.elements[field].value = detail.payload?.[field] || (assessmentField ? detail.payload?.assessment?.[assessmentField] : "") || "";
   }
   installAssessmentWritingTools(form);
+  $$('[data-assessment-length]', form).forEach(syncCustomTargetLength);
   updateAllAssessmentCharacterCounts(form);
   clearFormError(form, $("#assessment-editor-error"));
   openDialog($("#assessment-editor-dialog"), trigger);
@@ -3670,6 +3760,9 @@ function returnToEdit() {
 }
 
 function setupEvents() {
+  $$('[data-journal-length]').forEach((select) => installCustomTargetLength(select, JOURNAL_FIELD_LABELS[select.dataset.journalLength] || "日誌", "journal-custom-target-length"));
+  const contactTargetSelect = $("[data-contact-reply-length]");
+  installCustomTargetLength(contactTargetSelect, "事業所からの連絡", "contact-custom-target-length");
   $("#open-child-picker").addEventListener("click", (event) => {
     $("#child-search-input").value = "";
     renderChildPicker();
@@ -3697,9 +3790,15 @@ function setupEvents() {
   $$('[data-expand-journal-field]').forEach((button) => button.addEventListener("click", () => runAsync(() => generateJournalField(button.dataset.expandJournalField, button))));
   $$('[data-copy-journal-field]').forEach((button) => button.addEventListener("click", () => runAsync(() => copyFieldText($("#journal-form").elements[button.dataset.copyJournalField], button, JOURNAL_FIELD_LABELS[button.dataset.copyJournalField]))));
   $$("#journal-form textarea[name]").forEach((field) => field.addEventListener("input", () => updateJournalCharacterCount(field.name)));
-  $$('[data-journal-length]').forEach((select) => select.addEventListener("change", () => updateJournalCharacterCount(select.dataset.journalLength)));
+  $$('[data-journal-length]').forEach((select) => {
+    select.addEventListener("change", () => updateJournalCharacterCount(select.dataset.journalLength));
+    $(".writing-custom-target-length", select.parentElement)?.addEventListener("input", () => updateJournalCharacterCount(select.dataset.journalLength));
+  });
   $("#contact-form textarea[name=facilityReply]")?.addEventListener("input", () => updateContactReplyCharacterCount());
-  $("[data-contact-reply-length]")?.addEventListener("change", () => updateContactReplyCharacterCount());
+  contactTargetSelect?.addEventListener("change", () => updateContactReplyCharacterCount());
+  if (contactTargetSelect?.parentElement) {
+    $(".writing-custom-target-length", contactTargetSelect.parentElement)?.addEventListener("input", () => updateContactReplyCharacterCount());
+  }
   $("#expand-contact-draft")?.addEventListener("click", () => runAsync(() => generateContactDraft($("#expand-contact-draft"))));
   $("#copy-contact-reply")?.addEventListener("click", () => runAsync(() => copyFieldText($("#contact-form").elements.facilityReply, $("#copy-contact-reply"), "事業所からの返信")));
   $("#contact-photo-input")?.addEventListener("change", () => renderContactPhotoPreview($("#contact-form")));

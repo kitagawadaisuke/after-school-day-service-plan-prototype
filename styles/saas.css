@@ -1748,6 +1748,17 @@ main {
   font: inherit;
 }
 
+.journal-writing-tools .writing-custom-target-length {
+  width: 8ch;
+  min-height: 38px;
+  padding: 0 8px;
+  border: 1px solid var(--line-strong);
+  border-radius: 8px;
+  color: var(--ink);
+  background: var(--paper-bright);
+  font: inherit;
+}
+
 .journal-writing-tools .button { min-height: 40px; padding-inline: 14px; font-size: 14px; }
 
 .journal-writing-note {
@@ -1764,6 +1775,49 @@ main {
   font-size: 13px;
   line-height: 1.55;
 }
+
+.assessment-writing-tools,
+.plan-writing-tools {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+  grid-template-areas:
+    "target count"
+    "compose copy";
+  align-items: center;
+  gap: 8px;
+  margin-top: 8px;
+  padding: 10px;
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  background: color-mix(in srgb, var(--forest-pale) 42%, white);
+}
+
+.assessment-writing-tools label,
+.plan-writing-tools label { grid-area: target; min-width: 0; font-size: 12px; }
+.assessment-writing-tools .journal-character-count,
+.plan-writing-tools .journal-character-count { grid-area: count; justify-self: end; font-size: 12px; white-space: nowrap; }
+.assessment-writing-tools .button,
+.plan-writing-tools .button { width: 100%; min-height: 34px; padding-inline: 9px; font-size: 12px; }
+.assessment-writing-tools .button:nth-of-type(1),
+.plan-writing-tools .button:nth-of-type(1) { grid-area: compose; }
+.assessment-writing-tools .button:nth-of-type(2),
+.plan-writing-tools .button:nth-of-type(2) { grid-area: copy; }
+.assessment-writing-tools .writing-custom-target-length,
+.plan-writing-tools .writing-custom-target-length { width: 7.5ch; min-height: 32px; margin-left: 5px; padding: 0 7px; border: 1px solid var(--line-strong); border-radius: 7px; background: var(--paper-bright); color: var(--ink); font: inherit; font-size: 12px; }
+.assessment-writing-tools .assessment-writing-note { grid-column: 1 / -1; }
+
+.writing-disclosure {
+  margin-top: 12px;
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  background: var(--forest-pale);
+}
+
+.writing-disclosure > summary { cursor: pointer; padding: 11px 12px; color: var(--forest); font-size: 13px; font-weight: 700; list-style-position: inside; }
+.writing-disclosure > summary::marker { color: var(--terracotta); }
+.writing-disclosure[open] > summary { border-bottom: 1px solid var(--line); }
+.writing-disclosure .assessment-writing-tools,
+.writing-disclosure .plan-writing-tools { margin: 0; border: 0; border-radius: 0; background: transparent; }
 
 .draft-assist {
   display: grid;
@@ -1999,7 +2053,12 @@ main {
   .journal-writing-tools label,
   .journal-character-count,
   .journal-writing-tools select,
+  .journal-writing-tools .writing-custom-target-length,
   .journal-writing-tools .button { width: 100%; }
+  .assessment-writing-tools,
+  .plan-writing-tools { display: flex; align-items: stretch; flex-direction: column; }
+  .assessment-writing-tools .journal-character-count,
+  .plan-writing-tools .journal-character-count { align-self: flex-start; }
   .overview-heading { display: grid; grid-template-columns: 1fr auto; }
   .overview-heading > div:first-child::before { display: none; }
   .date-stamp { width: 76px; height: 76px; flex-basis: 76px; }
