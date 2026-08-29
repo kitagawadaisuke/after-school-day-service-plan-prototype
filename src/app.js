@@ -402,8 +402,104 @@ function createAssessmentDraft(profile, monitoringDraft, consultationPlanDraft =
   };
 }
 
+const WRITING_TARGET_MIN = 80;
+const WRITING_TARGET_MAX = 800;
+
+function writingToolsMarkup() {
+  return `<span class="writing-tools" data-writing-tools>
+    <span class="writing-target-label">目標文字数
+      <select data-writing-target aria-label="目標文字数"><option value="100">100字</option><option value="200" selected>200字</option><option value="300">300字</option><option value="500">500字</option><option value="custom">任意</option></select>
+      <input data-writing-custom-target type="number" min="${WRITING_TARGET_MIN}" max="${WRITING_TARGET_MAX}" step="1" inputmode="numeric" placeholder="80〜800" aria-label="任意の目標文字数" hidden />
+    </span>
+    <output class="writing-character-count" aria-live="polite"></output>
+    <button class="mini-button" type="button" data-writing-format>文章を整える</button>
+    <button class="mini-button" type="button" data-writing-copy>コピー</button>
+    <small>事実を追加せず、改行や文末を読みやすく整えます。</small>
+  </span>`;
+}
+
+function writingFieldTarget(field) {
+  const select = $("[data-writing-target]", field);
+  if (!select) return null;
+  if (select.value !== "custom") return Number(select.value) || null;
+  const customTarget = Number($("[data-writing-custom-target]", field)?.value);
+  return Number.isInteger(customTarget) && customTarget >= WRITING_TARGET_MIN && customTarget <= WRITING_TARGET_MAX
+    ? customTarget
+    : null;
+}
+
+function updateWritingTools(field) {
+  const textarea = $("textarea", field);
+  const output = $(".writing-character-count", field);
+  if (!textarea || !output) return;
+  const target = writingFieldTarget(field);
+  const count = [...textarea.value.trim()].length;
+  output.textContent = target ? `現在 ${count}字 ／ 目標 ${target}字` : `現在 ${count}字 ／ 目標文字数を入力`;
+  output.dataset.state = target && count >= target ? "met" : "short";
+}
+
+function refreshWritingTools(root = document) {
+  $$(".writing-field", root).forEach(updateWritingTools);
+}
+
+function formatWritingText(value) {
+  return String(value || "")
+    .replace(/\r\n?/g, "\n")
+    .split("\n")
+    .map((line) => line.replace(/\s+/g, " ").trim())
+    .filter(Boolean)
+    .map((line) => /[。！？!?]$/u.test(line) ? line : `${line}。`)
+    .join("\n");
+}
+
+function formatWritingField(button) {
+  const field = button.closest(".writing-field");
+  const textarea = $("textarea", field);
+  if (!textarea?.value.trim()) {
+    showToast("文章を整える内容を入力してください。");
+    textarea?.focus();
+    return;
+  }
+  const target = writingFieldTarget(field);
+  if (!target) {
+    showToast(`任意の目標文字数は${WRITING_TARGET_MIN}〜${WRITING_TARGET_MAX}字で入力してください。`);
+    $("[data-writing-custom-target]", field)?.focus();
+    return;
+  }
+  textarea.value = formatWritingText(textarea.value);
+  textarea.dispatchEvent(new Event("input", { bubbles: true }));
+  updateWritingTools(field);
+  showToast("文章を整えました。事実の追加・推測はしていません。");
+}
+
+async function copyWritingField(button) {
+  const field = button.closest(".writing-field");
+  const textarea = $("textarea", field);
+  const text = textarea?.value.trim();
+  if (!text) {
+    showToast("コピーする内容を入力してください。");
+    textarea?.focus();
+    return;
+  }
+  try {
+    if (navigator.clipboard?.writeText) await navigator.clipboard.writeText(text);
+    else {
+      textarea.focus();
+      textarea.select();
+      if (!document.execCommand("copy")) throw new Error("COPY_FAILED");
+      textarea.setSelectionRange(text.length, text.length);
+    }
+    const originalLabel = button.textContent;
+    button.textContent = "コピーしました";
+    window.setTimeout(() => { if (button.isConnected) button.textContent = originalLabel; }, 1600);
+    showToast("文章をコピーしました。");
+  } catch {
+    showToast("コピーできませんでした。文章を選択してコピーしてください。");
+  }
+}
+
 function draftTextarea(root, path, label, value, rows = 3, hint = "") {
-  return `<label class="draft-field"><span>${escapeHtml(label)}</span>${hint ? `<small>${escapeHtml(hint)}</small>` : ""}<textarea data-draft-root="${escapeAttribute(root)}" data-draft-path="${escapeAttribute(path)}" rows="${rows}" maxlength="2000">${escapeHtml(value ?? "")}</textarea></label>`;
+  return `<label class="draft-field writing-field"><span>${escapeHtml(label)}</span>${hint ? `<small>${escapeHtml(hint)}</small>` : ""}<textarea data-draft-root="${escapeAttribute(root)}" data-draft-path="${escapeAttribute(path)}" rows="${rows}" maxlength="2000">${escapeHtml(value ?? "")}</textarea>${writingToolsMarkup()}</label>`;
 }
 
 function renderMonitoringDraft() {
@@ -416,6 +512,7 @@ function renderMonitoringDraft() {
     draftTextarea("monitoringDraft", "reviewPoints", "見直したいこと・追加で確認したいこと", draft.reviewPoints, 3),
     draftTextarea("monitoringDraft", "nextStep", "次のアセスメントへの申し送り", draft.nextStep, 2)
   ].join("");
+  refreshWritingTools($("#monitoring-draft-fields"));
 }
 
 function renderConsultationDraft() {
@@ -455,6 +552,7 @@ function renderConsultationDraft() {
       draftTextarea("consultationPlanDraft", "consentProcess", "同意と交付", draft.consentProcess, 3)
     ])
   ].join("");
+  refreshWritingTools($("#consultation-draft-fields"));
 }
 
 function renderContactBook() {
@@ -480,14 +578,15 @@ function renderAssessmentDraft() {
     <article><span>日誌の根拠</span><strong>${escapeHtml(draft.sourcePeriod)}</strong><small>日誌だけで結論は出しません</small></article>
     <article><span>次の工程</span><strong>個別支援計画の原案</strong><small>本人・家族・支援者で確認して決定</small></article>`;
   $("#assessment-consultation-link").innerHTML = `<strong>相談支援案から引き継ぐ目標</strong><span>${escapeHtml(draft.consultationGoal || "相談支援事業所の案を確認してください。")} </span><button class="inline-link" type="button" data-view-target="consultation">相談支援案を確認する →</button>`;
-  $("#assessment-draft-fields").innerHTML = [
+ $("#assessment-draft-fields").innerHTML = [
     draftTextarea("assessmentDraft", "personWish", "本人の意向", draft.personWish, 3),
     draftTextarea("assessmentDraft", "familyWish", "家族の意向", draft.familyWish, 3),
     draftTextarea("assessmentDraft", "strengths", "本人の強み・活かせること", draft.strengths, 3),
     draftTextarea("assessmentDraft", "needs", "生活上の課題・支援の必要性", draft.needs, 4),
     draftTextarea("assessmentDraft", "supportDirection", "支援の方向性", draft.supportDirection, 4),
-    draftTextarea("assessmentDraft", "planningNote", "計画書へ引き継ぐこと", draft.planningNote, 3)
-  ].join("");
+   draftTextarea("assessmentDraft", "planningNote", "計画書へ引き継ぐこと", draft.planningNote, 3)
+ ].join("");
+  refreshWritingTools(document.getElementById("assessment-draft-fields"));
 }
 
 function refreshPlanStale() {
@@ -993,7 +1092,7 @@ function planInput(path, label, value, type = "text", extra = "") {
 }
 
 function planTextarea(path, label, value, rows = 3) {
-  return `<label><span>${escapeHtml(label)}</span><textarea data-plan-path="${escapeAttribute(path)}" rows="${rows}" maxlength="2000">${escapeHtml(value ?? "")}</textarea></label>`;
+  return `<label class="writing-field"><span>${escapeHtml(label)}</span><textarea data-plan-path="${escapeAttribute(path)}" rows="${rows}" maxlength="2000">${escapeHtml(value ?? "")}</textarea>${writingToolsMarkup()}</label>`;
 }
 
 function supportSectionEditor(key, heading, section, { allowNotApplicable = false } = {}) {
@@ -1148,8 +1247,9 @@ function renderPlanEditor() {
       <label class="domain-toggle" style="--toggle-color:#4f8588;margin-top:12px;display:inline-block">
         <input type="checkbox" data-plan-boolean="workflow.consultationDelivery.notApplicable" ${plan.workflow.consultationDelivery.notApplicable ? "checked" : ""} />
         <span>指定障害児相談支援事業者への交付は該当なし（理由は別記録）</span>
-      </label>
-    </section>`;
+     </label>
+   </section>`;
+  refreshWritingTools(editor);
 }
 
 function renderAudit() {
@@ -1440,12 +1540,28 @@ function openJournalDialog(journal = null) {
   $$("input[name='journalDomains']", form).forEach((input) => {
     input.checked = journal?.domains?.includes(input.value) ?? false;
   });
-  Object.keys(INDICATOR_META).forEach((key) => {
-    const input = form.elements[key];
-    input.value = String(journal?.indicators?.[key] ?? "");
-  });
-  dialog.showModal();
+ Object.keys(INDICATOR_META).forEach((key) => {
+   const input = form.elements[key];
+   input.value = String(journal?.indicators?.[key] ?? "");
+ });
+  refreshWritingTools(form);
+ dialog.showModal();
   window.setTimeout(() => $("#journal-date").focus(), 20);
+}
+
+function installJournalWritingTools() {
+  [
+    "#journal-observation",
+    "#journal-support",
+    "#journal-response",
+    "#journal-family"
+  ].forEach((selector) => {
+    const textarea = $(selector);
+    const field = textarea?.closest("label");
+    if (!field || $("[data-writing-tools]", field)) return;
+    field.classList.add("writing-field");
+    textarea.insertAdjacentHTML("afterend", writingToolsMarkup());
+  });
 }
 
 function handleJournalSubmit(event) {
@@ -1918,7 +2034,9 @@ function renderAll() {
 }
 
 function initializeStaticControls() {
-  $("#journal-domain-options").innerHTML = renderDomainToggles("journalDomains");
+ $("#journal-domain-options").innerHTML = renderDomainToggles("journalDomains");
+  installJournalWritingTools();
+  refreshWritingTools($("#journal-form"));
 
   $("#open-child-dialog").addEventListener("click", openChildDialog);
   $("#open-child-dialog-from-profile").addEventListener("click", openChildDialog);
@@ -1994,9 +2112,31 @@ function initializeStaticControls() {
     if (patternPlanButton) {
       openPatternPlanDialog(patternPlanButton.dataset.editPatternPlan);
     }
+ });
+
+  document.addEventListener("click", (event) => {
+    const formatButton = event.target.closest("[data-writing-format]");
+    if (formatButton) formatWritingField(formatButton);
+    const copyButton = event.target.closest("[data-writing-copy]");
+    if (copyButton) void copyWritingField(copyButton);
+  });
+  document.addEventListener("change", (event) => {
+    if (!event.target.matches("[data-writing-target]")) return;
+    const field = event.target.closest(".writing-field");
+    const customTarget = $("[data-writing-custom-target]", field);
+    const isCustom = event.target.value === "custom";
+    customTarget.hidden = !isCustom;
+    customTarget.required = isCustom;
+    updateWritingTools(field);
+    if (isCustom) customTarget.focus();
+  });
+  document.addEventListener("input", (event) => {
+    if (!event.target.matches("textarea, [data-writing-custom-target]")) return;
+    const field = event.target.closest(".writing-field");
+    if (field) updateWritingTools(field);
   });
 
-  $("#journal-search").addEventListener("input", (event) => {
+ $("#journal-search").addEventListener("input", (event) => {
     state.filters.search = event.target.value;
     renderJournalList();
   });
