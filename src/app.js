@@ -412,10 +412,10 @@ function writingToolsMarkup() {
       <input data-writing-custom-target type="number" min="${WRITING_TARGET_MIN}" max="${WRITING_TARGET_MAX}" step="1" inputmode="numeric" placeholder="80〜800" aria-label="任意の目標文字数" hidden />
     </span>
     <output class="writing-character-count" aria-live="polite"></output>
-    <button class="mini-button" type="button" data-writing-format>指定文字数で整える</button>
+    <button class="mini-button" type="button" data-writing-format>目標文字数を目安に整える</button>
     <button class="mini-button" type="button" data-writing-copy>コピー</button>
     <output class="writing-action-feedback" data-writing-feedback aria-live="polite"></output>
-    <small>AIが入力済みの事実だけをもとに、指定文字数の下書きを作成します。内容を確認してから保存してください。</small>
+    <small>AIが入力済みの事実だけをもとに、目標文字数前後の下書きを作成します。内容を確認してから保存してください。</small>
   </span>`;
 }
 
@@ -436,7 +436,9 @@ function updateWritingTools(field) {
   const target = writingFieldTarget(field);
   const count = [...textarea.value.trim()].length;
   output.textContent = target ? `現在 ${count}字 ／ 目標 ${target}字` : `現在 ${count}字 ／ 目標文字数を入力`;
-  output.dataset.state = target && count >= target ? "met" : "short";
+  const lowerBound = target ? Math.round(target * 0.8) : 0;
+  const upperBound = target ? Math.round(target * 1.2) : 0;
+  output.dataset.state = !target || count < lowerBound ? "short" : count > upperBound ? "over" : "met";
 }
 
 function refreshWritingTools(root = document) {
@@ -498,7 +500,7 @@ async function formatWritingField(button) {
   const originalLabel = button.textContent;
   button.disabled = true;
   button.textContent = "AI作成中…";
-  showWritingFeedback(field, `AIが${target}字の下書きを作成しています。`, "progress");
+  showWritingFeedback(field, `AIが${target}字を目安に下書きを作成しています。`, "progress");
   try {
     const response = await fetch("/api/demo/writing-assist", {
       method: "POST",
@@ -507,8 +509,9 @@ async function formatWritingField(button) {
     });
     if (!response.ok) throw new Error(await responseErrorMessage(response));
     const generated = await response.json();
-    if (generated?.characterCount !== target || [...String(generated?.text || "")].length !== target) {
-      throw new Error(`指定した${target}字の下書きを作成できませんでした。`);
+    const generatedCount = [...String(generated?.text || "").trim()].length;
+    if (!generated?.text || generated?.characterCount !== generatedCount) {
+      throw new Error("AIによる文章作成を完了できませんでした。もう一度お試しください。");
     }
     textarea.value = generated.text;
     textarea.dispatchEvent(new Event("input", { bubbles: true }));
@@ -516,8 +519,8 @@ async function formatWritingField(button) {
     button.disabled = false;
     button.textContent = originalLabel;
     markWritingButtonComplete(button);
-    showWritingFeedback(field, `AIが入力済みの事実をもとに、${target}字で下書きを作成しました。内容を確認してから保存してください。`, "changed");
-    showToast(`${target}字の下書きを作成しました。内容を確認してから保存してください。`);
+    showWritingFeedback(field, `AIが入力済みの事実をもとに、${generatedCount}字の下書きを作成しました（目標 ${target}字）。内容を確認してから保存してください。`, "changed");
+    showToast(`${generatedCount}字の下書きを作成しました（目標 ${target}字）。`);
   } catch (error) {
     const message = error instanceof Error ? error.message : "AIによる文章作成を完了できませんでした。";
     showWritingFeedback(field, message, "error");

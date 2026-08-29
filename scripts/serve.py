@@ -106,6 +106,8 @@ def openai_output_text(payload: object) -> str:
 
 
 def writing_prompt(*, source_text: str, field_label: str, activity: str, target_characters: int, revision_text: str = "", revision_count: int = 0) -> str:
+    lower_bound = max(1, round(target_characters * 0.8))
+    upper_bound = min(800, round(target_characters * 1.2))
     context = [f"入力欄: {field_label}"]
     if activity:
         context.append(f"活動・場面: {activity}")
@@ -114,12 +116,12 @@ def writing_prompt(*, source_text: str, field_label: str, activity: str, target_
         context.extend([
             "前回の下書き:",
             revision_text,
-            f"前回の下書きは{revision_count}字でした。内容を変えずに、{target_characters}字ちょうどになるよう文字数だけを調整してください。",
+            f"前回の下書きは{revision_count}字でした。内容を変えずに、{lower_bound}〜{upper_bound}字へ調整してください。",
         ])
     return "\n".join([
         "あなたは放課後等デイサービスの記録作成を支援する日本語の文章補助です。",
         "以下に記載された事実だけを使い、職員が確認・修正する下書きを作成してください。",
-        f"出力は本文だけを、必ず日本語の文字数でちょうど{target_characters}字にしてください。",
+        f"出力は本文だけを、日本語の文字数で{lower_bound}〜{upper_bound}字（目安{target_characters}字）にしてください。",
         "入力にない本人の心情、未記載の支援・日時・数値、評価を断定したり、同じ内容を繰り返して水増ししたりしないでください。",
         "根拠が足りない場合は推測せず、生成できないことを示す短い一文だけを返してください。",
         "見出し、箇条書き、注釈、文字数の説明は出力しないでください。",
@@ -172,12 +174,11 @@ def generate_writing_draft(payload: object) -> dict:
         raise WritingAssistError(400, f"目標文字数は{WRITING_TARGET_MIN}〜{WRITING_TARGET_MAX}字で指定してください。")
     if not source_text:
         raise WritingAssistError(400, "文章を整える内容を入力してください。")
-    if character_count(source_text) < max(20, target_characters // 10):
-        raise WritingAssistError(422, "記録の根拠が短いため、この文字数へ安全に広げられません。活動内容・本人の様子・行った支援を追記してください。")
-
     model = os.environ.get("OPENAI_MODEL", "gpt-4.1").strip() or "gpt-4.1"
     generated = ""
-    for attempt in range(3):
+    lower_bound = max(1, round(target_characters * 0.8))
+    upper_bound = min(800, round(target_characters * 1.2))
+    for attempt in range(2):
         generated = request_openai(
             writing_prompt(
                 source_text=source_text,
@@ -190,10 +191,8 @@ def generate_writing_draft(payload: object) -> dict:
             api_key=api_key,
             model=model,
         )
-        if character_count(generated) == target_characters:
+        if lower_bound <= character_count(generated) <= upper_bound:
             break
-    if character_count(generated) != target_characters:
-        raise WritingAssistError(503, f"指定した{target_characters}字に整えられませんでした。入力内容を少し具体的にして、もう一度お試しください。")
     return {
         "text": generated,
         "characterCount": character_count(generated),
