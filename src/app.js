@@ -414,6 +414,7 @@ function writingToolsMarkup() {
     <output class="writing-character-count" aria-live="polite"></output>
     <button class="mini-button" type="button" data-writing-format>文章を整える</button>
     <button class="mini-button" type="button" data-writing-copy>コピー</button>
+    <output class="writing-action-feedback" data-writing-feedback aria-live="polite"></output>
     <small>事実を追加せず、改行や文末を読みやすく整えます。</small>
   </span>`;
 }
@@ -452,6 +453,24 @@ function formatWritingText(value) {
     .join("\n");
 }
 
+function showWritingFeedback(field, message, state = "done") {
+  const feedback = $("[data-writing-feedback]", field);
+  if (!feedback) return;
+  feedback.textContent = message;
+  feedback.dataset.state = state;
+}
+
+function markWritingButtonComplete(button) {
+  const originalLabel = button.textContent;
+  button.textContent = "整えました";
+  button.classList.add("is-complete");
+  window.setTimeout(() => {
+    if (!button.isConnected) return;
+    button.textContent = originalLabel;
+    button.classList.remove("is-complete");
+  }, 1800);
+}
+
 function formatWritingField(button) {
   const field = button.closest(".writing-field");
   const textarea = $("textarea", field);
@@ -466,10 +485,21 @@ function formatWritingField(button) {
     $("[data-writing-custom-target]", field)?.focus();
     return;
   }
-  textarea.value = formatWritingText(textarea.value);
+  const sourceText = textarea.value;
+  const formattedText = formatWritingText(sourceText);
+  const changed = formattedText !== sourceText;
+  textarea.value = formattedText;
   textarea.dispatchEvent(new Event("input", { bubbles: true }));
   updateWritingTools(field);
-  showToast("文章を整えました。事実の追加・推測はしていません。");
+  markWritingButtonComplete(button);
+  showWritingFeedback(
+    field,
+    changed
+      ? "整えました。空白・改行・文末を読みやすく調整しています。"
+      : "すでに読みやすい状態です（変更なし）。",
+    changed ? "changed" : "unchanged"
+  );
+  showToast(changed ? "文章を整えました。事実の追加・推測はしていません。" : "すでに読みやすい文章です（変更なし）。");
 }
 
 async function copyWritingField(button) {
