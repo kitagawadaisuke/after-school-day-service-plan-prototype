@@ -105,7 +105,7 @@ def openai_output_text(payload: object) -> str:
     return "".join(parts).strip()
 
 
-def writing_prompt(*, source_text: str, field_label: str, activity: str, target_characters: int, revision_text: str = "") -> str:
+def writing_prompt(*, source_text: str, field_label: str, activity: str, target_characters: int, revision_text: str = "", revision_count: int = 0) -> str:
     context = [f"入力欄: {field_label}"]
     if activity:
         context.append(f"活動・場面: {activity}")
@@ -114,7 +114,7 @@ def writing_prompt(*, source_text: str, field_label: str, activity: str, target_
         context.extend([
             "前回の下書き:",
             revision_text,
-            "前回の文章が指定文字数と一致しなかったため、内容を変えずに文字数だけを調整してください。",
+            f"前回の下書きは{revision_count}字でした。内容を変えずに、{target_characters}字ちょうどになるよう文字数だけを調整してください。",
         ])
     return "\n".join([
         "あなたは放課後等デイサービスの記録作成を支援する日本語の文章補助です。",
@@ -176,28 +176,22 @@ def generate_writing_draft(payload: object) -> dict:
         raise WritingAssistError(422, "記録の根拠が短いため、この文字数へ安全に広げられません。活動内容・本人の様子・行った支援を追記してください。")
 
     model = os.environ.get("OPENAI_MODEL", "gpt-4.1").strip() or "gpt-4.1"
-    generated = request_openai(
-        writing_prompt(
-            source_text=source_text,
-            field_label=field_label,
-            activity=activity,
-            target_characters=target_characters,
-        ),
-        api_key=api_key,
-        model=model,
-    )
-    if character_count(generated) != target_characters:
+    generated = ""
+    for attempt in range(3):
         generated = request_openai(
             writing_prompt(
                 source_text=source_text,
                 field_label=field_label,
                 activity=activity,
                 target_characters=target_characters,
-                revision_text=generated,
+                revision_text=generated if attempt else "",
+                revision_count=character_count(generated),
             ),
             api_key=api_key,
             model=model,
         )
+        if character_count(generated) == target_characters:
+            break
     if character_count(generated) != target_characters:
         raise WritingAssistError(503, f"指定した{target_characters}字に整えられませんでした。入力内容を少し具体的にして、もう一度お試しください。")
     return {
