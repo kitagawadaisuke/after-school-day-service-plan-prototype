@@ -1885,6 +1885,7 @@ h3 {
 .writing-character-count[data-state="short"] { color: #9c5d42; }
 .writing-tools .mini-button { min-height: 31px; padding: 5px 9px; font-size: 11px; }
 .writing-tools .mini-button.is-complete { color: #245844; border-color: #75a18b; background: #e7f2eb; }
+.writing-tools .mini-button:disabled { cursor: wait; color: #73817c; border-color: #ccd8d1; background: #edf1ee; }
 .writing-action-feedback {
   grid-column: 1 / -1;
   min-height: 0;
@@ -1895,6 +1896,8 @@ h3 {
 }
 .writing-action-feedback:empty { display: none; }
 .writing-action-feedback[data-state="unchanged"] { color: #6d675a; }
+.writing-action-feedback[data-state="progress"] { color: #467063; }
+.writing-action-feedback[data-state="error"] { color: #a24932; }
 .writing-tools small { grid-column: 1 / -1; color: #718078; font-size: 10px; line-height: 1.45; }
 
 .draft-actions {

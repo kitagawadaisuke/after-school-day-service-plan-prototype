@@ -412,10 +412,10 @@ function writingToolsMarkup() {
       <input data-writing-custom-target type="number" min="${WRITING_TARGET_MIN}" max="${WRITING_TARGET_MAX}" step="1" inputmode="numeric" placeholder="80〜800" aria-label="任意の目標文字数" hidden />
     </span>
     <output class="writing-character-count" aria-live="polite"></output>
-    <button class="mini-button" type="button" data-writing-format>文章を整える</button>
+    <button class="mini-button" type="button" data-writing-format>指定文字数で整える</button>
     <button class="mini-button" type="button" data-writing-copy>コピー</button>
     <output class="writing-action-feedback" data-writing-feedback aria-live="polite"></output>
-    <small>事実を追加せず、改行や文末を読みやすく整えます。</small>
+    <small>AIが入力済みの事実だけをもとに、指定文字数の下書きを作成します。内容を確認してから保存してください。</small>
   </span>`;
 }
 
@@ -443,16 +443,6 @@ function refreshWritingTools(root = document) {
   $$(".writing-field", root).forEach(updateWritingTools);
 }
 
-function formatWritingText(value) {
-  return String(value || "")
-    .replace(/\r\n?/g, "\n")
-    .split("\n")
-    .map((line) => line.replace(/\s+/g, " ").trim())
-    .filter(Boolean)
-    .map((line) => /[。！？!?]$/u.test(line) ? line : `${line}。`)
-    .join("\n");
-}
-
 function showWritingFeedback(field, message, state = "done") {
   const feedback = $("[data-writing-feedback]", field);
   if (!feedback) return;
@@ -471,7 +461,27 @@ function markWritingButtonComplete(button) {
   }, 1800);
 }
 
-function formatWritingField(button) {
+function writingAssistPayload(field, textarea, target) {
+  const isJournalField = textarea.id.startsWith("journal-");
+  const label = field.querySelector(":scope > span")?.textContent?.trim() || "記録内容";
+  return {
+    sourceText: textarea.value.trim(),
+    fieldLabel: label,
+    activity: isJournalField ? $("#journal-activity")?.value?.trim() || "" : "",
+    targetCharacters: target,
+  };
+}
+
+async function responseErrorMessage(response) {
+  try {
+    const payload = await response.json();
+    return payload?.error?.message || "AIによる文章作成を完了できませんでした。";
+  } catch {
+    return "AIによる文章作成を完了できませんでした。";
+  }
+}
+
+async function formatWritingField(button) {
   const field = button.closest(".writing-field");
   const textarea = $("textarea", field);
   if (!textarea?.value.trim()) {
@@ -485,21 +495,37 @@ function formatWritingField(button) {
     $("[data-writing-custom-target]", field)?.focus();
     return;
   }
-  const sourceText = textarea.value;
-  const formattedText = formatWritingText(sourceText);
-  const changed = formattedText !== sourceText;
-  textarea.value = formattedText;
-  textarea.dispatchEvent(new Event("input", { bubbles: true }));
-  updateWritingTools(field);
-  markWritingButtonComplete(button);
-  showWritingFeedback(
-    field,
-    changed
-      ? "整えました。空白・改行・文末を読みやすく調整しています。"
-      : "すでに読みやすい状態です（変更なし）。",
-    changed ? "changed" : "unchanged"
-  );
-  showToast(changed ? "文章を整えました。事実の追加・推測はしていません。" : "すでに読みやすい文章です（変更なし）。");
+  const originalLabel = button.textContent;
+  button.disabled = true;
+  button.textContent = "AI作成中…";
+  showWritingFeedback(field, `AIが${target}字の下書きを作成しています。`, "progress");
+  try {
+    const response = await fetch("/api/demo/writing-assist", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(writingAssistPayload(field, textarea, target)),
+    });
+    if (!response.ok) throw new Error(await responseErrorMessage(response));
+    const generated = await response.json();
+    if (generated?.characterCount !== target || [...String(generated?.text || "")].length !== target) {
+      throw new Error(`指定した${target}字の下書きを作成できませんでした。`);
+    }
+    textarea.value = generated.text;
+    textarea.dispatchEvent(new Event("input", { bubbles: true }));
+    updateWritingTools(field);
+    button.disabled = false;
+    button.textContent = originalLabel;
+    markWritingButtonComplete(button);
+    showWritingFeedback(field, `AIが入力済みの事実をもとに、${target}字で下書きを作成しました。内容を確認してから保存してください。`, "changed");
+    showToast(`${target}字の下書きを作成しました。内容を確認してから保存してください。`);
+  } catch (error) {
+    const message = error instanceof Error ? error.message : "AIによる文章作成を完了できませんでした。";
+    showWritingFeedback(field, message, "error");
+    showToast(message);
+  } finally {
+    if (button.isConnected && button.textContent === "AI作成中…") button.textContent = originalLabel;
+    if (button.isConnected) button.disabled = false;
+  }
 }
 
 async function copyWritingField(button) {
@@ -2146,7 +2172,7 @@ function initializeStaticControls() {
 
   document.addEventListener("click", (event) => {
     const formatButton = event.target.closest("[data-writing-format]");
-    if (formatButton) formatWritingField(formatButton);
+    if (formatButton) void formatWritingField(formatButton);
     const copyButton = event.target.closest("[data-writing-copy]");
     if (copyButton) void copyWritingField(copyButton);
   });
