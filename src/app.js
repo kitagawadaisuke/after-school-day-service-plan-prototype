@@ -415,7 +415,7 @@ function writingToolsMarkup() {
     <button class="mini-button" type="button" data-writing-format>目標文字数を目安に整える</button>
     <button class="mini-button" type="button" data-writing-copy>コピー</button>
     <output class="writing-action-feedback" data-writing-feedback aria-live="polite"></output>
-    <small>AIが入力済みの事実だけをもとに、目標文字数前後の下書きを作成します。内容を確認してから保存してください。</small>
+    <small>AIが入力内容をもとに、言い換えや文のつなぎを加えて目標文字数前後の下書きを作成します。内容を確認してから保存してください。</small>
   </span>`;
 }
 
@@ -521,8 +521,8 @@ async function formatWritingField(button) {
     markWritingButtonComplete(button);
     const lowerBound = Math.round(target * 0.8);
     const resultMessage = generatedCount < lowerBound
-      ? `AIが${generatedCount}字の下書きを作成しました。入力内容が短いため、記録にない事実は補っていません。${target}字前後にしたい場合は、活動・支援・本人の反応を追記してください。`
-      : `AIが入力済みの事実をもとに、${generatedCount}字の下書きを作成しました（目標 ${target}字）。内容を確認してから保存してください。`;
+      ? `AIが${generatedCount}字の下書きを作成しました。${target}字前後へ近づけるには、活動・支援・本人の反応を追記すると内容がより具体的になります。`
+      : `AIが入力内容をもとに、${generatedCount}字の下書きを作成しました（目標 ${target}字）。内容を確認してから保存してください。`;
     showWritingFeedback(field, resultMessage, "changed");
     showToast(`${generatedCount}字の下書きを作成しました（目標 ${target}字）。`);
   } catch (error) {
