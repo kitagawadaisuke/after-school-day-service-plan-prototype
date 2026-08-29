@@ -519,7 +519,11 @@ async function formatWritingField(button) {
     button.disabled = false;
     button.textContent = originalLabel;
     markWritingButtonComplete(button);
-    showWritingFeedback(field, `AIが入力済みの事実をもとに、${generatedCount}字の下書きを作成しました（目標 ${target}字）。内容を確認してから保存してください。`, "changed");
+    const lowerBound = Math.round(target * 0.8);
+    const resultMessage = generatedCount < lowerBound
+      ? `AIが${generatedCount}字の下書きを作成しました。入力内容が短いため、記録にない事実は補っていません。${target}字前後にしたい場合は、活動・支援・本人の反応を追記してください。`
+      : `AIが入力済みの事実をもとに、${generatedCount}字の下書きを作成しました（目標 ${target}字）。内容を確認してから保存してください。`;
+    showWritingFeedback(field, resultMessage, "changed");
     showToast(`${generatedCount}字の下書きを作成しました（目標 ${target}字）。`);
   } catch (error) {
     const message = error instanceof Error ? error.message : "AIによる文章作成を完了できませんでした。";
