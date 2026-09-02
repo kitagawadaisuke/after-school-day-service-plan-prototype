@@ -1,0 +1,14 @@
+[Unit]
+Description=COCO after-school day service application
+After=network.target
+
+[Service]
+Type=simple
+WorkingDirectory=/home/dev1/coco_app
+EnvironmentFile=/home/dev1/coco_app/.env
+ExecStart=/home/dev1/.local/node-v22.22.1/bin/node /home/dev1/coco_app/server/start.js
+Restart=on-failure
+RestartSec=5
+
+[Install]
+WantedBy=default.target
