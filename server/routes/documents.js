@@ -26,6 +26,7 @@ const documentKindSchema = z.enum([
   "basic_assessment",
   "consultation_plan",
   "individual_support_plan",
+  "specialized_support_plan",
   "monitoring_record",
 ]);
 const documentStatusSchema = z.enum([

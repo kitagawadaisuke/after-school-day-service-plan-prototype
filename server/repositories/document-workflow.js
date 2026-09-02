@@ -103,7 +103,7 @@ async function readDocument(client, tenantId, childId, documentId, options = {})
     `select d.*
      from public.case_documents d
      where d.tenant_id = $1 and d.child_id = $2 and d.id = $3 and d.deleted_at is null
-       and d.document_kind in ('consultation_plan', 'individual_support_plan')
+       and d.document_kind in ('consultation_plan', 'individual_support_plan', 'specialized_support_plan')
      ${options.forUpdate ? "for update" : ""}`,
     [tenantId, childId, documentId],
   );

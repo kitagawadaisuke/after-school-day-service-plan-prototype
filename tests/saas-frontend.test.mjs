@@ -79,7 +79,7 @@ test("最後に開いた利用者は同じ職員・事業所のブラウザタ�
   assert.match(script, /forgetSelectedChild\(\)/);
 });
 
-test("外部計画は任意の参考資料とし、事業所の計画だけを正式工程で扱う", () => {
+test("外部計画は任意の参考資料とし、事業所の計画と専門的支援計画を正式工程で扱う", () => {
   assert.match(html, /data-create-document="consultation_plan"/);
   assert.match(html, /data-generate-draft="basic_assessment"/);
   assert.match(html, /data-generate-draft="individual_support_plan"/);
@@ -103,8 +103,10 @@ test("外部計画は任意の参考資料とし、事業所の計画だけを�
   assert.match(html, /id="reference-plan-editor-dialog"/);
   assert.match(html, /name="referenceMemo"/);
   assert.doesNotMatch(html, /name="childWish"/);
-  assert.match(script, /kind === "individual_support_plan" && \(can\("documents\.edit"\)/);
+  assert.match(script, /\["individual_support_plan", "specialized_support_plan"\]\.includes\(kind\)/);
   assert.match(html, /<h2 id="individual-title">個別支援計画<\/h2>/);
+  assert.match(html, /data-create-document="specialized_support_plan"/);
+  assert.match(html, /<h2 id="specialized-title">専門的支援計画<\/h2>/);
   assert.match(script, /documentKind: kind/);
   assert.match(script, /targetDocumentKind: "basic_assessment"/);
   assert.match(script, /targetDocumentKind: "individual_support_plan"/);
@@ -283,8 +285,9 @@ test("保存済みの書類ではPDFを一つだけ出力・参照する", () =>
   assert.match(script, /document-item--compact/);
   assert.doesNotMatch(script, /kind === "consultation_plan" \? "登録済みの参考資料" : `第\$\{documentRecord\.versionNumber\}版`/);
   assert.match(script, /PDF_LAYOUT_TEMPLATE_VERSIONS/);
-  assert.match(script, /basic_assessment: "basic-assessment-v4"/);
-  assert.match(script, /individual_support_plan: "individual-support-plan-v5"/);
+  assert.match(script, /basic_assessment: "coco-assessment-v1"/);
+  assert.match(script, /individual_support_plan: "coco-individual-plan-v1"/);
+  assert.match(script, /specialized_support_plan: "coco-specialized-plan-v1"/);
   assert.match(script, /body: \{ templateVersion: requiredVersion \}/);
   assert.match(script, /documentRecord\.documentKind !== "consultation_plan"/);
   assert.match(script, /snapshot\.snapshotKind === snapshotKind/);

@@ -106,7 +106,7 @@ async function readSnapshotSourceDetails(
   ] = await Promise.all([
     client.query(
       `select id, management_code, display_name, legal_name, birth_date, grade,
-              gender, disability_category, municipality_name, copayment_limit_yen,
+              gender, address, primary_phone, disability_category, municipality_name, copayment_limit_yen,
               recipient_certificate_ciphertext, recipient_certificate_last4,
               certificate_valid_from, certificate_valid_to
        from public.children
@@ -136,7 +136,7 @@ async function readSnapshotSourceDetails(
       [tenantId, documentRow.id],
     ),
     client.query(
-      `select r.*, g.title as goal_title
+      `select r.*, g.title as goal_title, g.support_details
        from public.monitoring_goal_results r
        join public.document_goals g
          on g.tenant_id = r.tenant_id and g.id = r.goal_id
@@ -214,6 +214,8 @@ async function readSnapshotSourceDetails(
       birth_date: dateOnly(child.birth_date),
       grade: child.grade,
       gender: child.gender,
+      address: child.address || {},
+      primary_phone: child.primary_phone,
       disability_category: child.disability_category,
       municipality_name: child.municipality_name,
       copayment_limit_yen: child.copayment_limit_yen === null

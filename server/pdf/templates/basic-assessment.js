@@ -1,42 +1,23 @@
-import { buildDocumentHtml, firstValue, renderSchedules, renderSection } from "./common.js";
+import { buildCocoForm, cell, section, text, value } from "./coco-form.js";
 
 export const BASIC_ASSESSMENT_ORIENTATION = "portrait";
 
 export function renderBasicAssessment(source, snapshotKind) {
   const payload = source.document.payload || {};
-  const assessment = payload.assessment || {};
-  const value = (keys, assessmentKey = null) => firstValue(payload, keys, assessmentKey ? assessment[assessmentKey] : null);
-  const bodyHtml = [
-    renderSection("本人・家族から伺ったこと", [
-      ["本人の願い", value(["childWishes", "本人の意向", "childAndFamilyWishes"], "personWish")],
-      ["家族の願い", value(["familyWishes", "家族の意向"], "familyWish")],
-      ["困りごと・相談内容", value(["concerns", "困りごと", "consultationSummary"], "needs")],
-      ["望む生活のイメージ", value(["desiredLife", "lifeVision", "oneYearVision"], "planningNotes")],
-    ]),
-    renderSection("現在の状況と強み・課題", [
-      ["生活・健康", firstValue(payload, ["healthManagement", "dailyLiving", "healthStatus"])],
-      ["運動・感覚", firstValue(payload, ["movementSensory", "motorSkills", "sensoryProfile"])],
-      ["認知・行動", firstValue(payload, ["cognitionBehavior", "behavioralStatus"])],
-      ["言語・コミュニケーション", firstValue(payload, ["languageCommunication", "communication"])],
-      ["人間関係・社会性", firstValue(payload, ["relationshipsSocial", "socialParticipation"])],
-      ["家族・生活環境", firstValue(payload, ["familySituation", "livingEnvironment"])],
-      ["強み・好きなこと", value(["strengths", "interests"], "strengths")],
-      ["優先して支援する課題", value(["priorityNeeds", "currentChallenges", "challenges"], "needs")],
-    ]),
-    renderSection("支援の見立て", [
-      ["総合的なアセスメント", value(["overallAssessment", "currentSituation"], "planningNotes")],
-      ["支援で大切にすること", value(["supportConsiderations", "supportDirection"], "supportDirection")],
-      ["医療・安全上の留意事項", firstValue(payload, ["medicalSafetyNotes", "riskNotes"])],
-      ["連携先と役割", firstValue(payload, ["supportNetwork", "informalSupport"])],
-    ]),
-    `<section class="document-section page-break-before"><h2>現在・予定の週間生活</h2>${renderSchedules(source.schedules)}</section>`,
+  const dailyRows = [["食事", "dailyMeal"], ["衣類の着脱", "dailyDressing"], ["排泄", "dailyToileting"], ["入浴", "dailyBathing"], ["睡眠", "dailySleep"]];
+  const pageOne = [
+    section("日常生活について", `<table class="coco-table"><thead><tr><th>項目</th><th>確認内容</th><th>備考</th></tr></thead><tbody>${dailyRows.map(([label, key]) => `<tr><th>${label}</th><td>${text(value(payload, [key, "healthManagement"]))}</td><td></td></tr>`).join("")}<tr><th>スケジュール管理</th><td>${text(value(payload, ["scheduleManagement", "supportConsiderations"]))}</td><td></td></tr></tbody></table>`),
+    section("学習面について", `<table class="coco-table"><thead><tr><th>項目</th><th>確認内容</th><th>備考</th></tr></thead><tbody><tr><th>在籍学級</th><td>${text(value(payload, ["schoolClass", "grade"]))}</td><td></td></tr><tr><th>授業中の様子</th><td>${text(value(payload, ["learning", "cognitionBehavior"]))}</td><td></td></tr></tbody></table>`),
+    section("社会性について", `<div class="coco-grid">${cell("状況理解", value(payload, ["socialUnderstanding", "cognitionBehavior"]), "tall")}${cell("環境適応", value(payload, ["environmentAdaptation", "relationshipsSocial"]), "tall")}${cell("友達との関わり", value(payload, ["friendRelationships", "relationshipsSocial"]), "tall")}${cell("公共の場での行動", value(payload, ["publicBehavior", "relationshipsSocial"]), "tall")}</div>`),
+    section("コミュニケーションについて", `<div class="coco-grid">${cell("自分から話す", value(payload, ["speaksIndependently", "languageCommunication"]), "tall")}${cell("相手の話を聴く", value(payload, ["listensToOthers", "languageCommunication"]), "tall")}</div>`),
+    section("余暇について", `<div class="coco-grid">${cell("趣味・好きな遊び", value(payload, ["hobbies", "strengths"]), "tall")}${cell("習い事等", value(payload, ["lessons", "desiredLife"]), "tall")}</div>`),
   ].join("");
-  return buildDocumentHtml({
-    source,
-    snapshotKind,
-    title: "アセスメントシート",
-    subtitle: "情報収集・状況整理",
-    orientation: BASIC_ASSESSMENT_ORIENTATION,
-    bodyHtml,
-  });
+  const pageTwo = [
+    section("進路について", `<div class="coco-grid">${cell("家族", value(payload, ["familyCareerPath"]), "tall")}${cell("本人", value(payload, ["childCareerPath"]), "tall")}</div>`),
+    section("その他、支援に関わる特記事項", `<div class="coco-grid one">${cell("特記事項", value(payload, ["supportNotes", "medicalSafetyNotes", "planningNotes"]), "xl")}</div>`),
+    section("生活・嗜好について", `<div class="coco-grid">${cell("好きな食べ物・おやつ", value(payload, ["favoriteFoods", "strengths"]), "tall")}${cell("嫌いな食べ物・飲み物", value(payload, ["dislikedFoods"]), "tall")}${cell("好きな遊び・キャラクター", value(payload, ["favoriteActivities", "strengths"]), "tall")}${cell("苦手な遊び・キャラクター", value(payload, ["difficultActivities"]), "tall")}${cell("好きな色・物など", value(payload, ["favoriteThings"]), "tall")}${cell("睡眠", value(payload, ["sleepPattern", "dailySleep"]), "tall")}</div>`),
+    section("家以外での様子について", `<div class="coco-grid">${cell("好きな外出先", value(payload, ["favoriteOutings"]), "tall")}${cell("苦手な外出先", value(payload, ["difficultOutings"]), "tall")}${cell("外出時に気をつけること", value(payload, ["outingNotes", "medicalSafetyNotes"]), "tall")}${cell("その他", value(payload, ["outsideNotes"]), "tall")}</div>`),
+    section("習い事・他事業所の利用 / 利用希望日", `<div class="coco-grid">${cell("習い事・他事業所", value(payload, ["otherServices"]), "tall")}${cell("利用希望日", value(payload, ["desiredServiceDays"]), "tall")}</div>`),
+  ].join("");
+  return buildCocoForm({ source, snapshotKind, title: "アセスメントシート", bodyHtml: `${pageOne}<div class="page-break">${pageTwo}</div>`, pageClass: "basic-assessment" });
 }

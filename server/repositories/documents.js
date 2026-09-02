@@ -6,6 +6,7 @@ export const SUPPORTED_DOCUMENT_KINDS = Object.freeze([
   "basic_assessment",
   "consultation_plan",
   "individual_support_plan",
+  "specialized_support_plan",
   "monitoring_record",
 ]);
 

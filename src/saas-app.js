@@ -26,6 +26,7 @@ const DOCUMENT_KIND_LABELS = Object.freeze({
   consultation_plan: "参考資料",
   basic_assessment: "アセスメント",
   individual_support_plan: "個別支援計画",
+  specialized_support_plan: "専門的支援計画",
   monitoring_record: "モニタリング",
 });
 
@@ -47,6 +48,9 @@ const OFFICIAL_PDF_STATUSES = Object.freeze(["approved", "distributed", "active"
 const EDITABLE_DOCUMENT_STATUSES = Object.freeze(["draft", "internal_review", "explanation_pending"]);
 const INDIVIDUAL_PLAN_PAYLOAD_FIELDS = Object.freeze([
   ["userAndFamilyWishes", "本人・家族の意向"],
+  ["supportIssues", "支援課題"],
+  ["childWishes", "本人の希望"],
+  ["familyWishes", "保護者の希望"],
   ["overallSupportPolicy", "総合的な支援の方針"],
   ["consultationPlanBasis", "相談支援計画とのつながり"],
   ["supportConsiderations", "支援上の留意事項"],
@@ -54,6 +58,11 @@ const INDIVIDUAL_PLAN_PAYLOAD_FIELDS = Object.freeze([
   ["coordination", "家族・関係機関との連携"],
   ["monitoringPlan", "モニタリングの時期・方法"],
   ["explanationNotes", "説明・同意時の確認事項"],
+  ["specializedGoal", "目指すべき達成目標"],
+  ["specializedSupportTarget", "専門的支援の目標"],
+  ["specializedSupportContent", "活動プログラム"],
+  ["specializedTargetDate", "達成時期"],
+  ["specializedFiveDomains", "5領域"],
 ]);
 const INDIVIDUAL_PLAN_FIELD_LABELS = Object.freeze(Object.fromEntries(INDIVIDUAL_PLAN_PAYLOAD_FIELDS));
 const ASSESSMENT_EDITOR_FIELDS = Object.freeze([
@@ -1154,8 +1163,10 @@ async function loadDocumentSnapshots(documents = state.documents) {
 // it, so staff do not have to open and re-save their own content just to get a
 // corrected form.
 const PDF_LAYOUT_TEMPLATE_VERSIONS = Object.freeze({
-  basic_assessment: "basic-assessment-v4",
-  individual_support_plan: "individual-support-plan-v5",
+  basic_assessment: "coco-assessment-v1",
+  individual_support_plan: "coco-individual-plan-v1",
+  specialized_support_plan: "coco-specialized-plan-v1",
+  monitoring_record: "coco-monitoring-v1",
 });
 
 function requiredPdfTemplateVersion(documentRecord) {
@@ -1245,6 +1256,7 @@ function renderDocuments() {
   renderDocumentLane("consultation_plan", $("#consultation-document-list"));
   renderDocumentLane("basic_assessment", $("#assessment-document-list"));
   renderDocumentLane("individual_support_plan", $("#individual-document-list"));
+  renderDocumentLane("specialized_support_plan", $("#specialized-document-list"));
   renderDocumentLane("monitoring_record", $("#monitoring-document-list"));
   $$('[data-create-document]').forEach((button) => { button.disabled = !state.selectedChild; });
   const assessment = latestDocument("basic_assessment");
@@ -1361,7 +1373,7 @@ function renderDocumentLane(kind, container) {
       edit.addEventListener("click", () => runAsync(() => openAssessmentEditor(documentRecord, edit)));
       actions.append(edit);
     }
-    if (kind === "individual_support_plan" && (can("documents.edit") && EDITABLE_DOCUMENT_STATUSES.includes(documentRecord.status))) {
+    if (["individual_support_plan", "specialized_support_plan"].includes(kind) && can("documents.edit") && EDITABLE_DOCUMENT_STATUSES.includes(documentRecord.status)) {
       const edit = element("button", { className: "button button-primary", text: "編集する", attributes: { type: "button" } });
       edit.addEventListener("click", () => runAsync(() => openPlanEditor(documentRecord, edit)));
       actions.append(edit);
@@ -1595,7 +1607,7 @@ async function loadDocuments() {
   const { data } = await api(`/children/${childId}/documents?limit=100`);
   state.documents = data.items || [];
   state.documentDetails.clear();
-  const latestIds = [...new Set(["consultation_plan", "basic_assessment", "individual_support_plan", "monitoring_record"]
+  const latestIds = [...new Set(["consultation_plan", "basic_assessment", "individual_support_plan", "specialized_support_plan", "monitoring_record"]
     .map((kind) => latestDocument(kind)?.id)
     .filter(Boolean))];
   for (const reference of state.documents.filter((documentRecord) => documentRecord.documentKind === "consultation_plan")) {
@@ -2453,6 +2465,12 @@ async function submitJournal(event) {
       announce("日誌を変更しました。");
       return;
     }
+    if (kind === "specialized_support_plan") {
+      const created = state.documents.find((documentRecord) => documentRecord.id === result.data.id) || result.data;
+      await openPlanEditor(created, button);
+      announce("専門的支援の目標と活動プログラムを入力してください。");
+      return;
+    }
     announce("日誌を保存しました。連絡帳の下書きを作成しています。");
     await openContactDraftFromJournal($("#main-content"), savedJournal || body);
   } catch (error) {
@@ -2981,7 +2999,7 @@ function renderPlanEditorGoals(goals = []) {
 }
 
 async function openPlanEditor(documentRecord, trigger) {
-  if (!state.selectedChild || documentRecord.documentKind !== "individual_support_plan") return;
+  if (!state.selectedChild || !["individual_support_plan", "specialized_support_plan"].includes(documentRecord.documentKind)) return;
   if (!EDITABLE_DOCUMENT_STATUSES.includes(documentRecord.status)) {
     announce("確定後の計画書は編集できません。新しい版を作成してください。");
     return;
@@ -2996,6 +3014,7 @@ async function openPlanEditor(documentRecord, trigger) {
   const form = $("#plan-editor-form");
   form.reset();
   form.elements.documentId.value = detail.id;
+  form.dataset.documentKind = detail.documentKind;
   form.dataset.documentEtag = detailResult.etag || `\"${detail.rowVersion}\"`;
   form.elements.periodStart.value = detail.periodStart || "";
   form.elements.periodEnd.value = detail.periodEnd || "";
@@ -3541,7 +3560,7 @@ async function submitStaffEdit(event) {
 }
 
 function workflowActionsForStatus(status, documentKind) {
-  if (documentKind !== "individual_support_plan") return [];
+  if (!["individual_support_plan", "specialized_support_plan"].includes(documentKind)) return [];
   const transitions = {
     draft: ["submit", "void"],
     internal_review: ["return", "explain", "void"],
@@ -3555,7 +3574,7 @@ function workflowActionsForStatus(status, documentKind) {
 }
 
 async function openWorkflow(documentRecord, trigger) {
-  if (documentRecord.documentKind !== "individual_support_plan") return;
+  if (!["individual_support_plan", "specialized_support_plan"].includes(documentRecord.documentKind)) return;
   const result = await api(`/children/${encodeURIComponent(state.selectedChild.id)}/documents/${encodeURIComponent(documentRecord.id)}/workflow`);
   state.workflow = result.data;
   state.workflowEtag = result.etag || `"${result.data.document.rowVersion}"`;

@@ -5,19 +5,19 @@
     <meta name="viewport" content="width=device-width, initial-scale=1">
     <meta name="color-scheme" content="light">
     <meta name="theme-color" content="#123b3d">
-    <title>みちのーと｜支援記録・個別支援計画</title>
+    <title>放課後デイサービス COCO｜支援記録・個別支援計画</title>
     <meta
       name="description"
       content="相談支援計画から日々の記録、個別支援計画までを安全につなぐ放課後等デイサービス向け業務システム"
     >
-  <link rel="stylesheet" href="/styles/saas.css?v=20260821-studio-refresh-4">
-  <script type="module" src="/src/saas-app.js?v=20260821-writing-access-fix"></script>
+  <link rel="stylesheet" href="/styles/saas.css?v=20260902-coco-forms-1">
+  <script type="module" src="/src/saas-app.js?v=20260902-coco-forms-1"></script>
   </head>
   <body>
     <a class="skip-link" href="#main-content">本文へ移動</a>
 
     <div id="session-gate" class="session-gate" role="status" aria-live="polite">
-      <span class="gate-mark" aria-hidden="true">道</span>
+          <span class="gate-mark" aria-hidden="true">C</span>
       <p>所属と権限を確認しています</p>
     </div>
 
@@ -33,8 +33,8 @@
         <div class="brand">
           <span class="brand-mark" aria-hidden="true"><i></i><i></i><i></i></span>
           <div>
-            <strong>みちのーと</strong>
-            <span>個別支援の記録・計画</span>
+            <strong>COCO</strong>
+            <span>放課後等デイサービス</span>
           </div>
         </div>
         <div class="facility-identity" aria-live="polite">
@@ -183,8 +183,20 @@
                   <div id="individual-document-list" class="document-list empty-state"><strong>登録された計画はありません</strong></div>
                 </div>
               </section>
-              <section class="document-lane monitoring" aria-labelledby="monitoring-title">
+              <section class="document-lane individual" aria-labelledby="specialized-title">
                 <div class="document-lane-index" aria-hidden="true">03</div>
+                <div class="document-lane-heading">
+                  <p class="document-lane-step">専門的支援を整理</p>
+                  <h2 id="specialized-title">専門的支援計画</h2>
+                  <p>専門職による支援目標と活動プログラムを、個別支援計画と分けて管理します。</p>
+                </div>
+                <div class="document-lane-record">
+                  <div id="specialized-document-controls" class="document-lane-controls"><button class="button button-secondary permission-edit-documents" type="button" data-create-document="specialized_support_plan" hidden>専門的支援計画を作成</button></div>
+                  <div id="specialized-document-list" class="document-list empty-state"><strong>登録された専門的支援計画はありません</strong></div>
+                </div>
+              </section>
+              <section class="document-lane monitoring" aria-labelledby="monitoring-title">
+                <div class="document-lane-index" aria-hidden="true">04</div>
                 <div class="document-lane-heading">
                   <p class="document-lane-step">支援を振り返る</p>
                   <h2 id="monitoring-title">モニタリング</h2>
@@ -424,6 +436,9 @@
           <label class="field"><span>開始日</span><input name="periodStart" type="date"></label>
           <label class="field"><span>終了日</span><input name="periodEnd" type="date"></label>
           <label class="field field-wide"><span>本人・家族の意向</span><textarea name="userAndFamilyWishes" maxlength="8000" rows="3"></textarea></label>
+          <label class="field field-wide"><span>支援課題（アセスメント結果）</span><textarea name="supportIssues" maxlength="8000" rows="3"></textarea></label>
+          <label class="field"><span>本人の希望</span><textarea name="childWishes" maxlength="8000" rows="3"></textarea></label>
+          <label class="field"><span>保護者の希望</span><textarea name="familyWishes" maxlength="8000" rows="3"></textarea></label>
           <label class="field field-wide"><span>総合的な支援の方針</span><textarea name="overallSupportPolicy" maxlength="8000" rows="4"></textarea></label>
           <label class="field field-wide"><span>参考資料とのつながり</span><textarea name="consultationPlanBasis" maxlength="8000" rows="3"></textarea></label>
           <label class="field field-wide"><span>支援上の留意事項</span><textarea name="supportConsiderations" maxlength="8000" rows="3"></textarea></label>
@@ -431,6 +446,12 @@
           <label class="field field-wide"><span>家族・関係機関との連携</span><textarea name="coordination" maxlength="8000" rows="3"></textarea></label>
           <label class="field field-wide"><span>モニタリングの時期・方法</span><textarea name="monitoringPlan" maxlength="8000" rows="3"></textarea></label>
           <label class="field field-wide"><span>説明・同意時の確認事項</span><textarea name="explanationNotes" maxlength="8000" rows="3"></textarea></label>
+          <p class="form-section-label field-wide">専門的支援実施計画書に記載する項目</p>
+          <label class="field field-wide"><span>目指すべき達成目標</span><textarea name="specializedGoal" maxlength="8000" rows="3"></textarea></label>
+          <label class="field"><span>専門的支援の目標</span><textarea name="specializedSupportTarget" maxlength="8000" rows="3"></textarea></label>
+          <label class="field"><span>活動プログラム</span><textarea name="specializedSupportContent" maxlength="8000" rows="3"></textarea></label>
+          <label class="field"><span>達成時期</span><input name="specializedTargetDate" type="date"></label>
+          <label class="field"><span>5領域（読点区切り）</span><input name="specializedFiveDomains" maxlength="500" placeholder="健康・生活、運動・感覚"></label>
         </div>
         <section class="document-goal-editor" aria-labelledby="plan-editor-goals-title"><h3 id="plan-editor-goals-title">支援目標</h3><div id="plan-editor-goals"></div></section>
         <div class="dialog-actions"><button class="button button-ghost" type="button" data-close-dialog="plan-editor-dialog">キャンセル</button><button class="button button-primary" type="submit">計画書を保存</button></div>

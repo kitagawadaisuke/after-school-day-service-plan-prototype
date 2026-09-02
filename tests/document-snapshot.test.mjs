@@ -354,8 +354,9 @@ test("帳票種別ごとにA4向き・版・利用児識別を表示し、内部
   const expected = {
     basic_assessment: ["portrait", "アセスメントシート"],
     consultation_plan: ["landscape", "サービス等利用計画"],
-    individual_support_plan: ["landscape", "個別支援計画書"],
-    monitoring_record: ["portrait", "モニタリング記録"],
+    individual_support_plan: ["portrait", "個別支援計画"],
+    specialized_support_plan: ["portrait", "専門的支援実施計画書"],
+    monitoring_record: ["portrait", "モニタリング"],
   };
 
   for (const [documentKind, [orientation, title]] of Object.entries(expected)) {
@@ -364,8 +365,8 @@ test("帳票種別ごとにA4向き・版・利用児識別を表示し、内部
     assert.equal(rendered.orientation, orientation);
     assert.match(rendered.html, new RegExp(`data-orientation="${orientation}"`));
     assert.equal(rendered.html.includes(title), true);
-    assert.equal(rendered.html.includes("山田 花子（C-001）"), true);
-    assert.equal(rendered.html.includes("第2版"), documentKind !== "basic_assessment" && documentKind !== "individual_support_plan");
+    assert.equal(rendered.html.includes("山田 花子"), true);
+    assert.equal(rendered.html.includes("第2版"), documentKind === "consultation_plan");
     assert.equal(rendered.html.includes("作業用"), false);
     assert.equal(rendered.html.includes("作成中"), false);
     assert.equal(rendered.html.includes("帳票 "), false);
@@ -375,23 +376,23 @@ test("帳票種別ごとにA4向き・版・利用児識別を表示し、内部
 
   source.document.document_kind = "basic_assessment";
   const assessment = renderDocumentTemplate(source, "draft").html;
-  assert.match(assessment, /document-heading document-heading--plain">\s*<h1>アセスメントシート<\/h1>/);
+  assert.match(assessment, /class="coco-title">アセスメントシート<\/h1>/);
   assert.doesNotMatch(assessment, /MICHI-NOTE/);
 
   source.document.document_kind = "individual_support_plan";
   const individual = renderDocumentTemplate(source, "draft").html;
-  assert.match(individual, /document-heading document-heading--plain">\s*<h1>個別支援計画書<\/h1>/);
+  assert.match(individual, /class="coco-title">個別支援計画<\/h1>/);
   assert.doesNotMatch(individual, /MICHI-NOTE/);
   assert.doesNotMatch(individual, /第2版/);
   assert.doesNotMatch(individual, /テスト法人/);
   assert.match(individual, /font-family: "IPAGothic"/);
-  assert.match(individual, /<thead><tr><th class="field-table-title" colspan="4"><h2>計画の基本方針<\/h2><\/th><\/tr><\/thead>/);
+  assert.match(individual, /具体的な支援内容（活動プログラム）/);
   assert.equal(individual.includes("&lt;script&gt;alert"), true);
 
   source.document.status = "approved";
   const official = renderDocumentTemplate(source, "official");
   assert.equal(official.html.includes("作成中"), false);
-  assert.equal(official.html.includes("正式版"), true);
+  assert.equal(official.html.includes("下書き"), false);
 });
 
 test("S3アダプターはSSE-KMS・チェックサム・上書き防止を必須にする", async () => {
@@ -454,7 +455,7 @@ test("下書きPDFを不変スナップショットとして作成・再利用�
     assert.equal(generated.json().reused, false);
     assert.equal(Object.hasOwn(generated.json(), "storageKey"), false);
     assert.equal(fake.putCount, 1);
-    assert.equal(fake.renderCalls[0].orientation, "landscape");
+    assert.equal(fake.renderCalls[0].orientation, "portrait");
     assert.equal(fake.renderCalls[0].html.includes("テスト利用児"), true);
 
     const replay = await app.inject({

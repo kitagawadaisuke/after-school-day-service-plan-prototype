@@ -2,11 +2,13 @@ import { renderBasicAssessment, BASIC_ASSESSMENT_ORIENTATION } from "./basic-ass
 import { renderConsultationPlan, CONSULTATION_PLAN_ORIENTATION } from "./consultation-plan.js";
 import { renderIndividualSupportPlan, INDIVIDUAL_SUPPORT_PLAN_ORIENTATION } from "./individual-support-plan.js";
 import { renderMonitoringRecord, MONITORING_RECORD_ORIENTATION } from "./monitoring-record.js";
+import { renderSpecializedSupportPlan, SPECIALIZED_SUPPORT_PLAN_ORIENTATION } from "./specialized-support-plan.js";
 
 const TEMPLATES = Object.freeze({
   basic_assessment: Object.freeze({ render: renderBasicAssessment, orientation: BASIC_ASSESSMENT_ORIENTATION }),
   consultation_plan: Object.freeze({ render: renderConsultationPlan, orientation: CONSULTATION_PLAN_ORIENTATION }),
   individual_support_plan: Object.freeze({ render: renderIndividualSupportPlan, orientation: INDIVIDUAL_SUPPORT_PLAN_ORIENTATION }),
+  specialized_support_plan: Object.freeze({ render: renderSpecializedSupportPlan, orientation: SPECIALIZED_SUPPORT_PLAN_ORIENTATION }),
   monitoring_record: Object.freeze({ render: renderMonitoringRecord, orientation: MONITORING_RECORD_ORIENTATION }),
 });
 
