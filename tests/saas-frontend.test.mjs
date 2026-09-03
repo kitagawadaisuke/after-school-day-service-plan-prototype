@@ -86,6 +86,7 @@ test("外部計画は任意の参考資料とし、事業所の計画と専門�
   assert.doesNotMatch(html, /1　整理する|2　計画にする|3　振り返る/);
   assert.doesNotMatch(html, /計画をつくる/);
   assert.match(html, /class="document-lane-index" aria-hidden="true">01/);
+  assert.match(html, /class="document-lane specialized"/);
   assert.match(html, /class="document-lane-step">現状を整理/);
   assert.match(html, /class="document-lane-step">方針を決める/);
   assert.match(html, /class="document-lane-step">支援を振り返る/);
@@ -99,6 +100,8 @@ test("外部計画は任意の参考資料とし、事業所の計画と専門�
   assert.match(html, /id="reference-material-view-dialog"/);
   assert.match(html, /id="delete-reference-material-button"/);
   assert.match(script, /text: "参考資料を削除"/);
+  assert.match(script, /アセスメントを編集/);
+  assert.match(script, /計画書を編集/);
   assert.match(html, /アセスメントを編集するときに確認します。/);
   assert.match(html, /id="reference-plan-editor-dialog"/);
   assert.match(html, /name="referenceMemo"/);

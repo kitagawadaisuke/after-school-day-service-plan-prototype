@@ -1349,6 +1349,7 @@ function renderDocumentLane(kind, container) {
     item.append(
       ...(kind === "consultation_plan" ? [element("strong", { text: "登録済みの参考資料" })] : []),
       ...(statusLabel ? [element("span", { className: "status-chip", text: statusLabel })] : []),
+      ...(kind === "consultation_plan" ? [] : [element("p", { className: "document-workflow-copy", text: documentWorkflowCopy(kind, documentRecord) })]),
       element("div", { className: "document-date-meta" }, [
         element("span", { text: `対象期間：${formatDate(documentRecord.periodStart)} 〜 ${formatDate(documentRecord.periodEnd)}` }),
         element("span", { text: `最終更新：${formatDate(documentRecord.updatedAt, true)}` }),
@@ -1376,18 +1377,18 @@ function renderDocumentLane(kind, container) {
       }
     }
     if (kind === "basic_assessment" && can("documents.edit") && EDITABLE_DOCUMENT_STATUSES.includes(documentRecord.status)) {
-      const edit = element("button", { className: "button button-primary", text: "編集する", attributes: { type: "button" } });
+      const edit = element("button", { className: "button button-primary", text: "アセスメントを編集", attributes: { type: "button" } });
       edit.addEventListener("click", () => runAsync(() => openAssessmentEditor(documentRecord, edit)));
       actions.append(edit);
     }
     if (["individual_support_plan", "specialized_support_plan"].includes(kind) && can("documents.edit") && EDITABLE_DOCUMENT_STATUSES.includes(documentRecord.status)) {
-      const edit = element("button", { className: "button button-primary", text: "編集する", attributes: { type: "button" } });
+      const edit = element("button", { className: "button button-primary", text: kind === "individual_support_plan" ? "計画書を編集" : "専門的支援計画を編集", attributes: { type: "button" } });
       edit.addEventListener("click", () => runAsync(() => openPlanEditor(documentRecord, edit)));
       actions.append(edit);
     }
     if (kind === "monitoring_record") {
       if (can("documents.edit") && EDITABLE_DOCUMENT_STATUSES.includes(documentRecord.status)) {
-        const edit = element("button", { className: "button button-primary", text: "帳票を編集", attributes: { type: "button" } });
+        const edit = element("button", { className: "button button-primary", text: "モニタリングを編集", attributes: { type: "button" } });
         edit.addEventListener("click", () => runAsync(() => openMonitoringEditor(documentRecord, edit)));
         actions.append(edit);
       }
@@ -2986,6 +2987,17 @@ async function submitMonitoringEditor(event) {
   } catch (error) {
     if (error.status !== 409) showFormError(form, errorContainer, errorMessage(error), []);
   }
+}
+
+function documentWorkflowCopy(kind, documentRecord) {
+  const copyByKind = {
+    basic_assessment: "現在のアセスメント内容を保存しています。活動の様子を反映して、いつでも更新できます。",
+    individual_support_plan: "アセスメントの内容を個別支援計画へ反映しています。",
+    specialized_support_plan: "個別支援計画と専門的支援の内容をもとに整理しています。",
+    monitoring_record: "計画に沿った支援を振り返り、次の支援へつなげます。",
+  };
+  if (kind === "individual_support_plan" && documentRecord.status === "draft") return "アセスメントの内容を個別支援計画の下書きへ反映しています。";
+  return copyByKind[kind] || "内容を確認できます。";
 }
 
 async function submitMonitoringResult(event) {
