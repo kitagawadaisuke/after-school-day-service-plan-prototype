@@ -1807,7 +1807,8 @@ main {
 }
 
 .assessment-writing-tools,
-.plan-writing-tools {
+.plan-writing-tools,
+.journal-disclosure-tools {
   display: grid;
   grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
   grid-template-areas:
@@ -1823,17 +1824,23 @@ main {
 }
 
 .assessment-writing-tools label,
-.plan-writing-tools label { grid-area: target; min-width: 0; font-size: 12px; }
+.plan-writing-tools label,
+.journal-disclosure-tools label { grid-area: target; min-width: 0; font-size: 12px; }
 .assessment-writing-tools .journal-character-count,
-.plan-writing-tools .journal-character-count { grid-area: count; justify-self: end; font-size: 12px; white-space: nowrap; }
+.plan-writing-tools .journal-character-count,
+.journal-disclosure-tools .journal-character-count { grid-area: count; justify-self: end; font-size: 12px; white-space: nowrap; }
 .assessment-writing-tools .button,
-.plan-writing-tools .button { width: 100%; min-height: 34px; padding-inline: 9px; font-size: 12px; }
+.plan-writing-tools .button,
+.journal-disclosure-tools .button { width: 100%; min-height: 34px; padding-inline: 9px; font-size: 12px; }
 .assessment-writing-tools .button:nth-of-type(1),
-.plan-writing-tools .button:nth-of-type(1) { grid-area: compose; }
+.plan-writing-tools .button:nth-of-type(1),
+.journal-disclosure-tools .button:nth-of-type(1) { grid-area: compose; }
 .assessment-writing-tools .button:nth-of-type(2),
-.plan-writing-tools .button:nth-of-type(2) { grid-area: copy; }
+.plan-writing-tools .button:nth-of-type(2),
+.journal-disclosure-tools .button:nth-of-type(2) { grid-area: copy; }
 .assessment-writing-tools .writing-custom-target-length,
-.plan-writing-tools .writing-custom-target-length { width: 7.5ch; min-height: 32px; margin-left: 5px; padding: 0 7px; border: 1px solid var(--line-strong); border-radius: 7px; background: var(--paper-bright); color: var(--ink); font: inherit; font-size: 12px; }
+.plan-writing-tools .writing-custom-target-length,
+.journal-disclosure-tools .writing-custom-target-length { width: 7.5ch; min-height: 32px; margin-left: 5px; padding: 0 7px; border: 1px solid var(--line-strong); border-radius: 7px; background: var(--paper-bright); color: var(--ink); font: inherit; font-size: 12px; }
 .assessment-writing-tools .assessment-writing-note { grid-column: 1 / -1; }
 
 .writing-disclosure {
@@ -1843,11 +1850,12 @@ main {
   background: var(--forest-pale);
 }
 
-.writing-disclosure > summary { cursor: pointer; padding: 11px 12px; color: var(--forest); font-size: 13px; font-weight: 700; list-style-position: inside; }
+.writing-disclosure > summary { cursor: pointer; padding: 11px 12px; color: var(--forest); font-size: 13px; font-weight: 700; line-height: 1.5; overflow-wrap: anywhere; list-style-position: inside; }
 .writing-disclosure > summary::marker { color: var(--terracotta); }
 .writing-disclosure[open] > summary { border-bottom: 1px solid var(--line); }
 .writing-disclosure .assessment-writing-tools,
-.writing-disclosure .plan-writing-tools { margin: 0; border: 0; border-radius: 0; background: transparent; }
+.writing-disclosure .plan-writing-tools,
+.writing-disclosure .journal-disclosure-tools { margin: 0; border: 0; border-radius: 0; background: transparent; }
 
 .draft-assist {
   display: grid;
@@ -2086,9 +2094,11 @@ main {
   .journal-writing-tools .writing-custom-target-length,
   .journal-writing-tools .button { width: 100%; }
   .assessment-writing-tools,
-  .plan-writing-tools { display: flex; align-items: stretch; flex-direction: column; }
+  .plan-writing-tools,
+  .journal-disclosure-tools { display: flex; align-items: stretch; flex-direction: column; }
   .assessment-writing-tools .journal-character-count,
-  .plan-writing-tools .journal-character-count { align-self: flex-start; }
+  .plan-writing-tools .journal-character-count,
+  .journal-disclosure-tools .journal-character-count { align-self: flex-start; }
   .overview-heading { display: grid; grid-template-columns: 1fr auto; }
   .overview-heading > div:first-child::before { display: none; }
   .date-stamp { width: 76px; height: 76px; flex-basis: 76px; }

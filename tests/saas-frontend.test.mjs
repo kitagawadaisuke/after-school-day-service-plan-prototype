@@ -156,6 +156,8 @@ test("保護者・受給者証を利用者台帳で扱い、週間予定画面�
   assert.match(html, /文章を整える/);
   assert.match(html, /data-copy-journal-field="observation"[^>]*>コピー/);
   assert.match(html, /id="copy-contact-reply"[^>]*>コピー/);
+  assert.match(html, /data-journal-writing-disclosure="observation"/);
+  assert.match(html, /data-contact-writing-disclosure="facilityReply"/);
   assert.match(script, /async function copyFieldText\(/);
   assert.match(script, /navigator\.clipboard\?\.writeText/);
   assert.match(html, /引継ぎ事項/);
@@ -214,6 +216,7 @@ test("保護者・受給者証を利用者台帳で扱い、週間予定画面�
   assert.match(script, /function createWritingDisclosure\(/);
   assert.match(script, /任意の目標文字数は\$\{WRITING_TARGET_MIN\}〜\$\{WRITING_TARGET_MAX\}字で入力してください。/);
   assert.match(css, /\.writing-disclosure \{/);
+  assert.match(css, /\.journal-disclosure-tools/);
   assert.match(css, /\.journal-writing-tools \.writing-custom-target-length/);
 });
 
