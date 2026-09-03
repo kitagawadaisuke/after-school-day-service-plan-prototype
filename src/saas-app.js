@@ -1363,7 +1363,7 @@ function renderDocumentLane(kind, container) {
     item.append(
       ...(kind === "consultation_plan" ? [element("strong", { text: "登録済みの参考資料" })] : []),
       ...(statusLabel ? [element("span", { className: "status-chip", text: statusLabel })] : []),
-      ...(kind === "consultation_plan" ? [] : [element("p", { className: "document-workflow-copy", text: documentWorkflowCopy(kind, documentRecord) })]),
+      ...(kind === "consultation_plan" || kind === "basic_assessment" ? [] : [element("p", { className: "document-workflow-copy", text: documentWorkflowCopy(kind, documentRecord) })]),
       element("div", { className: "document-date-meta" }, [
         element("span", { text: `対象期間：${formatDate(documentRecord.periodStart)} 〜 ${formatDate(documentRecord.periodEnd)}` }),
         element("span", { text: `最終更新：${formatDate(documentRecord.updatedAt, true)}` }),
@@ -3135,14 +3135,10 @@ async function submitMonitoringEditor(event) {
 
 function documentWorkflowCopy(kind, documentRecord) {
   const copyByKind = {
-    basic_assessment: "現在のアセスメント内容を保存しています。活動の様子を反映して、いつでも更新できます。",
     individual_support_plan: "アセスメントの内容を個別支援計画へ反映しています。",
     specialized_support_plan: "個別支援計画と専門的支援の内容をもとに整理しています。",
     monitoring_record: "計画に沿った支援を振り返り、次の支援へつなげます。",
   };
-  if (kind === "basic_assessment" && documentRecord.periodStart && documentRecord.periodEnd) {
-    return `${formatDate(documentRecord.periodStart)} 〜 ${formatDate(documentRecord.periodEnd)}の支援の記録を下書きの候補として反映しています。`;
-  }
   if (kind === "individual_support_plan" && documentRecord.status === "draft") return "アセスメントの内容を個別支援計画の下書きへ反映しています。";
   return copyByKind[kind] || "内容を確認できます。";
 }

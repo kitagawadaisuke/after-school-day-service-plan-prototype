@@ -314,6 +314,8 @@ test("保存済みの書類ではPDFを一つだけ出力・参照する", () =>
   assert.match(script, /viewer: COMMON_PERMISSIONS/);
   assert.match(script, /function appendDocumentPdfAction\(/);
   assert.match(script, /document-item--compact/);
+  assert.match(script, /kind === "consultation_plan" \|\| kind === "basic_assessment" \? \[\] : \[element\("p", \{ className: "document-workflow-copy"/);
+  assert.doesNotMatch(script, /支援の記録を下書きの候補として反映しています。/);
   assert.doesNotMatch(script, /kind === "consultation_plan" \? "登録済みの参考資料" : `第\$\{documentRecord\.versionNumber\}版`/);
   assert.match(script, /PDF_LAYOUT_TEMPLATE_VERSIONS/);
   assert.match(script, /coco-assessment-v2/);
