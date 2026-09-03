@@ -104,6 +104,9 @@ test("外部計画は任意の参考資料とし、事業所の計画と専門�
   assert.match(html, /すべての帳票の作成・編集時に確認します。/);
   assert.match(html, /id="assessment-document-controls"/);
   assert.match(html, /id="assessment-generation-dialog"/);
+  assert.ok(html.indexOf('id="assessment-readiness"') < html.indexOf('id="open-assessment-generation"'));
+  assert.ok(html.indexOf('id="individual-readiness"') < html.indexOf('id="open-individual-plan-generation"'));
+  assert.ok(html.indexOf('id="monitoring-readiness"') < html.indexOf('id="open-monitoring-generation"'));
   assert.match(script, /function openAssessmentGeneration\(/);
   assert.match(css, /\.readiness-copy, \.document-workflow-copy, \.document-item \.document-workflow-copy[^}]+font-size: 13px/);
   assert.match(script, /assessment-document-controls"\)\.hidden = !can\("documents\.edit"\)/);
