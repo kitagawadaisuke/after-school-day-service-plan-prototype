@@ -139,6 +139,13 @@
 
           <section id="view-documents" class="page-view" data-page-view="documents" aria-label="計画書" hidden>
             <div class="document-flow-columns">
+              <details id="external-reference-details" class="document-reference-panel document-reference-shared">
+                <summary><span><strong>共通の参考資料</strong><small>すべての帳票の作成・編集時に確認します。</small></span><em>任意</em></summary>
+                <div class="document-reference-content">
+                  <div><p>受け取った計画書・面談資料・連絡事項を利用者ごとに保管します。アセスメント、個別支援計画、専門的支援計画、モニタリングのすべてで参照できます。</p><button class="button button-secondary permission-edit-documents" type="button" data-create-document="consultation_plan" hidden>参考資料を登録</button></div>
+                  <div id="consultation-document-list" class="document-list empty-state"><strong>登録された参考資料はありません</strong></div>
+                </div>
+              </details>
               <section class="document-lane assessment" aria-labelledby="assessment-title">
                 <div class="document-lane-index" aria-hidden="true">01</div>
                 <div class="document-lane-heading">
@@ -151,13 +158,6 @@
                     <button class="button button-secondary permission-edit-documents" type="button" data-generate-draft="basic_assessment" aria-describedby="assessment-readiness" hidden>アセスメントを作成</button><small id="assessment-readiness" class="readiness-copy">利用者を選択すると作成できます。</small>
                   </div>
                   <div id="assessment-document-list" class="document-list empty-state"><strong>登録されたアセスメントはありません</strong></div>
-                  <details id="external-reference-details" class="document-reference-panel document-reference-inline">
-                    <summary><span><strong>参考資料</strong><small>アセスメントを編集するときに確認します。</small></span><em>任意</em></summary>
-                    <div class="document-reference-content">
-                      <div><p>受け取った計画書や面談資料を保管し、必要な補足だけメモに残せます。</p><button class="button button-secondary permission-edit-documents" type="button" data-create-document="consultation_plan" hidden>参考資料を登録</button></div>
-                      <div id="consultation-document-list" class="document-list empty-state"><strong>登録された参考資料はありません</strong></div>
-                    </div>
-                  </details>
                 </div>
               </section>
               <section class="document-lane individual" aria-labelledby="individual-title">

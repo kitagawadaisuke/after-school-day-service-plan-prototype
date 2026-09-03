@@ -91,8 +91,9 @@ test("外部計画は任意の参考資料とし、事業所の計画と専門�
   assert.match(html, /class="document-lane-step">方針を決める/);
   assert.match(html, /class="document-lane-step">支援を振り返る/);
   assert.match(html, /id="open-monitoring-generation"/);
-  assert.match(html, /<strong>参考資料<\/strong>/);
-  assert.match(html, /class="document-reference-panel document-reference-inline"/);
+  assert.match(html, /<strong>共通の参考資料<\/strong>/);
+  assert.match(html, /class="document-reference-panel document-reference-shared"/);
+  assert.match(html, /すべての帳票の作成・編集時に確認します。/);
   assert.match(html, /id="assessment-document-controls"/);
   assert.match(script, /assessment-document-controls"\)\.hidden = Boolean\(assessment\)/);
   assert.match(script, /kind === "monitoring_record" && !documents\.length && state\.selectedChild/);
@@ -102,7 +103,7 @@ test("外部計画は任意の参考資料とし、事業所の計画と専門�
   assert.match(script, /text: "参考資料を削除"/);
   assert.match(script, /アセスメントを編集/);
   assert.match(script, /計画書を編集/);
-  assert.match(html, /アセスメントを編集するときに確認します。/);
+  assert.match(html, /アセスメント、個別支援計画、専門的支援計画、モニタリングのすべてで参照できます。/);
   assert.match(html, /id="reference-plan-editor-dialog"/);
   assert.match(html, /name="referenceMemo"/);
   assert.doesNotMatch(html, /name="childWish"/);
