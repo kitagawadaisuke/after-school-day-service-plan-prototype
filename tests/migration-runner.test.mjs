@@ -268,6 +268,11 @@ test("runtime grants keep bootstrap owner-only and never embed a credential", as
   assert.match(sql, /revoke all on function app_private\.configure_provisioner_login\(text\)/i);
   assert.match(sql, /grant execute on function app_private\.reconcile_initial_tenant/i);
   assert.match(sql, /revoke all on function app_private\.provision_tenant/i);
+  assert.ok(
+    sql.lastIndexOf("grant execute on function app_private.resolve_local_login")
+      > sql.lastIndexOf("revoke all on all functions in schema app_private"),
+    "local-login function grants must follow the blanket private-function revoke",
+  );
   assert.equal(sql.includes(RUNTIME_LOGIN.password), false);
 });
 

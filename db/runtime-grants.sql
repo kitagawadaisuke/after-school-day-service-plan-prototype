@@ -14,13 +14,6 @@ begin
 end
 $$;
 
-grant execute on function app_private.resolve_local_login(text) to michinote_runtime;
-grant execute on function app_private.record_local_login_attempt(uuid, boolean) to michinote_runtime;
-grant execute on function app_private.request_local_password_setup(text, text) to michinote_runtime;
-grant execute on function app_private.consume_local_password_setup(text, text) to michinote_runtime;
-grant execute on function app_private.request_local_open_signup(uuid, text, text, text) to michinote_runtime;
-grant execute on function app_private.consume_local_password_setup_result(text, text) to michinote_runtime;
-
 create or replace function app_private.configure_runtime_login(runtime_verifier text)
 returns void
 language plpgsql
@@ -133,6 +126,16 @@ from public, michinote_runtime, michinote_provisioner;
 
 grant usage on schema public, app_private to michinote_runtime;
 grant usage on schema app_private to michinote_provisioner;
+
+-- These local-auth helpers must be granted after the blanket private-function
+-- revoke above. Keeping the grants here prevents the runtime account from
+-- losing the ability to sign in or issue password-setup links.
+grant execute on function app_private.resolve_local_login(text) to michinote_runtime;
+grant execute on function app_private.record_local_login_attempt(uuid, boolean) to michinote_runtime;
+grant execute on function app_private.request_local_password_setup(text, text) to michinote_runtime;
+grant execute on function app_private.consume_local_password_setup(text, text) to michinote_runtime;
+grant execute on function app_private.request_local_open_signup(uuid, text, text, text) to michinote_runtime;
+grant execute on function app_private.consume_local_password_setup_result(text, text) to michinote_runtime;
 
 grant select on
   public.organizations,

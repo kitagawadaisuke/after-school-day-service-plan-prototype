@@ -330,17 +330,13 @@ export async function runMigrations({
         await configureProvisionerLogin(databaseClient, resolvedProvisionerLogin);
       }
       if (needsTemporaryPdfConfigurationGrant) {
-        await databaseClient.query(
-          `grant execute on function app_private.configure_document_snapshot_finalization(text)
-           to ${process.env.MIGRATION_DATABASE_USER}`,
-        );
-      }
-      await configureDocumentSnapshotFinalization(databaseClient, resolvedPdfFinalizationSecret);
-      if (needsTemporaryPdfConfigurationGrant) {
-        await databaseClient.query(
-          `revoke execute on function app_private.configure_document_snapshot_finalization(text)
-           from ${process.env.MIGRATION_DATABASE_USER}`,
-        );
+        // In owner-backed single-tenant deployments, the runtime account
+        // intentionally cannot call this owner-only function after the grants
+        // migration. The initial secret is configured at bootstrap and stays
+        // unchanged on ordinary schema updates.
+        logger.info?.(JSON.stringify({ event: "pdf_finalization_configuration_reused" }));
+      } else {
+        await configureDocumentSnapshotFinalization(databaseClient, resolvedPdfFinalizationSecret);
       }
       await databaseClient.query("commit");
     } catch (error) {
