@@ -141,6 +141,78 @@ function monitoringAssessmentDraftValues(previousMonitoring, previousMonitoringG
   };
 }
 
+const ASSESSMENT_RECORD_FIELD_RULES = Object.freeze([
+  { field: "healthManagement", label: "生活・健康", terms: ["体調", "発熱", "疲", "眠", "食", "服薬", "通院", "けが", "痛", "水分", "休憩"] },
+  { field: "movementSensory", label: "運動・感覚", terms: ["運動", "散歩", "公園", "ボール", "体操", "ダンス", "感覚", "音", "触", "工作", "制作", "はさみ"] },
+  { field: "cognitionBehavior", label: "認知・行動", terms: ["予定", "見通し", "順番", "ルール", "切り替", "集中", "理解", "選択", "課題", "学習", "宿題", "パズル", "工作", "制作"] },
+  { field: "languageCommunication", label: "言語・コミュニケーション", terms: ["話", "伝", "会話", "発言", "聞", "説明", "ことば", "言葉", "やりとり", "質問"] },
+  { field: "relationshipsSocial", label: "人間関係・社会性", terms: ["友", "集団", "一緒", "協力", "順番", "他児", "相手", "関わ", "参加"] },
+  { field: "familySituation", label: "家族・生活環境", terms: ["家庭", "家族", "保護者", "自宅", "学校", "送迎"] },
+  { field: "medicalSafetyNotes", label: "医療・安全上の留意事項", terms: ["体調", "服薬", "通院", "アレルギー", "けが", "危険", "安全", "発熱"] },
+  { field: "supportNetwork", label: "連携先と役割", terms: ["学校", "担任", "保護者", "家族", "相談", "連携", "送迎"] },
+  { field: "dailyMeal", label: "食事", terms: ["食事", "昼食", "おやつ", "食べ", "飲み"] },
+  { field: "dailyDressing", label: "衣類の着脱", terms: ["着替", "服", "衣類", "靴"] },
+  { field: "dailyToileting", label: "排泄", terms: ["排泄", "トイレ"] },
+  { field: "dailyBathing", label: "入浴", terms: ["入浴", "お風呂", "洗髪"] },
+  { field: "dailySleep", label: "睡眠", terms: ["睡眠", "就寝", "眠", "起床"] },
+  { field: "scheduleManagement", label: "スケジュール管理", terms: ["予定", "見通し", "スケジュール", "切り替", "時間"] },
+  { field: "schoolClass", label: "在籍学級", terms: ["学校", "学級", "授業", "担任"] },
+  { field: "learning", label: "学習面", terms: ["学習", "宿題", "読", "書", "計算", "プリント", "課題"] },
+  { field: "socialUnderstanding", label: "状況理解", terms: ["状況", "ルール", "順番", "理解", "見通し"] },
+  { field: "environmentAdaptation", label: "環境適応", terms: ["環境", "場所", "音", "慣", "不安", "切り替"] },
+  { field: "friendRelationships", label: "友達との関わり", terms: ["友", "他児", "一緒", "関わ", "集団", "協力"] },
+  { field: "publicBehavior", label: "公共の場での行動", terms: ["外出", "公共", "買い物", "公園", "地域", "交通"] },
+  { field: "speaksIndependently", label: "自分から話す", terms: ["自分から", "話", "伝", "発言", "質問"] },
+  { field: "listensToOthers", label: "相手の話を聞く", terms: ["聞", "相手", "説明", "話を"] },
+  { field: "hobbies", label: "余暇", terms: ["遊び", "工作", "制作", "読書", "絵", "ゲーム", "音楽", "外出"] },
+  { field: "lessons", label: "習い事", terms: ["習い事", "教室", "レッスン", "塾"] },
+  { field: "favoriteFood", label: "好きな食べ物", terms: ["好きな食べ物", "好物"] },
+  { field: "dislikedFood", label: "苦手な食べ物", terms: ["苦手な食べ物", "嫌いな食べ物"] },
+  { field: "favoriteSnack", label: "好きなおやつ", terms: ["好きなおやつ", "おやつ"] },
+  { field: "drinks", label: "飲み物", terms: ["飲み物", "水分", "飲ん"] },
+  { field: "favoritePlay", label: "好きな遊び", terms: ["好きな遊び", "好んで", "楽し", "遊び"] },
+  { field: "difficultPlay", label: "苦手な遊び", terms: ["苦手な遊び", "苦手", "嫌", "困"] },
+  { field: "favoriteCharacter", label: "好きなキャラクター", terms: ["好きなキャラクター", "キャラクター"] },
+  { field: "difficultCharacter", label: "苦手なキャラクター", terms: ["苦手なキャラクター"] },
+  { field: "favoriteThings", label: "好きなこと", terms: ["好き", "楽し", "興味", "関心"] },
+  { field: "sleepPattern", label: "睡眠の様子", terms: ["睡眠", "就寝", "眠", "起床"] },
+  { field: "favoriteOutings", label: "好きな外出先", terms: ["好きな外出", "外出", "公園", "買い物"] },
+  { field: "difficultOutings", label: "苦手な外出先", terms: ["苦手な外出"] },
+  { field: "outingNotes", label: "外出時の留意事項", terms: ["外出", "交通", "公共", "買い物", "安全"] },
+  { field: "outsideNotes", label: "その他の外出時の様子", terms: ["外出", "地域", "公園", "移動"] },
+  { field: "otherServices", label: "他のサービス利用", terms: ["他サービス", "療育", "放課後等デイ", "相談支援"] },
+  { field: "desiredServiceDays", label: "利用希望日", terms: ["利用日", "利用希望", "曜日", "送迎"] },
+]);
+
+function recordSearchText(record) {
+  return [record.activity, record.observation, record.supportProvided, record.childResponse]
+    .filter((value) => typeof value === "string" && value.trim())
+    .join(" ");
+}
+
+function recordAssessmentSentence(record) {
+  const activity = boundedEvidenceText(record.activity);
+  const observation = boundedEvidenceText(record.observation || record.childResponse);
+  if (activity && observation) return `${activity}では、${observation}`;
+  return observation || activity || null;
+}
+
+function recordCandidateForField(records, rule) {
+  const matches = records.filter((record) => {
+    const text = recordSearchText(record);
+    return rule.terms.some((term) => text.includes(term));
+  });
+  const sentences = [...new Set(matches.map(recordAssessmentSentence).filter(Boolean))].slice(-2);
+  if (!sentences.length) return null;
+  return `支援の記録では、${sentences.join("／")}様子が記録されています。`;
+}
+
+function assessmentRecordFieldCandidates(records) {
+  return Object.fromEntries(
+    ASSESSMENT_RECORD_FIELD_RULES.map((rule) => [rule.field, recordCandidateForField(records, rule)]),
+  );
+}
+
 function assessmentSupportRecordDraftValues(supportRecords) {
   if (!supportRecords.length) {
     return {
@@ -149,8 +221,10 @@ function assessmentSupportRecordDraftValues(supportRecords) {
       overallAssessment: null,
       supportConsiderations: null,
       planningNotes: null,
+      priorityNeeds: null,
     };
   }
+  const fieldCandidates = assessmentRecordFieldCandidates(supportRecords);
   const activities = [...new Set(supportRecords
     .map((record) => boundedEvidenceText(record.activity))
     .filter(Boolean))]
@@ -162,8 +236,12 @@ function assessmentSupportRecordDraftValues(supportRecords) {
   const activityText = activities.length ? activities.join("、") : "日々の活動";
   const observationText = observations.join("／");
   return {
+    ...fieldCandidates,
     strengths: `指定期間の支援記録では、${activityText}への参加の様子を確認しました。`,
     concerns: observationText || null,
+    priorityNeeds: observationText
+      ? `支援の記録にある「${observationText}」について、本人の負担や環境との関係を確認しながら優先して支援します。`
+      : null,
     overallAssessment: `指定期間の支援記録${supportRecords.length}件を確認し、${activityText}での様子をアセスメントの候補として整理しました。`,
     supportConsiderations: observationText
       ? `記録にある「${observationText}」を踏まえ、本人の反応を確認しながら支援方法を調整します。`
@@ -179,6 +257,7 @@ function preferEnteredValue(currentValue, generatedValue) {
 
 function mergeAssessmentDraftValues(monitoringDraft, supportRecordDraft) {
   return {
+    ...supportRecordDraft,
     childWishes: monitoringDraft.childWishes,
     familyWishes: monitoringDraft.familyWishes,
     strengths: supportRecordDraft.strengths,
@@ -287,7 +366,7 @@ export function buildBasicAssessmentDraft({
         personWish: assessmentDraft.childWishes,
         familyWish: assessmentDraft.familyWishes,
         strengths: assessmentDraft.strengths,
-        needs: assessmentDraft.concerns,
+        needs: assessmentDraft.priorityNeeds || assessmentDraft.concerns,
         supportDirection: assessmentDraft.supportConsiderations,
         planningNotes: assessmentDraft.planningNotes,
       },

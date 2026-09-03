@@ -235,20 +235,12 @@ function hasEnteredValue(value) {
 }
 
 function retainAssessmentEntries(existingPayload, generatedPayload) {
-  const fields = [
-    "childWishes",
-    "familyWishes",
-    "strengths",
-    "concerns",
-    "overallAssessment",
-    "supportConsiderations",
-    "planningNotes",
-  ];
   const payload = { ...existingPayload, ...generatedPayload };
-  for (const field of fields) {
+  for (const [field, generatedValue] of Object.entries(generatedPayload)) {
+    if (typeof generatedValue !== "string" && generatedValue !== null) continue;
     payload[field] = hasEnteredValue(existingPayload?.[field])
       ? existingPayload[field]
-      : generatedPayload[field];
+      : generatedValue;
   }
   const existingAssessment = existingPayload?.assessment || {};
   const generatedAssessment = generatedPayload.assessment || {};
