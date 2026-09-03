@@ -145,7 +145,7 @@
                 </div>
                 <div class="document-lane-record">
                   <div id="assessment-document-controls" class="document-lane-controls">
-                    <button class="button button-secondary permission-edit-documents" type="button" data-generate-draft="basic_assessment" aria-describedby="assessment-readiness" hidden>アセスメントを作成</button><small id="assessment-readiness" class="readiness-copy">利用者を選択すると作成できます。</small>
+                    <button id="open-assessment-generation" class="button button-secondary permission-edit-documents" type="button" aria-describedby="assessment-readiness" hidden>支援の記録から作成</button><small id="assessment-readiness" class="readiness-copy">利用者を選択すると作成できます。</small>
                   </div>
                   <div id="assessment-document-list" class="document-list empty-state"><strong>登録されたアセスメントはありません</strong></div>
                 </div>
@@ -354,6 +354,15 @@
           <label class="check-line field-wide"><input name="isPrimary" type="checkbox"><span>主連絡先にする</span></label>
         </div>
         <div class="dialog-actions"><button class="button button-ghost" type="button" data-close-dialog="guardian-dialog">キャンセル</button><button id="guardian-save-button" class="button button-primary" type="submit">登録する</button></div>
+      </form>
+    </dialog>
+
+    <dialog id="assessment-generation-dialog" class="app-dialog form-dialog permission-edit-documents" aria-labelledby="assessment-generation-title">
+      <form id="assessment-generation-form" novalidate>
+        <div class="dialog-heading"><p class="eyebrow">支援の記録を選ぶ</p><h2 id="assessment-generation-title">アセスメントを作成</h2><p>指定期間の支援の記録を、アセスメント下書きの候補として反映します。本人・家族の意向は、作成後に確認して編集してください。</p></div>
+        <div id="assessment-generation-error" class="form-error" role="alert" hidden></div>
+        <div class="field-grid"><label class="field"><span>開始日 <em>必須</em></span><input name="periodStart" type="date" required></label><label class="field"><span>終了日 <em>必須</em></span><input name="periodEnd" type="date" required></label></div>
+        <div class="dialog-actions"><button class="button button-ghost" type="button" data-close-dialog="assessment-generation-dialog">キャンセル</button><button id="assessment-generation-submit" class="button button-primary" type="submit">支援の記録から作成</button></div>
       </form>
     </dialog>
 

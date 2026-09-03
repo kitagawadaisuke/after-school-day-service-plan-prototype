@@ -2,6 +2,7 @@ const GENERATOR_VERSION = "rules-2026-08-14";
 const MIN_LINKED_LOGS_FOR_REVIEW = 2;
 const MAX_GOAL_EVIDENCE_EXCERPTS = 12;
 const MAX_EVIDENCE_FIELD_CHARS = 240;
+const MAX_ASSESSMENT_RECORD_EXCERPTS = 12;
 
 function dateTime(value) {
   if (!value) return null;
@@ -140,6 +141,54 @@ function monitoringAssessmentDraftValues(previousMonitoring, previousMonitoringG
   };
 }
 
+function assessmentSupportRecordDraftValues(supportRecords) {
+  if (!supportRecords.length) {
+    return {
+      strengths: null,
+      concerns: null,
+      overallAssessment: null,
+      supportConsiderations: null,
+      planningNotes: null,
+    };
+  }
+  const activities = [...new Set(supportRecords
+    .map((record) => boundedEvidenceText(record.activity))
+    .filter(Boolean))]
+    .slice(0, 6);
+  const observations = supportRecords
+    .map((record) => boundedEvidenceText(record.observation || record.childResponse))
+    .filter(Boolean)
+    .slice(-3);
+  const activityText = activities.length ? activities.join("、") : "日々の活動";
+  const observationText = observations.join("／");
+  return {
+    strengths: `指定期間の支援記録では、${activityText}への参加の様子を確認しました。`,
+    concerns: observationText || null,
+    overallAssessment: `指定期間の支援記録${supportRecords.length}件を確認し、${activityText}での様子をアセスメントの候補として整理しました。`,
+    supportConsiderations: observationText
+      ? `記録にある「${observationText}」を踏まえ、本人の反応を確認しながら支援方法を調整します。`
+      : "支援記録の内容をもとに、本人の反応を確認しながら支援方法を調整します。",
+    planningNotes: "記録で確認した活動の様子を、本人・家族への聞き取りとあわせて支援計画に反映します。",
+  };
+}
+
+function preferEnteredValue(currentValue, generatedValue) {
+  if (typeof currentValue === "string" && currentValue.trim()) return currentValue;
+  return currentValue ?? generatedValue;
+}
+
+function mergeAssessmentDraftValues(monitoringDraft, supportRecordDraft) {
+  return {
+    childWishes: monitoringDraft.childWishes,
+    familyWishes: monitoringDraft.familyWishes,
+    strengths: supportRecordDraft.strengths,
+    concerns: preferEnteredValue(monitoringDraft.concerns, supportRecordDraft.concerns),
+    overallAssessment: preferEnteredValue(monitoringDraft.overallAssessment, supportRecordDraft.overallAssessment),
+    supportConsiderations: preferEnteredValue(monitoringDraft.supportConsiderations, supportRecordDraft.supportConsiderations),
+    planningNotes: preferEnteredValue(monitoringDraft.planningNotes, supportRecordDraft.planningNotes),
+  };
+}
+
 export function buildBasicAssessmentDraft({
   child,
   guardians,
@@ -147,27 +196,33 @@ export function buildBasicAssessmentDraft({
   currentSchedule,
   previousMonitoring = null,
   previousMonitoringGoalResults = [],
+  supportRecords = [],
+  supportRecordPeriod = null,
   generatedAt = new Date(),
 }) {
   const candidates = consultationCandidates(consultationPlan);
   const monitoringDraft = monitoringAssessmentDraftValues(previousMonitoring, previousMonitoringGoalResults);
+  const supportRecordDraft = assessmentSupportRecordDraftValues(supportRecords);
+  const assessmentDraft = mergeAssessmentDraftValues(monitoringDraft, supportRecordDraft);
+  const evidencePeriod = supportRecordPeriod || {
+    start: consultationPlan?.periodStart || currentSchedule?.validFrom || null,
+    end: consultationPlan?.periodEnd || currentSchedule?.validTo || null,
+  };
   return {
     templateVersion: "basic-assessment-v2",
-    periodStart: consultationPlan?.periodStart || currentSchedule?.validFrom || null,
-    periodEnd: consultationPlan?.periodEnd || currentSchedule?.validTo || null,
+    periodStart: evidencePeriod.start,
+    periodEnd: evidencePeriod.end,
     payload: {
       generation: baseGeneration({
         targetDocumentKind: "basic_assessment",
         generatedAt,
         sourceDocuments: [consultationPlan, previousMonitoring],
-        period: {
-          start: consultationPlan?.periodStart || currentSchedule?.validFrom || null,
-          end: consultationPlan?.periodEnd || currentSchedule?.validTo || null,
-        },
+        period: evidencePeriod,
         counts: {
           guardians: guardians.length,
           scheduleItems: currentSchedule?.items.length || 0,
           previousMonitoringResults: previousMonitoringGoalResults.length,
+          supportRecords: supportRecords.length,
         },
       }),
       provenance: {
@@ -185,6 +240,7 @@ export function buildBasicAssessmentDraft({
         } : null,
         previousMonitoring: documentReference(previousMonitoring),
         previousMonitoringResultIds: previousMonitoringGoalResults.map((result) => result.id),
+        supportRecordIds: supportRecords.map((record) => record.id),
       },
       basicInformation: {
         managementCode: child.managementCode,
@@ -206,7 +262,12 @@ export function buildBasicAssessmentDraft({
         previousMonitoring,
         previousMonitoringGoalResults,
       ),
-      ...monitoringDraft,
+      ...assessmentDraft,
+      supportRecordEvidence: supportRecordPeriod ? {
+        period: supportRecordPeriod,
+        count: supportRecords.length,
+        excerpts: supportRecords.slice(-MAX_ASSESSMENT_RECORD_EXCERPTS).map(evidenceExcerpt),
+      } : null,
       currentScheduleFacts: currentSchedule ? {
         scheduleVersionId: currentSchedule.id,
         summary: currentSchedule.summary,
@@ -223,12 +284,12 @@ export function buildBasicAssessmentDraft({
         })),
       } : null,
       assessment: {
-        personWish: monitoringDraft.childWishes,
-        familyWish: monitoringDraft.familyWishes,
-        strengths: null,
-        needs: monitoringDraft.concerns,
-        supportDirection: monitoringDraft.supportConsiderations,
-        planningNotes: monitoringDraft.planningNotes,
+        personWish: assessmentDraft.childWishes,
+        familyWish: assessmentDraft.familyWishes,
+        strengths: assessmentDraft.strengths,
+        needs: assessmentDraft.concerns,
+        supportDirection: assessmentDraft.supportConsiderations,
+        planningNotes: assessmentDraft.planningNotes,
       },
       confirmationRequired: [
         "本人の意向は、本人への聞き取りまたは意思決定支援を行って確認してください。",

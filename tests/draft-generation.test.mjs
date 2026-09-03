@@ -362,6 +362,52 @@ test("相談支援計画・利用児・保護者・現在スケジュールか�
   });
 });
 
+test("指定期間の支援記録からアセスメントを作成・更新し、手入力は保持する", async () => {
+  await withApp("tenant_admin", async (app) => {
+    const createdResponse = await generate(app, {
+      targetDocumentKind: "basic_assessment",
+      consultationPlanId: IDS.consultation,
+      currentScheduleVersionId: IDS.schedule,
+      periodStart: "2026-05-01",
+      periodEnd: "2026-05-31",
+    });
+    assert.equal(createdResponse.statusCode, 201);
+    const created = createdResponse.json();
+    assert.equal(created.periodStart, "2026-05-01");
+    assert.equal(created.periodEnd, "2026-05-31");
+    assert.equal(created.payload.generation.evidenceCounts.supportRecords, 3);
+    assert.deepEqual(created.payload.provenance.supportRecordIds, [IDS.logOne, IDS.logTwo, IDS.logThree]);
+    assert.equal(created.payload.supportRecordEvidence.excerpts.length, 3);
+    assert.match(created.payload.overallAssessment, /支援記録3件/);
+
+    const manuallyEdited = await app.inject({
+      method: "PATCH",
+      url: `/api/v1/children/${IDS.child}/documents/${created.id}`,
+      headers: { "if-match": '"1"' },
+      payload: {
+        payload: { ...created.payload, strengths: "職員が確認した本人の強み" },
+      },
+    });
+    assert.equal(manuallyEdited.statusCode, 200);
+
+    const refreshedResponse = await generate(app, {
+      targetDocumentKind: "basic_assessment",
+      consultationPlanId: IDS.consultation,
+      currentScheduleVersionId: IDS.schedule,
+      assessmentDocumentId: created.id,
+      periodStart: "2026-05-08",
+      periodEnd: "2026-05-31",
+    });
+    assert.equal(refreshedResponse.statusCode, 201);
+    const refreshed = refreshedResponse.json();
+    assert.equal(refreshed.id, created.id);
+    assert.equal(refreshed.rowVersion, 3);
+    assert.equal(refreshed.periodStart, "2026-05-08");
+    assert.equal(refreshed.payload.strengths, "職員が確認した本人の強み");
+    assert.deepEqual(refreshed.payload.provenance.supportRecordIds, [IDS.logTwo, IDS.logThree]);
+  });
+});
+
 test("相談支援計画・アセスメント・前回モニタリングから計画候補と目標系譜を作る", async () => {
   await withApp("plan_approver", async (app) => {
     const response = await generate(app, {

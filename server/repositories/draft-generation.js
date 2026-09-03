@@ -5,7 +5,7 @@ import {
   buildIndividualSupportPlanDraft,
   buildMonitoringRecordDraft,
 } from "../services/draft-builder.js";
-import { createDocument, createDocumentGoal } from "./documents.js";
+import { createDocument, createDocumentGoal, updateDocument } from "./documents.js";
 
 const EDITABLE_STATUSES = Object.freeze(["draft", "internal_review", "explanation_pending"]);
 const MAX_DAILY_LOG_EVIDENCE = 2_000;
@@ -203,6 +203,67 @@ async function createGeneratedDocument(client, actor, childId, documentKind, bui
   });
 }
 
+async function readAssessmentSupportRecords(client, actor, childId, periodStart, periodEnd) {
+  if (!periodStart || !periodEnd) return [];
+  const result = await client.query(
+    `select id, occurred_at, activity, observation, support_provided, child_response
+     from public.daily_logs
+     where tenant_id = $1 and child_id = $2 and deleted_at is null and status = 'final'
+       and occurred_at >= $3::date and occurred_at < ($4::date + interval '1 day')
+     order by occurred_at, id
+     limit $5`,
+    [actor.tenantId, childId, periodStart, periodEnd, MAX_DAILY_LOG_EVIDENCE + 1],
+  );
+  if (result.rows.length > MAX_DAILY_LOG_EVIDENCE) {
+    throw unprocessable(
+      "EVIDENCE_LIMIT_EXCEEDED",
+      "指定期間の支援記録件数が多すぎます。期間を短く分けてアセスメントを作成してください。",
+    );
+  }
+  return result.rows.map((row) => ({
+    id: row.id,
+    occurredAt: dateTime(row.occurred_at),
+    activity: row.activity,
+    observation: row.observation,
+    supportProvided: row.support_provided,
+    childResponse: row.child_response,
+  }));
+}
+
+function hasEnteredValue(value) {
+  return typeof value === "string" ? Boolean(value.trim()) : value !== null && value !== undefined;
+}
+
+function retainAssessmentEntries(existingPayload, generatedPayload) {
+  const fields = [
+    "childWishes",
+    "familyWishes",
+    "strengths",
+    "concerns",
+    "overallAssessment",
+    "supportConsiderations",
+    "planningNotes",
+  ];
+  const payload = { ...existingPayload, ...generatedPayload };
+  for (const field of fields) {
+    payload[field] = hasEnteredValue(existingPayload?.[field])
+      ? existingPayload[field]
+      : generatedPayload[field];
+  }
+  const existingAssessment = existingPayload?.assessment || {};
+  const generatedAssessment = generatedPayload.assessment || {};
+  payload.assessment = { ...generatedAssessment, ...existingAssessment };
+  for (const field of ["personWish", "familyWish", "strengths", "needs", "supportDirection", "planningNotes"]) {
+    payload.assessment[field] = hasEnteredValue(existingAssessment[field])
+      ? existingAssessment[field]
+      : generatedAssessment[field];
+  }
+  payload.generation = generatedPayload.generation;
+  payload.provenance = generatedPayload.provenance;
+  payload.supportRecordEvidence = generatedPayload.supportRecordEvidence;
+  return payload;
+}
+
 export async function generateBasicAssessment(client, actor, childId, input, options = {}) {
   const child = await readChild(client, actor, childId);
   const consultationPlan = input.consultationPlanId
@@ -242,6 +303,13 @@ export async function generateBasicAssessment(client, actor, childId, input, opt
     childId,
     previousMonitoring?.id,
   );
+  const supportRecords = await readAssessmentSupportRecords(
+    client,
+    actor,
+    childId,
+    input.periodStart,
+    input.periodEnd,
+  );
   const built = buildBasicAssessmentDraft({
     child,
     guardians: guardians.rows.map(normalizeGuardian),
@@ -249,18 +317,40 @@ export async function generateBasicAssessment(client, actor, childId, input, opt
     currentSchedule,
     previousMonitoring,
     previousMonitoringGoalResults,
+    supportRecords,
+    supportRecordPeriod: input.periodStart ? { start: input.periodStart, end: input.periodEnd } : null,
     generatedAt: options.generatedAt,
   });
-  const document = await createGeneratedDocument(
-    client,
-    actor,
-    childId,
-    "basic_assessment",
-    built,
-  );
+  let document;
+  if (input.assessmentDocumentId) {
+    const existing = await readSourceDocument(
+      client,
+      actor,
+      childId,
+      input.assessmentDocumentId,
+      "basic_assessment",
+    );
+    if (!EDITABLE_STATUSES.includes(existing.status)) {
+      throw conflict("ASSESSMENT_NOT_EDITABLE", "確定済みのアセスメントは更新できません。新しい下書きを作成してください。");
+    }
+    document = await updateDocument(client, actor, childId, existing.id, existing.rowVersion, {
+      templateVersion: built.templateVersion,
+      periodStart: built.periodStart,
+      periodEnd: built.periodEnd,
+      payload: retainAssessmentEntries(existing.payload, built.payload),
+    });
+  } else {
+    document = await createGeneratedDocument(
+      client,
+      actor,
+      childId,
+      "basic_assessment",
+      built,
+    );
+  }
   return {
     document,
-    sourceIds: [consultationPlan?.id, currentSchedule?.id, previousMonitoring?.id].filter(Boolean),
+    sourceIds: [consultationPlan?.id, currentSchedule?.id, previousMonitoring?.id, ...supportRecords.map((record) => record.id)].filter(Boolean),
     evidenceCounts: built.payload.generation.evidenceCounts,
   };
 }

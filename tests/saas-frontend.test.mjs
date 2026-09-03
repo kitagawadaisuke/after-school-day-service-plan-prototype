@@ -87,7 +87,7 @@ test("最後に開いた利用者は同じ職員・事業所のブラウザタ�
 
 test("外部計画は任意の参考資料とし、事業所の計画と専門的支援計画を正式工程で扱う", () => {
   assert.match(html, /data-create-document="consultation_plan"/);
-  assert.match(html, /data-generate-draft="basic_assessment"/);
+  assert.match(html, /id="open-assessment-generation"/);
   assert.match(html, /data-generate-draft="individual_support_plan"/);
   assert.doesNotMatch(html, /1　整理する|2　計画にする|3　振り返る/);
   assert.doesNotMatch(html, /計画をつくる/);
@@ -101,7 +101,9 @@ test("外部計画は任意の参考資料とし、事業所の計画と専門�
   assert.match(html, /class="document-reference-panel document-reference-shared"/);
   assert.match(html, /すべての帳票の作成・編集時に確認します。/);
   assert.match(html, /id="assessment-document-controls"/);
-  assert.match(script, /assessment-document-controls"\)\.hidden = Boolean\(assessment\)/);
+  assert.match(html, /id="assessment-generation-dialog"/);
+  assert.match(script, /function openAssessmentGeneration\(/);
+  assert.match(script, /assessment-document-controls"\)\.hidden = !can\("documents\.edit"\)/);
   assert.match(script, /if \(view === "journals"\) view = "contact"/);
   assert.match(script, /kind === "monitoring_record" && !documents\.length && state\.selectedChild/);
   assert.match(html, /参考資料を登録/);
@@ -120,6 +122,7 @@ test("外部計画は任意の参考資料とし、事業所の計画と専門�
   assert.match(html, /<h2 id="specialized-title">専門的支援計画<\/h2>/);
   assert.match(script, /documentKind: kind/);
   assert.match(script, /targetDocumentKind: "basic_assessment"/);
+  assert.match(script, /assessmentDocumentId: assessment\?\.id/);
   assert.match(script, /targetDocumentKind: "individual_support_plan"/);
   assert.match(script, /targetDocumentKind: "monitoring_record"/);
   assert.match(script, /assessmentButton\.disabled = !state\.selectedChild/);

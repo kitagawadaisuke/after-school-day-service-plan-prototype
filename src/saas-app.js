@@ -1283,15 +1283,17 @@ function renderDocuments() {
   $$('[data-create-document]').forEach((button) => { button.disabled = !state.selectedChild; });
   const assessment = latestDocument("basic_assessment");
   const activePlan = latestDocument("individual_support_plan", (item) => item.status === "active");
-  const assessmentButton = $('[data-generate-draft="basic_assessment"]');
+  const assessmentButton = $("#open-assessment-generation");
   const individualButton = $('[data-generate-draft="individual_support_plan"]');
   const monitoringButton = $("#open-monitoring-generation");
   const monitoring = latestDocument("monitoring_record");
   if (assessmentButton) {
-    assessmentButton.hidden = !can("documents.edit") || Boolean(assessment);
-    assessmentButton.disabled = !state.selectedChild;
+    const assessmentCanRefresh = !assessment || EDITABLE_DOCUMENT_STATUSES.includes(assessment.status);
+    assessmentButton.hidden = !can("documents.edit") || !assessmentCanRefresh;
+    assessmentButton.disabled = !state.selectedChild || !assessmentCanRefresh;
+    assessmentButton.textContent = assessment ? "支援の記録から更新" : "支援の記録から作成";
   }
-  $("#assessment-document-controls").hidden = Boolean(assessment);
+  $("#assessment-document-controls").hidden = !can("documents.edit");
   if (individualButton) {
     individualButton.hidden = !can("documents.edit") || Boolean(latestDocument("individual_support_plan"));
     individualButton.disabled = !state.selectedChild || !assessment;
@@ -1302,14 +1304,14 @@ function renderDocuments() {
     monitoringButton.disabled = !state.selectedChild || !activePlan;
   }
   $("#monitoring-document-controls").hidden = Boolean(monitoring);
-  $("#assessment-readiness").hidden = Boolean(assessment);
+  $("#assessment-readiness").hidden = false;
   $("#individual-readiness").hidden = Boolean(latestDocument("individual_support_plan"));
   $("#monitoring-readiness").hidden = Boolean(monitoring);
   $("#assessment-readiness").textContent = !state.selectedChild
     ? "利用者を選択してください。"
-    : latestDocument("monitoring_record")
-      ? "前回モニタリングをもとに作成できます。"
-      : "現在の情報をもとに作成できます。";
+    : assessment?.periodStart && assessment?.periodEnd
+      ? `現在の下書き：${formatDate(assessment.periodStart)} 〜 ${formatDate(assessment.periodEnd)}の支援の記録を反映しています。`
+      : "期間を指定して支援の記録をアセスメントへ反映できます。";
   $("#individual-readiness").textContent = !assessment
     ? "アセスメントを作成すると、ここから作成できます。"
     : "アセスメントをもとに作成できます。";
@@ -2863,12 +2865,7 @@ async function generateDraft(button) {
   }
 }
 
-function openMonitoringGeneration(trigger) {
-  if (!state.selectedChild || !latestDocument("individual_support_plan", (item) => item.status === "active")) {
-    return announce("運用中の個別支援計画が必要です。");
-  }
-  const form = $("#monitoring-generation-form");
-  form.reset();
+function setDefaultEvidencePeriod(form) {
   const end = new Date();
   const start = new Date(end);
   start.setMonth(start.getMonth() - 6);
@@ -2876,6 +2873,64 @@ function openMonitoringGeneration(trigger) {
     date.setMinutes(date.getMinutes() - date.getTimezoneOffset());
     form.elements[field].value = date.toISOString().slice(0, 10);
   }
+}
+
+function openAssessmentGeneration(trigger) {
+  if (!state.selectedChild) return announce("利用者を選択してください。");
+  const assessment = latestDocument("basic_assessment");
+  if (assessment && !EDITABLE_DOCUMENT_STATUSES.includes(assessment.status)) {
+    return announce("確定済みのアセスメントは更新できません。新しい下書きを作成してください。");
+  }
+  const form = $("#assessment-generation-form");
+  form.reset();
+  if (assessment?.periodStart && assessment?.periodEnd) {
+    form.elements.periodStart.value = assessment.periodStart;
+    form.elements.periodEnd.value = assessment.periodEnd;
+  } else {
+    setDefaultEvidencePeriod(form);
+  }
+  $("#assessment-generation-title").textContent = assessment ? "アセスメントを更新" : "アセスメントを作成";
+  $("#assessment-generation-submit").textContent = assessment ? "支援の記録から更新" : "支援の記録から作成";
+  clearFormError(form, $("#assessment-generation-error"));
+  openDialog($("#assessment-generation-dialog"), trigger);
+}
+
+async function submitAssessmentGeneration(event) {
+  event.preventDefault();
+  const form = event.currentTarget;
+  const errorContainer = $("#assessment-generation-error");
+  if (!validateForm(form, errorContainer)) return;
+  const values = new FormData(form);
+  const assessment = latestDocument("basic_assessment");
+  const body = {
+    targetDocumentKind: "basic_assessment",
+    consultationPlanId: latestReferenceMaterial()?.id,
+    currentScheduleVersionId: state.schedules.current?.id,
+    previousMonitoringDocumentId: latestDocument("monitoring_record")?.id || undefined,
+    assessmentDocumentId: assessment?.id,
+    periodStart: values.get("periodStart"),
+    periodEnd: values.get("periodEnd"),
+  };
+  if (body.periodEnd < body.periodStart) return showFormError(form, errorContainer, "終了日は開始日以降にしてください。", ["periodEnd"]);
+  const evidenceDays = (Date.parse(`${body.periodEnd}T00:00:00Z`) - Date.parse(`${body.periodStart}T00:00:00Z`)) / 86_400_000;
+  if (evidenceDays > 366) return showFormError(form, errorContainer, "根拠期間は366日以内にしてください。", ["periodEnd"]);
+  try {
+    await idempotentCreate(`/children/${encodeURIComponent(state.selectedChild.id)}/draft-generations`, body);
+    closeDialog($("#assessment-generation-dialog"));
+    await loadDocuments();
+    announce(assessment ? "指定期間の支援の記録をアセスメントへ反映しました。" : "支援の記録をもとにアセスメントを作成しました。内容を確認して編集してください。");
+  } catch (error) {
+    if (error.status !== 409) showFormError(form, errorContainer, errorMessage(error), []);
+  }
+}
+
+function openMonitoringGeneration(trigger) {
+  if (!state.selectedChild || !latestDocument("individual_support_plan", (item) => item.status === "active")) {
+    return announce("運用中の個別支援計画が必要です。");
+  }
+  const form = $("#monitoring-generation-form");
+  form.reset();
+  setDefaultEvidencePeriod(form);
   clearFormError(form, $("#monitoring-generation-error"));
   openDialog($("#monitoring-generation-dialog"), trigger);
 }
@@ -2977,6 +3032,9 @@ function documentWorkflowCopy(kind, documentRecord) {
     specialized_support_plan: "個別支援計画と専門的支援の内容をもとに整理しています。",
     monitoring_record: "計画に沿った支援を振り返り、次の支援へつなげます。",
   };
+  if (kind === "basic_assessment" && documentRecord.periodStart && documentRecord.periodEnd) {
+    return `${formatDate(documentRecord.periodStart)} 〜 ${formatDate(documentRecord.periodEnd)}の支援の記録を下書きの候補として反映しています。`;
+  }
   if (kind === "individual_support_plan" && documentRecord.status === "draft") return "アセスメントの内容を個別支援計画の下書きへ反映しています。";
   return copyByKind[kind] || "内容を確認できます。";
 }
@@ -3876,6 +3934,7 @@ function setupEvents() {
   $("#copy-contact-reply")?.addEventListener("click", () => runAsync(() => copyFieldText($("#contact-form").elements.facilityReply, $("#copy-contact-reply"), "事業所からの返信")));
   $("#contact-photo-input")?.addEventListener("change", () => renderContactPhotoPreview($("#contact-form")));
   $("#create-guardian-button")?.addEventListener("click", (event) => openGuardianDialog(event.currentTarget));
+  $("#open-assessment-generation")?.addEventListener("click", (event) => openAssessmentGeneration(event.currentTarget));
   $("#open-monitoring-generation")?.addEventListener("click", (event) => openMonitoringGeneration(event.currentTarget));
   $("#invite-staff-button")?.addEventListener("click", (event) => openStaffInvite(event.currentTarget));
   $("#create-facility-button")?.addEventListener("click", (event) => openFacilityCreate(event.currentTarget));
@@ -3886,6 +3945,7 @@ function setupEvents() {
   $("#journal-form")?.addEventListener("submit", submitJournal);
   $("#contact-form")?.addEventListener("submit", submitContact);
   $("#guardian-form")?.addEventListener("submit", submitGuardian);
+  $("#assessment-generation-form")?.addEventListener("submit", submitAssessmentGeneration);
   $("#monitoring-generation-form")?.addEventListener("submit", submitMonitoringGeneration);
   $("#monitoring-result-form")?.addEventListener("submit", submitMonitoringResult);
   $("#monitoring-editor-form")?.addEventListener("submit", submitMonitoringEditor);
