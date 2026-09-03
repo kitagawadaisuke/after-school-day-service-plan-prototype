@@ -5,7 +5,7 @@ import {
   buildIndividualSupportPlanDraft,
   buildMonitoringRecordDraft,
 } from "../services/draft-builder.js";
-import { createDocument, createDocumentGoal, updateDocument } from "./documents.js";
+import { createDocument, createDocumentGoal } from "./documents.js";
 
 const EDITABLE_STATUSES = Object.freeze(["draft", "internal_review", "explanation_pending"]);
 const MAX_DAILY_LOG_EVIDENCE = 2_000;
@@ -178,10 +178,9 @@ async function readCurrentSchedule(client, actor, childId, scheduleVersionId) {
     parameters,
   );
   if (!result.rows[0]) {
-    if (!scheduleVersionId) return null;
     throw unprocessable(
-      "INVALID_CURRENT_SCHEDULE",
-      "指定された現在の生活スケジュールを利用できません。",
+      "CURRENT_SCHEDULE_REQUIRED",
+      "確定済みの現在の生活スケジュールを登録してからアセスメント下書きを作成してください。",
     );
   }
   const items = await client.query(
@@ -201,63 +200,6 @@ async function createGeneratedDocument(client, actor, childId, documentKind, bui
     periodEnd: built.periodEnd,
     payload: built.payload,
   });
-}
-
-async function readAssessmentSupportRecords(client, actor, childId, periodStart, periodEnd) {
-  if (!periodStart || !periodEnd) return [];
-  const result = await client.query(
-    `select id, occurred_at, activity, observation, support_provided, child_response
-     from public.daily_logs
-     where tenant_id = $1 and child_id = $2 and deleted_at is null and status = 'final'
-       and occurred_at >= $3::date and occurred_at < ($4::date + interval '1 day')
-     order by occurred_at, id
-     limit $5`,
-    [actor.tenantId, childId, periodStart, periodEnd, MAX_DAILY_LOG_EVIDENCE + 1],
-  );
-  if (result.rows.length > MAX_DAILY_LOG_EVIDENCE) {
-    throw unprocessable(
-      "EVIDENCE_LIMIT_EXCEEDED",
-      "指定期間の支援記録件数が多すぎます。期間を短く分けてアセスメントを作成してください。",
-    );
-  }
-  return result.rows.map((row) => ({
-    id: row.id,
-    occurredAt: dateTime(row.occurred_at),
-    activity: row.activity,
-    observation: row.observation,
-    supportProvided: row.support_provided,
-    childResponse: row.child_response,
-  }));
-}
-
-function hasEnteredValue(value) {
-  return typeof value === "string" ? Boolean(value.trim()) : value !== null && value !== undefined;
-}
-
-function isLegacySampleGeneratedValue(value) {
-  return typeof value === "string" && /[【\[]\s*サンプル\s*[】\]]/.test(value);
-}
-
-function retainAssessmentEntries(existingPayload, generatedPayload) {
-  const payload = { ...existingPayload, ...generatedPayload };
-  for (const [field, generatedValue] of Object.entries(generatedPayload)) {
-    if (typeof generatedValue !== "string" && generatedValue !== null) continue;
-    payload[field] = hasEnteredValue(existingPayload?.[field]) && !isLegacySampleGeneratedValue(existingPayload[field])
-      ? existingPayload[field]
-      : generatedValue;
-  }
-  const existingAssessment = existingPayload?.assessment || {};
-  const generatedAssessment = generatedPayload.assessment || {};
-  payload.assessment = { ...generatedAssessment, ...existingAssessment };
-  for (const field of ["personWish", "familyWish", "strengths", "needs", "supportDirection", "planningNotes"]) {
-    payload.assessment[field] = hasEnteredValue(existingAssessment[field]) && !isLegacySampleGeneratedValue(existingAssessment[field])
-      ? existingAssessment[field]
-      : generatedAssessment[field];
-  }
-  payload.generation = generatedPayload.generation;
-  payload.provenance = generatedPayload.provenance;
-  payload.supportRecordEvidence = generatedPayload.supportRecordEvidence;
-  return payload;
 }
 
 export async function generateBasicAssessment(client, actor, childId, input, options = {}) {
@@ -299,13 +241,6 @@ export async function generateBasicAssessment(client, actor, childId, input, opt
     childId,
     previousMonitoring?.id,
   );
-  const supportRecords = await readAssessmentSupportRecords(
-    client,
-    actor,
-    childId,
-    input.periodStart,
-    input.periodEnd,
-  );
   const built = buildBasicAssessmentDraft({
     child,
     guardians: guardians.rows.map(normalizeGuardian),
@@ -313,40 +248,18 @@ export async function generateBasicAssessment(client, actor, childId, input, opt
     currentSchedule,
     previousMonitoring,
     previousMonitoringGoalResults,
-    supportRecords,
-    supportRecordPeriod: input.periodStart ? { start: input.periodStart, end: input.periodEnd } : null,
     generatedAt: options.generatedAt,
   });
-  let document;
-  if (input.assessmentDocumentId) {
-    const existing = await readSourceDocument(
-      client,
-      actor,
-      childId,
-      input.assessmentDocumentId,
-      "basic_assessment",
-    );
-    if (!EDITABLE_STATUSES.includes(existing.status)) {
-      throw conflict("ASSESSMENT_NOT_EDITABLE", "確定済みのアセスメントは更新できません。新しい下書きを作成してください。");
-    }
-    document = await updateDocument(client, actor, childId, existing.id, existing.rowVersion, {
-      templateVersion: built.templateVersion,
-      periodStart: built.periodStart,
-      periodEnd: built.periodEnd,
-      payload: retainAssessmentEntries(existing.payload, built.payload),
-    });
-  } else {
-    document = await createGeneratedDocument(
-      client,
-      actor,
-      childId,
-      "basic_assessment",
-      built,
-    );
-  }
+  const document = await createGeneratedDocument(
+    client,
+    actor,
+    childId,
+    "basic_assessment",
+    built,
+  );
   return {
     document,
-    sourceIds: [consultationPlan?.id, currentSchedule?.id, previousMonitoring?.id, ...supportRecords.map((record) => record.id)].filter(Boolean),
+    sourceIds: [consultationPlan?.id, currentSchedule.id, previousMonitoring?.id].filter(Boolean),
     evidenceCounts: built.payload.generation.evidenceCounts,
   };
 }
@@ -382,37 +295,6 @@ async function readPreviousMonitoringGoalResults(client, actor, childId, monitor
     nextGoalAction: row.next_goal_action,
     goal: normalizeGoal({ ...row, id: row.source_goal_id, row_version: row.source_goal_row_version }),
   }));
-}
-
-function retainIndividualPlanEntries(existingPayload, generatedPayload) {
-  const fields = [
-    "userAndFamilyWishes",
-    "supportIssues",
-    "childWishes",
-    "familyWishes",
-    "overallSupportPolicy",
-    "consultationPlanBasis",
-    "supportConsiderations",
-    "serviceDelivery",
-    "coordination",
-    "monitoringPlan",
-    "explanationNotes",
-    "specializedGoal",
-    "specializedSupportTarget",
-    "specializedSupportContent",
-    "specializedTargetDate",
-    "specializedFiveDomains",
-  ];
-  const payload = { ...existingPayload, ...generatedPayload };
-  for (const field of fields) {
-    payload[field] = hasEnteredValue(existingPayload?.[field])
-      ? existingPayload[field]
-      : generatedPayload[field];
-  }
-  payload.plan = { ...(generatedPayload.plan || {}), ...(existingPayload?.plan || {}) };
-  payload.generation = generatedPayload.generation;
-  payload.provenance = generatedPayload.provenance;
-  return payload;
 }
 
 export async function generateIndividualSupportPlan(client, actor, childId, input, options = {}) {
@@ -457,39 +339,17 @@ export async function generateIndividualSupportPlan(client, actor, childId, inpu
     previousMonitoringGoalResults,
     generatedAt: options.generatedAt,
   });
-  let document;
-  if (input.individualSupportPlanDocumentId) {
-    const existing = await readSourceDocument(
-      client,
-      actor,
-      childId,
-      input.individualSupportPlanDocumentId,
-      "individual_support_plan",
-    );
-    if (!EDITABLE_STATUSES.includes(existing.status)) {
-      throw conflict("PLAN_NOT_EDITABLE", "確定済みの個別支援計画にはアセスメントを再反映できません。新しい下書きを作成してください。");
-    }
-    document = await updateDocument(client, actor, childId, existing.id, existing.rowVersion, {
-      templateVersion: built.templateVersion,
-      periodStart: built.periodStart,
-      periodEnd: built.periodEnd,
-      payload: retainIndividualPlanEntries(existing.payload, built.payload),
-    });
-  } else {
-    document = await createGeneratedDocument(
-      client,
-      actor,
-      childId,
-      "individual_support_plan",
-      built,
-    );
-  }
+  const document = await createGeneratedDocument(
+    client,
+    actor,
+    childId,
+    "individual_support_plan",
+    built,
+  );
   const goals = [];
-  if (!input.individualSupportPlanDocumentId) {
-    for (const candidate of built.goals) {
-      const created = await createDocumentGoal(client, actor, childId, document.id, candidate);
-      goals.push(created.goal);
-    }
+  for (const candidate of built.goals) {
+    const created = await createDocumentGoal(client, actor, childId, document.id, candidate);
+    goals.push(created.goal);
   }
   return {
     document: { ...document, goals },

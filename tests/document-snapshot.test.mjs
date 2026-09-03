@@ -375,16 +375,11 @@ test("帳票種別ごとにA4向き・版・利用児識別を表示し、内部
   }
 
   source.document.document_kind = "basic_assessment";
-  source.document.payload = {
-    socialUnderstanding: "集団活動では、ルールと手順を確認してから参加しています。予定の変更がある際は、事前に伝えて選べる方法を示すことで気持ちを切り替えられます。順番を待つ場面では、職員の声かけを聞きながら落ち着いて次の活動へ移る様子が見られます。",
-  };
   const assessment = renderDocumentTemplate(source, "draft").html;
   assert.match(assessment, /class="coco-title">アセスメントシート<\/h1>/);
   assert.doesNotMatch(assessment, /MICHI-NOTE/);
-  assert.match(assessment, /official-field--compact/);
 
   source.document.document_kind = "individual_support_plan";
-  source.document.payload = { overallSupportPolicy: "<script>alert('x')</script>の実行を防ぐ" };
   const individual = renderDocumentTemplate(source, "draft").html;
   assert.match(individual, /class="coco-title">個別支援計画<\/h1>/);
   assert.doesNotMatch(individual, /MICHI-NOTE/);

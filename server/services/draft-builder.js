@@ -2,17 +2,6 @@ const GENERATOR_VERSION = "rules-2026-08-14";
 const MIN_LINKED_LOGS_FOR_REVIEW = 2;
 const MAX_GOAL_EVIDENCE_EXCERPTS = 12;
 const MAX_EVIDENCE_FIELD_CHARS = 240;
-const MAX_ASSESSMENT_RECORD_EXCERPTS = 12;
-const MAX_ASSESSMENT_FIELD_SENTENCES = 2;
-const ASSESSMENT_CHALLENGE_TERMS = Object.freeze(["戸惑", "困", "不安", "難", "拒否", "疲", "怒", "泣", "切り替", "予定と異"]);
-const ASSESSMENT_ACTIVITY_CATEGORIES = Object.freeze([
-  { label: "制作", terms: ["工作", "制作", "色紙", "シール", "粘土", "絵"] },
-  { label: "運動", terms: ["運動", "サーキット", "ボール", "体操", "ダンス"] },
-  { label: "集団", terms: ["集団", "カードゲーム", "ルール", "友だち"] },
-  { label: "調理", terms: ["調理", "おやつ", "料理"] },
-  { label: "学習", terms: ["学習", "読書", "宿題", "本を読"] },
-  { label: "外出", terms: ["外出", "公園", "散歩", "買い物"] },
-]);
 
 function dateTime(value) {
   if (!value) return null;
@@ -151,160 +140,6 @@ function monitoringAssessmentDraftValues(previousMonitoring, previousMonitoringG
   };
 }
 
-const ASSESSMENT_RECORD_FIELD_RULES = Object.freeze([
-  { field: "healthManagement", label: "生活・健康", terms: ["体調", "発熱", "疲", "眠", "食", "服薬", "通院", "けが", "痛", "水分", "休憩"] },
-  { field: "movementSensory", label: "運動・感覚", terms: ["運動", "散歩", "公園", "ボール", "体操", "ダンス", "感覚", "音", "触", "工作", "制作", "はさみ"] },
-  { field: "cognitionBehavior", label: "認知・行動", terms: ["予定", "見通し", "順番", "ルール", "切り替", "集中", "理解", "選択", "課題", "学習", "宿題", "パズル", "工作", "制作"] },
-  { field: "languageCommunication", label: "言語・コミュニケーション", terms: ["話", "伝", "会話", "発言", "聞", "説明", "ことば", "言葉", "やりとり", "質問"] },
-  { field: "relationshipsSocial", label: "人間関係・社会性", terms: ["友", "集団", "一緒", "協力", "順番", "他児", "相手", "関わ", "参加"] },
-  { field: "familySituation", label: "家族・生活環境", terms: ["家庭", "家族", "保護者", "自宅", "学校", "送迎"] },
-  { field: "medicalSafetyNotes", label: "医療・安全上の留意事項", terms: ["体調", "服薬", "通院", "アレルギー", "けが", "危険", "安全", "発熱"] },
-  { field: "supportNetwork", label: "連携先と役割", terms: ["学校", "担任", "保護者", "家族", "相談", "連携", "送迎"] },
-  { field: "dailyMeal", label: "食事", terms: ["食事", "昼食", "おやつ", "食べ", "飲み"] },
-  { field: "dailyDressing", label: "衣類の着脱", terms: ["着替", "服", "衣類", "靴"] },
-  { field: "dailyToileting", label: "排泄", terms: ["排泄", "トイレ"] },
-  { field: "dailyBathing", label: "入浴", terms: ["入浴", "お風呂", "洗髪"] },
-  { field: "dailySleep", label: "睡眠", terms: ["睡眠", "就寝", "眠", "起床"] },
-  { field: "scheduleManagement", label: "スケジュール管理", terms: ["予定", "見通し", "スケジュール", "切り替", "時間"] },
-  { field: "schoolClass", label: "在籍学級", terms: ["学校", "学級", "授業", "担任"] },
-  { field: "learning", label: "学習面", terms: ["学習", "宿題", "読", "書", "計算", "プリント", "課題"] },
-  { field: "socialUnderstanding", label: "状況理解", terms: ["状況", "ルール", "順番", "理解", "見通し"] },
-  { field: "environmentAdaptation", label: "環境適応", terms: ["環境", "場所", "音", "慣", "不安", "切り替"] },
-  { field: "friendRelationships", label: "友達との関わり", terms: ["友", "他児", "一緒", "関わ", "集団", "協力"] },
-  { field: "publicBehavior", label: "公共の場での行動", terms: ["外出", "公共", "買い物", "公園", "地域", "交通"] },
-  { field: "speaksIndependently", label: "自分から話す", terms: ["自分から", "話", "伝", "発言", "質問"] },
-  { field: "listensToOthers", label: "相手の話を聞く", terms: ["聞", "相手", "説明", "話を"] },
-  { field: "hobbies", label: "余暇", terms: ["遊び", "工作", "制作", "読書", "絵", "ゲーム", "音楽", "外出"] },
-  { field: "lessons", label: "習い事", terms: ["習い事", "教室", "レッスン", "塾"] },
-  { field: "favoriteFood", label: "好きな食べ物", terms: ["好きな食べ物", "好物"] },
-  { field: "dislikedFood", label: "苦手な食べ物", terms: ["苦手な食べ物", "嫌いな食べ物"] },
-  { field: "favoriteSnack", label: "好きなおやつ", terms: ["好きなおやつ", "おやつ"] },
-  { field: "drinks", label: "飲み物", terms: ["飲み物", "水分", "飲ん"] },
-  { field: "favoritePlay", label: "好きな遊び", terms: ["好きな遊び", "好んで", "楽し", "遊び"] },
-  { field: "difficultPlay", label: "苦手な遊び", terms: ["苦手な遊び", "苦手", "嫌", "困"] },
-  { field: "favoriteCharacter", label: "好きなキャラクター", terms: ["好きなキャラクター", "キャラクター"] },
-  { field: "difficultCharacter", label: "苦手なキャラクター", terms: ["苦手なキャラクター"] },
-  { field: "favoriteThings", label: "好きなこと", terms: ["好き", "楽し", "興味", "関心"] },
-  { field: "sleepPattern", label: "睡眠の様子", terms: ["睡眠", "就寝", "眠", "起床"] },
-  { field: "favoriteOutings", label: "好きな外出先", terms: ["好きな外出", "外出", "公園", "買い物"] },
-  { field: "difficultOutings", label: "苦手な外出先", terms: ["苦手な外出"] },
-  { field: "outingNotes", label: "外出時の留意事項", terms: ["外出", "交通", "公共", "買い物", "安全"] },
-  { field: "outsideNotes", label: "その他の外出時の様子", terms: ["外出", "地域", "公園", "移動"] },
-  { field: "otherServices", label: "他のサービス利用", terms: ["他サービス", "療育", "放課後等デイ", "相談支援"] },
-  { field: "desiredServiceDays", label: "利用希望日", terms: ["利用日", "利用希望", "曜日", "送迎"] },
-]);
-
-function recordSearchText(record) {
-  return [record.activity, record.observation, record.supportProvided, record.childResponse]
-    .filter((value) => typeof value === "string" && value.trim())
-    .join(" ");
-}
-
-function cleanAssessmentSourceText(value) {
-  if (typeof value !== "string") return null;
-  const normalized = value
-    .replace(/[【\[]\s*サンプル\s*[】\]]/g, "")
-    .replace(/\s+/g, " ")
-    .trim();
-  return normalized || null;
-}
-
-function assessmentSentences(value) {
-  const text = cleanAssessmentSourceText(value);
-  if (!text) return [];
-  return text.match(/[^。！？]+[。！？]?/g)
-    ?.map((sentence) => sentence.trim())
-    .filter(Boolean) || [];
-}
-
-function matchingAssessmentSentences(record, rule) {
-  const sources = [record.observation, record.childResponse, record.supportProvided, record.activity];
-  return sources.flatMap(assessmentSentences)
-    .filter((sentence) => rule.terms.some((term) => sentence.includes(term)));
-}
-
-function recordCandidateForField(records, rule) {
-  const matches = records.filter((record) => {
-    const text = recordSearchText(record);
-    return rule.terms.some((term) => text.includes(term));
-  });
-  const sentences = [...new Set(matches.flatMap((record) => matchingAssessmentSentences(record, rule)))]
-    .slice(-MAX_ASSESSMENT_FIELD_SENTENCES);
-  if (!sentences.length) return null;
-  return sentences.join(" ");
-}
-
-function assessmentRecordFieldCandidates(records) {
-  return Object.fromEntries(
-    ASSESSMENT_RECORD_FIELD_RULES.map((rule) => [rule.field, recordCandidateForField(records, rule)]),
-  );
-}
-
-function activityCategories(records) {
-  const categories = records.flatMap((record) => {
-    const text = cleanAssessmentSourceText(record.activity) || "";
-    return ASSESSMENT_ACTIVITY_CATEGORIES
-      .filter((category) => category.terms.some((term) => text.includes(term)))
-      .map((category) => category.label);
-  });
-  return [...new Set(categories)].slice(0, 4);
-}
-
-function conciseRecordSentences(records, fields, terms = null) {
-  const sentences = records.flatMap((record) => fields.flatMap((field) => assessmentSentences(record[field])));
-  const matching = terms ? sentences.filter((sentence) => terms.some((term) => sentence.includes(term))) : sentences;
-  return [...new Set(matching)].slice(-MAX_ASSESSMENT_FIELD_SENTENCES);
-}
-
-function assessmentSupportRecordDraftValues(supportRecords) {
-  if (!supportRecords.length) {
-    return {
-      strengths: null,
-      concerns: null,
-      overallAssessment: null,
-      supportConsiderations: null,
-      planningNotes: null,
-      priorityNeeds: null,
-    };
-  }
-  const fieldCandidates = assessmentRecordFieldCandidates(supportRecords);
-  const categories = activityCategories(supportRecords);
-  const categoryText = categories.length ? `${categories.join("・")}などの活動` : "日々の活動";
-  const challenges = conciseRecordSentences(supportRecords, ["observation", "childResponse"], ASSESSMENT_CHALLENGE_TERMS);
-  const supportMethods = conciseRecordSentences(supportRecords, ["supportProvided"]);
-  return {
-    ...fieldCandidates,
-    strengths: `${categoryText}に参加する様子が記録されています。`,
-    concerns: challenges.length ? challenges.join(" ") : null,
-    priorityNeeds: challenges.length
-      ? "記録に見られた困りやすい場面について、本人の負担や環境との関係を確認しながら優先して支援します。"
-      : null,
-    overallAssessment: `指定期間の支援記録${supportRecords.length}件を確認し、${categoryText}での様子をアセスメントの候補として整理しました。`,
-    supportConsiderations: supportMethods.length
-      ? `${supportMethods.join(" ")} 本人の反応を確認しながら支援方法を調整します。`
-      : "支援記録の内容をもとに、本人の反応を確認しながら支援方法を調整します。",
-    planningNotes: "記録で確認した活動の様子を、本人・家族への聞き取りとあわせて支援計画に反映します。",
-  };
-}
-
-function preferEnteredValue(currentValue, generatedValue) {
-  if (typeof currentValue === "string" && currentValue.trim()) return currentValue;
-  return currentValue ?? generatedValue;
-}
-
-function mergeAssessmentDraftValues(monitoringDraft, supportRecordDraft) {
-  return {
-    ...supportRecordDraft,
-    childWishes: monitoringDraft.childWishes,
-    familyWishes: monitoringDraft.familyWishes,
-    strengths: supportRecordDraft.strengths,
-    concerns: preferEnteredValue(monitoringDraft.concerns, supportRecordDraft.concerns),
-    overallAssessment: preferEnteredValue(monitoringDraft.overallAssessment, supportRecordDraft.overallAssessment),
-    supportConsiderations: preferEnteredValue(monitoringDraft.supportConsiderations, supportRecordDraft.supportConsiderations),
-    planningNotes: preferEnteredValue(monitoringDraft.planningNotes, supportRecordDraft.planningNotes),
-  };
-}
-
 export function buildBasicAssessmentDraft({
   child,
   guardians,
@@ -312,33 +147,27 @@ export function buildBasicAssessmentDraft({
   currentSchedule,
   previousMonitoring = null,
   previousMonitoringGoalResults = [],
-  supportRecords = [],
-  supportRecordPeriod = null,
   generatedAt = new Date(),
 }) {
   const candidates = consultationCandidates(consultationPlan);
   const monitoringDraft = monitoringAssessmentDraftValues(previousMonitoring, previousMonitoringGoalResults);
-  const supportRecordDraft = assessmentSupportRecordDraftValues(supportRecords);
-  const assessmentDraft = mergeAssessmentDraftValues(monitoringDraft, supportRecordDraft);
-  const evidencePeriod = supportRecordPeriod || {
-    start: consultationPlan?.periodStart || currentSchedule?.validFrom || null,
-    end: consultationPlan?.periodEnd || currentSchedule?.validTo || null,
-  };
   return {
     templateVersion: "basic-assessment-v2",
-    periodStart: evidencePeriod.start,
-    periodEnd: evidencePeriod.end,
+    periodStart: consultationPlan?.periodStart || currentSchedule.validFrom || null,
+    periodEnd: consultationPlan?.periodEnd || currentSchedule.validTo || null,
     payload: {
       generation: baseGeneration({
         targetDocumentKind: "basic_assessment",
         generatedAt,
         sourceDocuments: [consultationPlan, previousMonitoring],
-        period: evidencePeriod,
+        period: {
+          start: consultationPlan?.periodStart || currentSchedule.validFrom || null,
+          end: consultationPlan?.periodEnd || currentSchedule.validTo || null,
+        },
         counts: {
           guardians: guardians.length,
-          scheduleItems: currentSchedule?.items.length || 0,
+          scheduleItems: currentSchedule.items.length,
           previousMonitoringResults: previousMonitoringGoalResults.length,
-          supportRecords: supportRecords.length,
         },
       }),
       provenance: {
@@ -348,15 +177,14 @@ export function buildBasicAssessmentDraft({
           rowVersion: Number(guardian.rowVersion),
           isPrimary: Boolean(guardian.isPrimary),
         })),
-        currentSchedule: currentSchedule ? {
+        currentSchedule: {
           id: currentSchedule.id,
           versionNumber: Number(currentSchedule.versionNumber),
           rowVersion: Number(currentSchedule.rowVersion),
           status: currentSchedule.status,
-        } : null,
+        },
         previousMonitoring: documentReference(previousMonitoring),
         previousMonitoringResultIds: previousMonitoringGoalResults.map((result) => result.id),
-        supportRecordIds: supportRecords.map((record) => record.id),
       },
       basicInformation: {
         managementCode: child.managementCode,
@@ -378,13 +206,8 @@ export function buildBasicAssessmentDraft({
         previousMonitoring,
         previousMonitoringGoalResults,
       ),
-      ...assessmentDraft,
-      supportRecordEvidence: supportRecordPeriod ? {
-        period: supportRecordPeriod,
-        count: supportRecords.length,
-        excerpts: supportRecords.slice(-MAX_ASSESSMENT_RECORD_EXCERPTS).map(evidenceExcerpt),
-      } : null,
-      currentScheduleFacts: currentSchedule ? {
+      ...monitoringDraft,
+      currentScheduleFacts: {
         scheduleVersionId: currentSchedule.id,
         summary: currentSchedule.summary,
         validFrom: currentSchedule.validFrom,
@@ -398,14 +221,14 @@ export function buildBasicAssessmentDraft({
           location: item.location,
           serviceKind: item.serviceKind,
         })),
-      } : null,
+      },
       assessment: {
-        personWish: assessmentDraft.childWishes,
-        familyWish: assessmentDraft.familyWishes,
-        strengths: assessmentDraft.strengths,
-        needs: assessmentDraft.priorityNeeds || assessmentDraft.concerns,
-        supportDirection: assessmentDraft.supportConsiderations,
-        planningNotes: assessmentDraft.planningNotes,
+        personWish: monitoringDraft.childWishes,
+        familyWish: monitoringDraft.familyWishes,
+        strengths: null,
+        needs: monitoringDraft.concerns,
+        supportDirection: monitoringDraft.supportConsiderations,
+        planningNotes: monitoringDraft.planningNotes,
       },
       confirmationRequired: [
         "本人の意向は、本人への聞き取りまたは意思決定支援を行って確認してください。",
@@ -417,7 +240,8 @@ export function buildBasicAssessmentDraft({
 }
 
 function boundedEvidenceText(value) {
-  const normalized = cleanAssessmentSourceText(value);
+  if (typeof value !== "string") return null;
+  const normalized = value.replace(/\s+/g, " ").trim();
   if (!normalized) return null;
   const characters = [...normalized];
   if (characters.length <= MAX_EVIDENCE_FIELD_CHARS) return normalized;

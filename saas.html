@@ -10,8 +10,8 @@
       name="description"
       content="相談支援計画から日々の記録、個別支援計画までを安全につなぐ放課後等デイサービス向け業務システム"
     >
-  <link rel="stylesheet" href="/styles/saas.css?v=20260903-plan-workflow-1">
-  <script type="module" src="/src/saas-app.js?v=20260903-plan-workflow-1"></script>
+  <link rel="stylesheet" href="/styles/saas.css?v=20260902-coco-forms-1">
+  <script type="module" src="/src/saas-app.js?v=20260902-coco-forms-1"></script>
   </head>
   <body>
     <a class="skip-link" href="#main-content">本文へ移動</a>
@@ -33,7 +33,7 @@
         <div class="brand">
           <span class="brand-mark" aria-hidden="true"><i></i><i></i><i></i></span>
           <div>
-            <strong>みちのーと</strong>
+            <strong>COCO</strong>
             <span>放課後等デイサービス</span>
           </div>
         </div>
@@ -60,14 +60,17 @@
           <button type="button" data-view="child" aria-current="page">
             <span aria-hidden="true">01</span>基本情報
           </button>
+          <button type="button" data-view="journals">
+            <span aria-hidden="true">02</span>日誌
+          </button>
           <button type="button" data-view="contact">
-            <span aria-hidden="true">02</span>支援の記録
+            <span aria-hidden="true">03</span>連絡帳
           </button>
           <button type="button" data-view="documents">
-            <span aria-hidden="true">03</span>計画書
+            <span aria-hidden="true">04</span>計画書
           </button>
           <button type="button" class="permission-view-audit" data-view="audit" hidden>
-            <span aria-hidden="true">04</span>操作履歴
+            <span aria-hidden="true">05</span>操作履歴
           </button>
         </nav>
 
@@ -104,6 +107,7 @@
             <div class="section-tabs" role="tablist" aria-label="利用者情報の種類">
               <button id="child-tab-basic" type="button" role="tab" aria-selected="true" aria-controls="child-panel-basic" data-child-panel="basic">基本情報</button>
               <button id="child-tab-guardians" type="button" role="tab" aria-selected="false" aria-controls="child-panel-guardians" data-child-panel="guardians" tabindex="-1">保護者・連絡先</button>
+              <button id="child-tab-schedules" type="button" role="tab" aria-selected="false" aria-controls="child-panel-schedules" data-child-panel="schedules" tabindex="-1">週間予定</button>
             </div>
             <div id="child-panel-basic" role="tabpanel" aria-labelledby="child-tab-basic" data-child-tab-panel="basic">
               <div id="child-detail" class="detail-sheet empty-state">
@@ -117,53 +121,72 @@
                 <div id="guardian-list" class="guardian-list empty-state"><strong>利用者を選択してください</strong></div>
               </section>
             </div>
+            <div id="child-panel-schedules" role="tabpanel" aria-labelledby="child-tab-schedules" data-child-tab-panel="schedules" hidden>
+              <div class="schedule-columns">
+                <section class="schedule-lane" aria-labelledby="current-schedule-title"><header><span>いま</span><h2 id="current-schedule-title">現在の生活</h2><p>アセスメント時点で実際に過ごしている一週間です。</p></header><div id="current-schedule" class="schedule-content empty-state"><strong>週間予定は未登録です</strong></div></section>
+                <section class="schedule-lane planned" aria-labelledby="planned-schedule-title"><header><span>これから</span><h2 id="planned-schedule-title">計画後の生活</h2><p>支援計画を実施した後に目指す一週間です。</p></header><div id="planned-schedule" class="schedule-content empty-state"><strong>週間予定は未登録です</strong></div></section>
+              </div>
+            </div>
+          </section>
+
+          <section id="view-journals" class="page-view" data-page-view="journals" aria-labelledby="journals-title" hidden>
+            <header class="page-heading">
+              <div><p class="eyebrow">日々の支援記録</p><h1 id="journals-title">日誌</h1><p>活動・観察・行った支援・本人の反応を分けて記録します。</p></div>
+              <button id="create-journal-button" class="button button-primary permission-edit-journals" type="button" hidden>日誌を登録</button>
+            </header>
+            <div id="journal-list" class="record-list empty-state"><strong>利用者を選択してください</strong></div>
           </section>
 
           <section id="view-contact" class="page-view" data-page-view="contact" aria-labelledby="contact-title" hidden>
             <header class="page-heading">
-              <div><p class="eyebrow">日々の支援記録</p><h1 id="contact-title">支援の記録</h1></div>
+              <div><p class="eyebrow">日々の情報共有</p><h1 id="contact-title">連絡帳</h1><p>日誌をもとに、事業所からの連絡と当日の様子を残します。</p></div>
             </header>
-            <div class="support-record-actions"><button id="create-journal-button" class="button button-primary permission-edit-journals" type="button" hidden>支援記録を追加</button></div>
-            <div id="journal-list" class="record-list empty-state"><strong>利用者を選択してください</strong></div>
+            <div id="contact-list" class="record-list empty-state"><strong>利用者を選択してください</strong></div>
           </section>
 
           <section id="view-documents" class="page-view" data-page-view="documents" aria-label="計画書" hidden>
             <div class="document-flow-columns">
-              <details id="external-reference-details" class="document-reference-panel document-reference-shared">
-                <summary><span><strong>共通の参考資料</strong><small>すべての帳票の作成・編集時に確認します。</small></span><em>任意</em></summary>
-                <div class="document-reference-content">
-                  <div><p>利用者ごとの計画書・面談資料・連絡事項を保管し、すべての帳票で参照します。</p><button class="button button-secondary permission-edit-documents" type="button" data-create-document="consultation_plan" hidden>参考資料を登録</button></div>
-                  <div id="consultation-document-list" class="document-list empty-state"><strong>登録された参考資料はありません</strong></div>
-                </div>
-              </details>
               <section class="document-lane assessment" aria-labelledby="assessment-title">
                 <div class="document-lane-index" aria-hidden="true">01</div>
                 <div class="document-lane-heading">
+                  <p class="document-lane-step">現状を整理</p>
                   <h2 id="assessment-title">アセスメント</h2>
+                  <p>本人・家族の状況を整理し、支援の出発点をつくります。</p>
                 </div>
                 <div class="document-lane-record">
                   <div id="assessment-document-controls" class="document-lane-controls">
-                    <small id="assessment-readiness" class="readiness-copy">利用者を選択すると作成できます。</small><button id="open-assessment-generation" class="button button-secondary permission-edit-documents" type="button" aria-describedby="assessment-readiness" hidden>支援の記録から作成</button>
+                    <button class="button button-secondary permission-edit-documents" type="button" data-generate-draft="basic_assessment" aria-describedby="assessment-readiness" hidden>アセスメントを作成</button><small id="assessment-readiness" class="readiness-copy">確定した現在の生活が必要です。</small><button id="open-current-schedule-from-assessment" class="button button-ghost" type="button" hidden>現在の生活を登録する</button>
                   </div>
                   <div id="assessment-document-list" class="document-list empty-state"><strong>登録されたアセスメントはありません</strong></div>
+                  <details id="external-reference-details" class="document-reference-panel document-reference-inline">
+                    <summary><span><strong>参考資料</strong><small>アセスメントを編集するときに確認します。</small></span><em>任意</em></summary>
+                    <div class="document-reference-content">
+                      <div><p>受け取った計画書や面談資料を保管し、必要な補足だけメモに残せます。</p><button class="button button-secondary permission-edit-documents" type="button" data-create-document="consultation_plan" hidden>参考資料を登録</button></div>
+                      <div id="consultation-document-list" class="document-list empty-state"><strong>登録された参考資料はありません</strong></div>
+                    </div>
+                  </details>
                 </div>
               </section>
               <section class="document-lane individual" aria-labelledby="individual-title">
                 <div class="document-lane-index" aria-hidden="true">02</div>
                 <div class="document-lane-heading">
+                  <p class="document-lane-step">方針を決める</p>
                   <h2 id="individual-title">個別支援計画</h2>
+                  <p>目標と具体的な支援を決め、日々の支援の基準にします。</p>
                 </div>
                 <div class="document-lane-record">
                   <div id="individual-document-controls" class="document-lane-controls">
-                    <small id="individual-readiness" class="readiness-copy">アセスメントが必要です。</small><button id="open-individual-plan-generation" class="button button-primary permission-edit-documents" type="button" aria-describedby="individual-readiness" hidden>アセスメントから作成</button>
+                    <button class="button button-primary permission-edit-documents" type="button" data-generate-draft="individual_support_plan" aria-describedby="individual-readiness" hidden>個別支援計画を作成</button><small id="individual-readiness" class="readiness-copy">アセスメントが必要です。</small>
                   </div>
                   <div id="individual-document-list" class="document-list empty-state"><strong>登録された計画はありません</strong></div>
                 </div>
               </section>
-              <section class="document-lane specialized" aria-labelledby="specialized-title">
+              <section class="document-lane individual" aria-labelledby="specialized-title">
                 <div class="document-lane-index" aria-hidden="true">03</div>
                 <div class="document-lane-heading">
+                  <p class="document-lane-step">専門的支援を整理</p>
                   <h2 id="specialized-title">専門的支援計画</h2>
+                  <p>専門職による支援目標と活動プログラムを、個別支援計画と分けて管理します。</p>
                 </div>
                 <div class="document-lane-record">
                   <div id="specialized-document-controls" class="document-lane-controls"><button class="button button-secondary permission-edit-documents" type="button" data-create-document="specialized_support_plan" hidden>専門的支援計画を作成</button></div>
@@ -173,11 +196,13 @@
               <section class="document-lane monitoring" aria-labelledby="monitoring-title">
                 <div class="document-lane-index" aria-hidden="true">04</div>
                 <div class="document-lane-heading">
+                  <p class="document-lane-step">支援を振り返る</p>
                   <h2 id="monitoring-title">モニタリング</h2>
+                  <p>計画に沿った支援を振り返り、次の支援へつなげます。</p>
                 </div>
                 <div class="document-lane-record">
                   <div id="monitoring-document-controls" class="document-lane-controls">
-                    <small id="monitoring-readiness" class="readiness-copy">運用中の個別支援計画が必要です。</small><button id="open-monitoring-generation" class="button button-secondary permission-edit-documents" type="button" aria-describedby="monitoring-readiness" hidden>モニタリングを作成</button>
+                    <button id="open-monitoring-generation" class="button button-secondary permission-edit-documents" type="button" aria-describedby="monitoring-readiness" hidden>モニタリングを作成</button><small id="monitoring-readiness" class="readiness-copy">運用中の個別支援計画が必要です。</small>
                   </div>
                   <div id="monitoring-document-list" class="document-list empty-state"><strong>登録されたモニタリングはありません</strong></div>
                 </div>
@@ -282,19 +307,19 @@
           <label class="field"><span>活動・場面 <em>必須</em></span><input name="activity" required maxlength="500" placeholder="例：公園での運動あそび"></label>
           <div class="field field-wide journal-writing-field">
             <label for="journal-observation"><span>観察した事実 <em>必須</em></span></label><textarea id="journal-observation" name="observation" required maxlength="4000" rows="4"></textarea>
-            <details class="writing-disclosure" data-journal-writing-disclosure="observation"><summary>「観察した事実」の文章を調整・コピー</summary><div class="journal-writing-tools journal-disclosure-tools"><label>目標文字数 <select data-journal-length="observation" aria-describedby="journal-observation-count"><option value="100">100字</option><option value="200" selected>200字</option><option value="300">300字</option><option value="400">400字</option></select></label><output id="journal-observation-count" class="journal-character-count" data-journal-character-count="observation" aria-live="polite"></output><button class="button button-quiet" type="button" data-expand-journal-field="observation" title="入力内容をもとに、目標文字数を目安に文章を整えます">文章を整える</button><button class="button button-quiet" type="button" data-copy-journal-field="observation">コピー</button></div></details>
+            <div class="journal-writing-tools"><label>目標文字数 <select data-journal-length="observation" aria-describedby="journal-observation-count"><option value="100">100字</option><option value="200" selected>200字</option><option value="300">300字</option><option value="400">400字</option></select></label><output id="journal-observation-count" class="journal-character-count" data-journal-character-count="observation" aria-live="polite"></output><button class="button button-quiet" type="button" data-expand-journal-field="observation" title="入力内容をもとに、目標文字数を目安に文章を整えます">文章を整える</button><button class="button button-quiet" type="button" data-copy-journal-field="observation">コピー</button></div>
           </div>
           <div class="field field-wide journal-writing-field">
             <label for="journal-support"><span>行った支援 <em>必須</em></span></label><textarea id="journal-support" name="supportProvided" required maxlength="4000" rows="4"></textarea>
-            <details class="writing-disclosure" data-journal-writing-disclosure="supportProvided"><summary>「行った支援」の文章を調整・コピー</summary><div class="journal-writing-tools journal-disclosure-tools"><label>目標文字数 <select data-journal-length="supportProvided" aria-describedby="journal-support-count"><option value="100">100字</option><option value="200" selected>200字</option><option value="300">300字</option><option value="400">400字</option></select></label><output id="journal-support-count" class="journal-character-count" data-journal-character-count="supportProvided" aria-live="polite"></output><button class="button button-quiet" type="button" data-expand-journal-field="supportProvided" title="入力内容をもとに、目標文字数を目安に文章を整えます">文章を整える</button><button class="button button-quiet" type="button" data-copy-journal-field="supportProvided">コピー</button></div></details>
+            <div class="journal-writing-tools"><label>目標文字数 <select data-journal-length="supportProvided" aria-describedby="journal-support-count"><option value="100">100字</option><option value="200" selected>200字</option><option value="300">300字</option><option value="400">400字</option></select></label><output id="journal-support-count" class="journal-character-count" data-journal-character-count="supportProvided" aria-live="polite"></output><button class="button button-quiet" type="button" data-expand-journal-field="supportProvided" title="入力内容をもとに、目標文字数を目安に文章を整えます">文章を整える</button><button class="button button-quiet" type="button" data-copy-journal-field="supportProvided">コピー</button></div>
           </div>
           <div class="field field-wide journal-writing-field">
             <label for="journal-response"><span>本人の反応 <em>必須</em></span></label><textarea id="journal-response" name="childResponse" required maxlength="4000" rows="4"></textarea>
-            <details class="writing-disclosure" data-journal-writing-disclosure="childResponse"><summary>「本人の反応」の文章を調整・コピー</summary><div class="journal-writing-tools journal-disclosure-tools"><label>目標文字数 <select data-journal-length="childResponse" aria-describedby="journal-response-count"><option value="100">100字</option><option value="200" selected>200字</option><option value="300">300字</option><option value="400">400字</option></select></label><output id="journal-response-count" class="journal-character-count" data-journal-character-count="childResponse" aria-live="polite"></output><button class="button button-quiet" type="button" data-expand-journal-field="childResponse" title="入力内容をもとに、目標文字数を目安に文章を整えます">文章を整える</button><button class="button button-quiet" type="button" data-copy-journal-field="childResponse">コピー</button></div></details>
+            <div class="journal-writing-tools"><label>目標文字数 <select data-journal-length="childResponse" aria-describedby="journal-response-count"><option value="100">100字</option><option value="200" selected>200字</option><option value="300">300字</option><option value="400">400字</option></select></label><output id="journal-response-count" class="journal-character-count" data-journal-character-count="childResponse" aria-live="polite"></output><button class="button button-quiet" type="button" data-expand-journal-field="childResponse" title="入力内容をもとに、目標文字数を目安に文章を整えます">文章を整える</button><button class="button button-quiet" type="button" data-copy-journal-field="childResponse">コピー</button></div>
           </div>
           <div class="field field-wide journal-writing-field">
             <label for="journal-health"><span>健康上の連絡</span></label><textarea id="journal-health" name="healthNote" maxlength="2000" rows="3"></textarea>
-            <details class="writing-disclosure" data-journal-writing-disclosure="healthNote"><summary>「健康上の連絡」の文章を調整・コピー</summary><div class="journal-writing-tools journal-disclosure-tools"><label>目標文字数 <select data-journal-length="healthNote" aria-describedby="journal-health-count"><option value="80">80字</option><option value="150" selected>150字</option><option value="250">250字</option></select></label><output id="journal-health-count" class="journal-character-count" data-journal-character-count="healthNote" aria-live="polite"></output><button class="button button-quiet" type="button" data-expand-journal-field="healthNote" title="入力内容をもとに、目標文字数を目安に文章を整えます">文章を整える</button><button class="button button-quiet" type="button" data-copy-journal-field="healthNote">コピー</button></div></details>
+            <div class="journal-writing-tools"><label>目標文字数 <select data-journal-length="healthNote" aria-describedby="journal-health-count"><option value="80">80字</option><option value="150" selected>150字</option><option value="250">250字</option></select></label><output id="journal-health-count" class="journal-character-count" data-journal-character-count="healthNote" aria-live="polite"></output><button class="button button-quiet" type="button" data-expand-journal-field="healthNote" title="入力内容をもとに、目標文字数を目安に文章を整えます">文章を整える</button><button class="button button-quiet" type="button" data-copy-journal-field="healthNote">コピー</button></div>
           </div>
           <p class="journal-writing-note field-wide">AIが入力した事実だけをもとに、目標文字数に近い下書きを作成します。内容を確認してから保存してください。</p>
           <fieldset class="field-wide checkbox-field"><legend>関連する5領域</legend><div>
@@ -309,11 +334,6 @@
       </form>
     </dialog>
 
-    <dialog id="daily-summary-dialog" class="app-dialog daily-summary-dialog" aria-labelledby="daily-summary-title">
-      <article id="daily-summary-card" class="daily-summary-card" aria-live="polite"></article>
-      <div class="dialog-actions daily-summary-actions"><button class="button button-ghost" type="button" data-close-dialog="daily-summary-dialog">閉じる</button><button id="print-daily-summary" class="button button-primary" type="button">印刷 / PDF保存</button></div>
-    </dialog>
-
     <dialog id="contact-dialog" class="app-dialog form-dialog permission-edit-journals" aria-labelledby="contact-form-title">
       <form id="contact-form" novalidate>
         <div class="dialog-heading"><p class="eyebrow">日々の情報共有</p><h2 id="contact-form-title">日誌から連絡帳を作成</h2><p id="contact-form-description">同じ日の日誌をもとに、事業所からの連絡と写真を確認して登録します。</p></div>
@@ -322,7 +342,7 @@
           <label class="field"><span>日付 <em>必須</em></span><input name="entryDate" type="date" required></label>
           <div class="field field-wide journal-writing-field">
             <label for="contact-facility-reply"><span>事業所からの連絡 <em>必須</em></span></label><textarea id="contact-facility-reply" name="facilityReply" maxlength="4000" rows="4" required></textarea>
-            <details class="writing-disclosure" data-contact-writing-disclosure="facilityReply"><summary>「事業所からの連絡」の文章を調整・コピー</summary><div class="journal-writing-tools journal-disclosure-tools"><label>目標文字数 <select data-contact-reply-length aria-describedby="contact-reply-count"><option value="100">100字</option><option value="200" selected>200字</option><option value="300">300字</option><option value="400">400字</option></select></label><output id="contact-reply-count" class="journal-character-count" aria-live="polite"></output><button id="expand-contact-draft" class="button button-quiet" type="button" title="入力内容をもとに、目標文字数を目安に文章を整えます">文章を整える</button><button id="copy-contact-reply" class="button button-quiet" type="button">コピー</button></div></details>
+            <div class="journal-writing-tools"><label>目標文字数 <select data-contact-reply-length aria-describedby="contact-reply-count"><option value="100">100字</option><option value="200" selected>200字</option><option value="300">300字</option><option value="400">400字</option></select></label><output id="contact-reply-count" class="journal-character-count" aria-live="polite"></output><button id="expand-contact-draft" class="button button-quiet" type="button" title="入力内容をもとに、目標文字数を目安に文章を整えます">文章を整える</button><button id="copy-contact-reply" class="button button-quiet" type="button">コピー</button></div>
           </div>
           <section class="field field-wide contact-photo-field" aria-labelledby="contact-photos-title">
             <div class="contact-photo-heading"><div><strong id="contact-photos-title">今日の様子の写真</strong><p id="contact-photo-help">JPEG・PNG・WebPを最大4枚まで（1枚5MBまで）添付できます。</p></div><output id="contact-photo-count" aria-live="polite"></output></div>
@@ -354,14 +374,31 @@
       </form>
     </dialog>
 
-    <dialog id="assessment-generation-dialog" class="app-dialog form-dialog permission-edit-documents" aria-labelledby="assessment-generation-title">
-      <form id="assessment-generation-form" novalidate>
-        <div class="dialog-heading"><p class="eyebrow">支援の記録を選ぶ</p><h2 id="assessment-generation-title">アセスメントを作成</h2><p>指定期間の支援の記録を、アセスメント下書きの候補として反映します。本人・家族の意向は、作成後に確認して編集してください。</p></div>
-        <div id="assessment-generation-error" class="form-error" role="alert" hidden></div>
-        <div class="field-grid"><label class="field"><span>開始日 <em>必須</em></span><input name="periodStart" type="date" required></label><label class="field"><span>終了日 <em>必須</em></span><input name="periodEnd" type="date" required></label></div>
-        <div class="dialog-actions"><button class="button button-ghost" type="button" data-close-dialog="assessment-generation-dialog">キャンセル</button><button id="assessment-generation-submit" class="button button-primary" type="submit">支援の記録から作成</button></div>
+    <dialog id="schedule-dialog" class="app-dialog form-dialog schedule-dialog permission-edit-documents" aria-labelledby="schedule-form-title">
+      <form id="schedule-form" novalidate>
+        <input name="scheduleKind" type="hidden">
+        <div class="dialog-heading"><p class="eyebrow">週間予定</p><h2 id="schedule-form-title">週間予定を編集</h2><p id="schedule-form-description">予定を時系列で登録します。</p></div>
+        <div id="schedule-error" class="form-error" role="alert" hidden></div>
+        <div class="field-grid">
+          <label class="field"><span>開始日</span><input name="validFrom" type="date"></label>
+          <label class="field"><span>終了日</span><input name="validTo" type="date"></label>
+          <label class="field field-wide"><span>一週間の概要</span><textarea name="summary" maxlength="8000" rows="3"></textarea></label>
+        </div>
+        <fieldset class="schedule-items-fieldset"><legend>予定</legend><div id="schedule-item-rows"></div><button id="add-schedule-item" class="button button-ghost" type="button">＋ 予定を追加</button></fieldset>
+        <div class="dialog-actions"><button class="button button-ghost" type="button" data-close-dialog="schedule-dialog">キャンセル</button><button class="button button-primary" type="submit">週間予定を保存</button></div>
       </form>
     </dialog>
+
+    <template id="schedule-item-template">
+      <div class="schedule-item-row">
+        <label class="field"><span>曜日</span><select name="dayOfWeek" required><option value="1">月</option><option value="2">火</option><option value="3">水</option><option value="4">木</option><option value="5">金</option><option value="6">土</option><option value="0">日</option></select></label>
+        <label class="field"><span>開始</span><input name="startTime" type="time" required></label>
+        <label class="field"><span>終了</span><span class="time-pair"><select name="endDay" aria-label="終了日"><option value="same">同日</option><option value="next">翌日</option></select><input name="endTime" type="time" aria-label="終了時刻" required></span></label>
+        <label class="field schedule-activity"><span>活動 <em>必須</em></span><input name="activity" maxlength="500" required></label>
+        <label class="field schedule-location"><span>場所</span><input name="location" maxlength="500"></label>
+        <div class="schedule-row-actions"><button class="button button-ghost duplicate-schedule-item" type="button">複製</button><button class="icon-button remove-schedule-item" type="button" aria-label="この予定を削除">×</button></div>
+      </div>
+    </template>
 
     <dialog id="monitoring-generation-dialog" class="app-dialog form-dialog permission-edit-documents" aria-labelledby="monitoring-generation-title">
       <form id="monitoring-generation-form" novalidate>
@@ -385,41 +422,6 @@
           <label class="field field-wide"><span>次の支援方針</span><textarea name="nextSupportPolicy" maxlength="8000" rows="3"></textarea></label>
         </div>
         <div class="dialog-actions"><button class="button button-ghost" type="button" data-close-dialog="monitoring-result-dialog">キャンセル</button><button class="button button-primary" type="submit">評価を保存</button></div>
-      </form>
-    </dialog>
-
-    <dialog id="monitoring-editor-dialog" class="app-dialog form-dialog permission-edit-documents" aria-labelledby="monitoring-editor-title">
-      <form id="monitoring-editor-form" novalidate>
-        <input name="documentId" type="hidden">
-        <div class="dialog-heading"><p class="eyebrow">モニタリング</p><h2 id="monitoring-editor-title">帳票を編集</h2><p>指定のモニタリング様式に出力する各欄を編集します。目標ごとの評価は、一覧の「評価を入力」からも更新できます。</p></div>
-        <div id="monitoring-editor-error" class="form-error" role="alert" hidden></div>
-        <div class="field-grid">
-          <label class="field"><span>対象期間（開始）</span><input name="periodStart" type="date"></label>
-          <label class="field"><span>対象期間（終了）</span><input name="periodEnd" type="date"></label>
-          <label class="field field-wide"><span>支援課題</span><textarea name="supportIssues" maxlength="4000" rows="2"></textarea></label>
-          <label class="field"><span>本人の希望</span><textarea name="childWishes" maxlength="4000" rows="2"></textarea></label>
-          <label class="field"><span>保護者の希望</span><textarea name="familyWishes" maxlength="4000" rows="2"></textarea></label>
-          <label class="field"><span>長期目標</span><textarea name="longTermGoal" maxlength="4000" rows="2"></textarea></label>
-          <label class="field"><span>短期目標</span><textarea name="shortTermGoal" maxlength="4000" rows="2"></textarea></label>
-          <label class="field"><span>達成状況</span><textarea name="overallEvaluation" maxlength="4000" rows="2"></textarea></label>
-          <label class="field"><span>変更の必要性</span><textarea name="nextPlanDirection" maxlength="4000" rows="2"></textarea></label>
-          <label class="field field-wide"><span>備考</span><textarea name="remarks" maxlength="4000" rows="2"></textarea></label>
-          <details class="assessment-template-fields field-wide" open>
-            <summary>具体的な支援内容（4欄）</summary>
-            <p>各欄はモニタリング帳票の「具体的な支援内容」にそのまま出力されます。</p>
-            <div class="field-grid">
-              <p class="form-section-label field-wide">支援内容 1</p>
-              <label class="field"><span>支援目標</span><textarea name="monitoringSupportGoal1" maxlength="2000" rows="2"></textarea></label><label class="field"><span>活動プログラム</span><textarea name="monitoringSupportContent1" maxlength="2000" rows="2"></textarea></label><label class="field"><span>達成状況</span><textarea name="monitoringProgress1" maxlength="2000" rows="2"></textarea></label><label class="field"><span>変更の必要性</span><textarea name="monitoringChange1" maxlength="2000" rows="2"></textarea></label><label class="field field-wide"><span>特記事項</span><textarea name="monitoringNotes1" maxlength="2000" rows="2"></textarea></label>
-              <p class="form-section-label field-wide">支援内容 2</p>
-              <label class="field"><span>支援目標</span><textarea name="monitoringSupportGoal2" maxlength="2000" rows="2"></textarea></label><label class="field"><span>活動プログラム</span><textarea name="monitoringSupportContent2" maxlength="2000" rows="2"></textarea></label><label class="field"><span>達成状況</span><textarea name="monitoringProgress2" maxlength="2000" rows="2"></textarea></label><label class="field"><span>変更の必要性</span><textarea name="monitoringChange2" maxlength="2000" rows="2"></textarea></label><label class="field field-wide"><span>特記事項</span><textarea name="monitoringNotes2" maxlength="2000" rows="2"></textarea></label>
-              <p class="form-section-label field-wide">支援内容 3</p>
-              <label class="field"><span>支援目標</span><textarea name="monitoringSupportGoal3" maxlength="2000" rows="2"></textarea></label><label class="field"><span>活動プログラム</span><textarea name="monitoringSupportContent3" maxlength="2000" rows="2"></textarea></label><label class="field"><span>達成状況</span><textarea name="monitoringProgress3" maxlength="2000" rows="2"></textarea></label><label class="field"><span>変更の必要性</span><textarea name="monitoringChange3" maxlength="2000" rows="2"></textarea></label><label class="field field-wide"><span>特記事項</span><textarea name="monitoringNotes3" maxlength="2000" rows="2"></textarea></label>
-              <p class="form-section-label field-wide">支援内容 4</p>
-              <label class="field"><span>支援目標</span><textarea name="monitoringSupportGoal4" maxlength="2000" rows="2"></textarea></label><label class="field"><span>活動プログラム</span><textarea name="monitoringSupportContent4" maxlength="2000" rows="2"></textarea></label><label class="field"><span>達成状況</span><textarea name="monitoringProgress4" maxlength="2000" rows="2"></textarea></label><label class="field"><span>変更の必要性</span><textarea name="monitoringChange4" maxlength="2000" rows="2"></textarea></label><label class="field field-wide"><span>特記事項</span><textarea name="monitoringNotes4" maxlength="2000" rows="2"></textarea></label>
-            </div>
-          </details>
-        </div>
-        <div class="dialog-actions"><button class="button button-ghost" type="button" data-close-dialog="monitoring-editor-dialog">キャンセル</button><button class="button button-primary" type="submit">モニタリングを保存</button></div>
       </form>
     </dialog>
 
@@ -448,42 +450,6 @@
           <label class="field"><span>活動プログラム</span><textarea name="specializedSupportContent" maxlength="8000" rows="3"></textarea></label>
           <label class="field"><span>達成時期</span><input name="specializedTargetDate" type="date"></label>
           <label class="field"><span>5領域（読点区切り）</span><input name="specializedFiveDomains" maxlength="500" placeholder="健康・生活、運動・感覚"></label>
-          <details class="assessment-template-fields field-wide" open>
-            <summary>個別支援計画に記載する確認項目</summary>
-            <p>指定の個別支援計画・専門的支援計画の欄にそのまま出力される内容です。目標を別途登録していない場合も、ここで帳票の各行を編集できます。</p>
-            <div class="field-grid">
-              <p class="form-section-label field-wide">長期・短期目標</p>
-              <label class="field field-wide"><span>長期目標</span><textarea name="longTermGoal" maxlength="4000" rows="2"></textarea></label>
-              <label class="field field-wide"><span>短期目標</span><textarea name="shortTermGoal" maxlength="4000" rows="2"></textarea></label>
-              <p class="form-section-label field-wide">具体的な支援内容（最大4行）</p>
-              <label class="field"><span>支援目標 1</span><textarea name="supportGoal1" maxlength="2000" rows="2"></textarea></label>
-              <label class="field"><span>活動プログラム 1</span><textarea name="supportContent1" maxlength="2000" rows="2"></textarea></label>
-              <label class="field"><span>達成時期 1</span><input name="supportTargetDate1" type="date"></label>
-              <label class="field"><span>5領域 1</span><input name="supportFiveDomains1" maxlength="500" placeholder="健康・生活、運動・感覚"></label>
-              <label class="field"><span>支援目標 2</span><textarea name="supportGoal2" maxlength="2000" rows="2"></textarea></label>
-              <label class="field"><span>活動プログラム 2</span><textarea name="supportContent2" maxlength="2000" rows="2"></textarea></label>
-              <label class="field"><span>達成時期 2</span><input name="supportTargetDate2" type="date"></label>
-              <label class="field"><span>5領域 2</span><input name="supportFiveDomains2" maxlength="500" placeholder="健康・生活、運動・感覚"></label>
-              <label class="field"><span>支援目標 3</span><textarea name="supportGoal3" maxlength="2000" rows="2"></textarea></label>
-              <label class="field"><span>活動プログラム 3</span><textarea name="supportContent3" maxlength="2000" rows="2"></textarea></label>
-              <label class="field"><span>達成時期 3</span><input name="supportTargetDate3" type="date"></label>
-              <label class="field"><span>5領域 3</span><input name="supportFiveDomains3" maxlength="500" placeholder="健康・生活、運動・感覚"></label>
-              <label class="field"><span>支援目標 4</span><textarea name="supportGoal4" maxlength="2000" rows="2"></textarea></label>
-              <label class="field"><span>活動プログラム 4</span><textarea name="supportContent4" maxlength="2000" rows="2"></textarea></label>
-              <label class="field"><span>達成時期 4</span><input name="supportTargetDate4" type="date"></label>
-              <label class="field"><span>5領域 4</span><input name="supportFiveDomains4" maxlength="500" placeholder="健康・生活、運動・感覚"></label>
-              <p class="form-section-label field-wide">週間計画</p>
-              <label class="field"><span>月</span><textarea name="weeklyMonday" maxlength="1000" rows="2"></textarea></label>
-              <label class="field"><span>火</span><textarea name="weeklyTuesday" maxlength="1000" rows="2"></textarea></label>
-              <label class="field"><span>水</span><textarea name="weeklyWednesday" maxlength="1000" rows="2"></textarea></label>
-              <label class="field"><span>木</span><textarea name="weeklyThursday" maxlength="1000" rows="2"></textarea></label>
-              <label class="field"><span>金</span><textarea name="weeklyFriday" maxlength="1000" rows="2"></textarea></label>
-              <label class="field"><span>土</span><textarea name="weeklySaturday" maxlength="1000" rows="2"></textarea></label>
-              <label class="field"><span>日</span><textarea name="weeklySunday" maxlength="1000" rows="2"></textarea></label>
-              <label class="field"><span>学校休業日</span><textarea name="weeklySchoolHoliday" maxlength="1000" rows="2"></textarea></label>
-              <label class="field field-wide"><span>利用時間帯・その他</span><textarea name="weeklyNotes" maxlength="2000" rows="2"></textarea></label>
-            </div>
-          </details>
         </div>
         <section class="document-goal-editor" aria-labelledby="plan-editor-goals-title"><h3 id="plan-editor-goals-title">支援目標</h3><div id="plan-editor-goals"></div></section>
         <div class="dialog-actions"><button class="button button-ghost" type="button" data-close-dialog="plan-editor-dialog">キャンセル</button><button class="button button-primary" type="submit">計画書を保存</button></div>
@@ -516,50 +482,6 @@
           <label class="field"><span>医療・安全上の留意事項</span><textarea name="medicalSafetyNotes" maxlength="8000" rows="3"></textarea></label>
           <label class="field"><span>連携先と役割</span><textarea name="supportNetwork" maxlength="8000" rows="3"></textarea></label>
           <label class="field field-wide"><span>個別支援計画へ引き継ぐこと</span><textarea name="planningNotes" maxlength="8000" rows="3"></textarea></label>
-          <details class="assessment-template-fields field-wide" open>
-            <summary>アセスメントシートに記載する確認項目</summary>
-            <p>指定のアセスメントシートの各欄にそのまま出力される内容です。本人・家族への聞き取りや観察をもとに編集します。</p>
-            <div class="field-grid">
-              <p class="form-section-label field-wide">日常生活・学習</p>
-              <label class="field"><span>食事</span><textarea name="dailyMeal" maxlength="2000" rows="2"></textarea></label>
-              <label class="field"><span>衣類の着脱</span><textarea name="dailyDressing" maxlength="2000" rows="2"></textarea></label>
-              <label class="field"><span>排泄</span><textarea name="dailyToileting" maxlength="2000" rows="2"></textarea></label>
-              <label class="field"><span>入浴</span><textarea name="dailyBathing" maxlength="2000" rows="2"></textarea></label>
-              <label class="field"><span>睡眠（生活面）</span><textarea name="dailySleep" maxlength="2000" rows="2"></textarea></label>
-              <label class="field"><span>スケジュール管理</span><textarea name="scheduleManagement" maxlength="2000" rows="2"></textarea></label>
-              <label class="field"><span>在籍学級</span><textarea name="schoolClass" maxlength="1000" rows="2"></textarea></label>
-              <label class="field"><span>授業中の様子</span><textarea name="learning" maxlength="2000" rows="2"></textarea></label>
-              <p class="form-section-label field-wide">社会性・コミュニケーション・余暇</p>
-              <label class="field"><span>状況理解</span><textarea name="socialUnderstanding" maxlength="2000" rows="2"></textarea></label>
-              <label class="field"><span>環境適応</span><textarea name="environmentAdaptation" maxlength="2000" rows="2"></textarea></label>
-              <label class="field"><span>友達との関わり</span><textarea name="friendRelationships" maxlength="2000" rows="2"></textarea></label>
-              <label class="field"><span>公共の場での行動</span><textarea name="publicBehavior" maxlength="2000" rows="2"></textarea></label>
-              <label class="field"><span>自分から話す</span><textarea name="speaksIndependently" maxlength="2000" rows="2"></textarea></label>
-              <label class="field"><span>相手の話を聴く</span><textarea name="listensToOthers" maxlength="2000" rows="2"></textarea></label>
-              <label class="field"><span>趣味・好きな遊び</span><textarea name="hobbies" maxlength="2000" rows="2"></textarea></label>
-              <label class="field"><span>習い事等</span><textarea name="lessons" maxlength="2000" rows="2"></textarea></label>
-              <p class="form-section-label field-wide">進路・生活嗜好・利用</p>
-              <label class="field"><span>家族の進路希望</span><textarea name="familyCareerPath" maxlength="2000" rows="2"></textarea></label>
-              <label class="field"><span>本人の進路希望</span><textarea name="childCareerPath" maxlength="2000" rows="2"></textarea></label>
-              <label class="field field-wide"><span>支援に関わる特記事項</span><textarea name="supportNotes" maxlength="4000" rows="3"></textarea></label>
-              <label class="field"><span>好きな食べ物</span><textarea name="favoriteFood" maxlength="1000" rows="2"></textarea></label>
-              <label class="field"><span>嫌いな食べ物</span><textarea name="dislikedFood" maxlength="1000" rows="2"></textarea></label>
-              <label class="field"><span>好きなおやつ</span><textarea name="favoriteSnack" maxlength="1000" rows="2"></textarea></label>
-              <label class="field"><span>飲み物</span><textarea name="drinks" maxlength="1000" rows="2"></textarea></label>
-              <label class="field"><span>好きな遊び</span><textarea name="favoritePlay" maxlength="1000" rows="2"></textarea></label>
-              <label class="field"><span>苦手な遊び</span><textarea name="difficultPlay" maxlength="1000" rows="2"></textarea></label>
-              <label class="field"><span>好きなキャラクター</span><textarea name="favoriteCharacter" maxlength="1000" rows="2"></textarea></label>
-              <label class="field"><span>苦手なキャラクター</span><textarea name="difficultCharacter" maxlength="1000" rows="2"></textarea></label>
-              <label class="field"><span>好きな色・物など</span><textarea name="favoriteThings" maxlength="1000" rows="2"></textarea></label>
-              <label class="field"><span>睡眠（時間帯・様子）</span><textarea name="sleepPattern" maxlength="1000" rows="2"></textarea></label>
-              <label class="field"><span>好きな外出先</span><textarea name="favoriteOutings" maxlength="1000" rows="2"></textarea></label>
-              <label class="field"><span>苦手な外出先</span><textarea name="difficultOutings" maxlength="1000" rows="2"></textarea></label>
-              <label class="field"><span>外出時に気をつけること</span><textarea name="outingNotes" maxlength="2000" rows="2"></textarea></label>
-              <label class="field"><span>家以外での特記事項</span><textarea name="outsideNotes" maxlength="2000" rows="2"></textarea></label>
-              <label class="field"><span>習い事・他事業所の利用</span><textarea name="otherServices" maxlength="2000" rows="2"></textarea></label>
-              <label class="field"><span>利用希望日</span><textarea name="desiredServiceDays" maxlength="1000" rows="2" placeholder="月・水・金 など"></textarea></label>
-            </div>
-          </details>
         </div>
         <div class="dialog-actions"><button class="button button-ghost" type="button" data-close-dialog="assessment-editor-dialog">キャンセル</button><button class="button button-primary" type="submit">アセスメントを保存</button></div>
       </form>

@@ -6,26 +6,14 @@ function monitoringBlock(result = {}) {
   return `<section class="coco-section"><h2>具体的な支援内容</h2><div class="coco-grid one">${cell("支援目標", result.goal_title, "tall")}${cell("具体的な支援内容（活動プログラム）", result.support_details, "tall")}${cell("達成状況", result.progress_summary, "tall")}${cell("変更の必要性", result.next_support_policy, "tall")}${cell("特記事項", result.current_challenge, "tall")}</div></section>`;
 }
 
-function payloadMonitoringBlock(payload, index) {
-  return {
-    goal_title: value(payload, [`monitoringSupportGoal${index}`]),
-    support_details: value(payload, [`monitoringSupportContent${index}`]),
-    progress_summary: value(payload, [`monitoringProgress${index}`]),
-    next_support_policy: value(payload, [`monitoringChange${index}`]),
-    current_challenge: value(payload, [`monitoringNotes${index}`]),
-  };
-}
-
 export function renderMonitoringRecord(source, snapshotKind) {
   const payload = source.document.payload || {};
   const monitoring = payload.monitoring || payload;
-  const results = Array.from({ length: 4 }, (_, index) => {
-    const manual = payloadMonitoringBlock(payload, index + 1);
-    return Object.values(manual).some(Boolean) ? manual : (source.monitoringResults || [])[index] || {};
-  });
+  const results = [...(source.monitoringResults || [])];
+  while (results.length < 4) results.push({});
   const initial = [
     section("支援課題", `<div class="coco-grid one">${cell("支援課題", value(payload, ["supportIssues", "overallEvaluation"]), "tall")}</div>`),
-    section("療育の希望", `<div class="coco-grid">${cell("本人の希望", value(payload, ["childWishes"]) || value(monitoring, ["personFeedback", "childWishes"]), "tall")}${cell("保護者の希望", value(payload, ["familyWishes"]) || value(monitoring, ["familyFeedback", "familyWishes"]), "tall")}</div>`),
+    section("療育の希望", `<div class="coco-grid">${cell("本人の希望", value(monitoring, ["personFeedback", "childWishes"]), "tall")}${cell("保護者の希望", value(monitoring, ["familyFeedback", "familyWishes"]), "tall")}</div>`),
     section("支援計画", `<div class="coco-grid">${cell("長期目標", value(payload, ["longTermGoal"]), "tall")}${cell("短期目標", value(payload, ["shortTermGoal"]), "tall")}${cell("達成状況", value(monitoring, ["overallEvaluation"]), "tall")}${cell("変更の必要性", value(monitoring, ["nextPlanDirection"]), "tall")}</div>`),
     monitoringBlock(results[0]), monitoringBlock(results[1]),
   ].join("");

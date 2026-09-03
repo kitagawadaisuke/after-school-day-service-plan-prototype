@@ -65,22 +65,6 @@ const INDIVIDUAL_PLAN_PAYLOAD_FIELDS = Object.freeze([
   ["specializedFiveDomains", "5領域"],
 ]);
 const INDIVIDUAL_PLAN_FIELD_LABELS = Object.freeze(Object.fromEntries(INDIVIDUAL_PLAN_PAYLOAD_FIELDS));
-// 帳票上の固定欄。支援目標を未登録でも、指定帳票の各行を直接編集できるようにする。
-const PLAN_TEMPLATE_FIELDS = Object.freeze([
-  "longTermGoal", "shortTermGoal",
-  "supportGoal1", "supportContent1", "supportTargetDate1", "supportFiveDomains1",
-  "supportGoal2", "supportContent2", "supportTargetDate2", "supportFiveDomains2",
-  "supportGoal3", "supportContent3", "supportTargetDate3", "supportFiveDomains3",
-  "supportGoal4", "supportContent4", "supportTargetDate4", "supportFiveDomains4",
-  "weeklyMonday", "weeklyTuesday", "weeklyWednesday", "weeklyThursday", "weeklyFriday", "weeklySaturday", "weeklySunday", "weeklySchoolHoliday", "weeklyNotes",
-]);
-const MONITORING_TEMPLATE_FIELDS = Object.freeze([
-  "supportIssues", "childWishes", "familyWishes", "longTermGoal", "shortTermGoal", "overallEvaluation", "nextPlanDirection", "remarks",
-  "monitoringSupportGoal1", "monitoringSupportContent1", "monitoringProgress1", "monitoringChange1", "monitoringNotes1",
-  "monitoringSupportGoal2", "monitoringSupportContent2", "monitoringProgress2", "monitoringChange2", "monitoringNotes2",
-  "monitoringSupportGoal3", "monitoringSupportContent3", "monitoringProgress3", "monitoringChange3", "monitoringNotes3",
-  "monitoringSupportGoal4", "monitoringSupportContent4", "monitoringProgress4", "monitoringChange4", "monitoringNotes4",
-]);
 const ASSESSMENT_EDITOR_FIELDS = Object.freeze([
   ["childWishes", "personWish"],
   ["familyWishes", "familyWish"],
@@ -107,13 +91,6 @@ const ASSESSMENT_FIELD_LABELS = Object.freeze({
   overallAssessment: "総合的なアセスメント", supportConsiderations: "支援で大切にすること", medicalSafetyNotes: "医療・安全上の留意事項",
   supportNetwork: "連携先と役割", planningNotes: "個別支援計画へ引き継ぐこと",
 });
-const ASSESSMENT_TEMPLATE_FIELDS = Object.freeze([
-  "dailyMeal", "dailyDressing", "dailyToileting", "dailyBathing", "dailySleep", "scheduleManagement", "schoolClass", "learning",
-  "socialUnderstanding", "environmentAdaptation", "friendRelationships", "publicBehavior", "speaksIndependently", "listensToOthers", "hobbies", "lessons",
-  "familyCareerPath", "childCareerPath", "supportNotes", "favoriteFood", "dislikedFood", "favoriteSnack", "drinks", "favoritePlay", "difficultPlay",
-  "favoriteCharacter", "difficultCharacter", "favoriteThings", "sleepPattern", "favoriteOutings", "difficultOutings", "outingNotes", "outsideNotes",
-  "otherServices", "desiredServiceDays",
-]);
 const ASSESSMENT_CONTEXT_FIELDS = Object.freeze(ASSESSMENT_EDITOR_FIELDS.slice(0, 12).map(([fieldName]) => fieldName));
 const ASSESSMENT_SYNTHESIS_FIELDS = Object.freeze(new Set([
   "overallAssessment", "supportConsiderations",
@@ -1026,18 +1003,17 @@ function renderJournals() {
       journal.fiveDomains.forEach((domain) => tags.append(element("li", { text: FIVE_DOMAIN_LABELS[domain] || domain })));
       body.append(tags);
     }
-    const actions = element("div", { className: "record-actions" });
-    const summaryButton = element("button", { className: "button button-secondary", text: "当日のサマリー", attributes: { type: "button" } });
-    summaryButton.addEventListener("click", () => openDailySummary(journal, summaryButton));
-    actions.append(summaryButton);
     if (can("journals.edit")) {
+      const actions = element("div", { className: "record-actions" });
+      const createContactButton = element("button", { className: "button button-quiet", text: "連絡帳を作成", attributes: { type: "button" } });
+      createContactButton.addEventListener("click", () => runAsync(() => openContactDraftFromJournal(createContactButton, journal)));
       const editButton = element("button", { className: "button button-quiet", text: journal.status === "draft" ? "続きを入力" : "編集", attributes: { type: "button" } });
       editButton.addEventListener("click", () => openJournalDialog(editButton, journal));
       const deleteButton = element("button", { className: "button button-danger", text: "削除", attributes: { type: "button" } });
       deleteButton.addEventListener("click", () => runAsync(() => deleteJournal(deleteButton, journal)));
-      actions.append(editButton, deleteButton);
+      actions.append(createContactButton, editButton, deleteButton);
+      body.append(actions);
     }
-    body.append(actions);
     item.append(date, body);
     container.append(item);
   }
@@ -1187,11 +1163,10 @@ async function loadDocumentSnapshots(documents = state.documents) {
 // it, so staff do not have to open and re-save their own content just to get a
 // corrected form.
 const PDF_LAYOUT_TEMPLATE_VERSIONS = Object.freeze({
-  // v2: supplied COCO forms are used as the PDF page backgrounds.
-  basic_assessment: "coco-assessment-v2",
-  individual_support_plan: "coco-individual-plan-v2",
-  specialized_support_plan: "coco-specialized-plan-v2",
-  monitoring_record: "coco-monitoring-v2",
+  basic_assessment: "coco-assessment-v1",
+  individual_support_plan: "coco-individual-plan-v1",
+  specialized_support_plan: "coco-specialized-plan-v1",
+  monitoring_record: "coco-monitoring-v1",
 });
 
 function requiredPdfTemplateVersion(documentRecord) {
@@ -1286,52 +1261,56 @@ function renderDocuments() {
   $$('[data-create-document]').forEach((button) => { button.disabled = !state.selectedChild; });
   const assessment = latestDocument("basic_assessment");
   const activePlan = latestDocument("individual_support_plan", (item) => item.status === "active");
-  const assessmentButton = $("#open-assessment-generation");
-  const individualButton = $("#open-individual-plan-generation");
+  const finalizedCurrent = state.schedules.current?.status === "finalized" ? state.schedules.current : null;
+  const assessmentButton = $('[data-generate-draft="basic_assessment"]');
+  const individualButton = $('[data-generate-draft="individual_support_plan"]');
   const monitoringButton = $("#open-monitoring-generation");
   const monitoring = latestDocument("monitoring_record");
   if (assessmentButton) {
-    const assessmentCanRefresh = !assessment || EDITABLE_DOCUMENT_STATUSES.includes(assessment.status);
-    assessmentButton.hidden = !can("documents.edit") || !assessmentCanRefresh;
-    assessmentButton.disabled = !state.selectedChild || !assessmentCanRefresh;
-    assessmentButton.textContent = assessment ? "支援の記録から更新" : "支援の記録から作成";
+    assessmentButton.hidden = !can("documents.edit") || Boolean(assessment);
+    assessmentButton.disabled = !state.selectedChild || !finalizedCurrent;
   }
-  $("#assessment-document-controls").hidden = !can("documents.edit");
+  $("#assessment-document-controls").hidden = Boolean(assessment);
   if (individualButton) {
-    const individualPlan = latestDocument("individual_support_plan");
-    const planCanRefresh = !individualPlan || EDITABLE_DOCUMENT_STATUSES.includes(individualPlan.status);
-    individualButton.hidden = !can("documents.edit");
+    individualButton.hidden = !can("documents.edit") || Boolean(latestDocument("individual_support_plan"));
     individualButton.disabled = !state.selectedChild || !assessment;
-    individualButton.textContent = !individualPlan
-      ? "アセスメントから作成"
-      : planCanRefresh
-        ? "アセスメントから未入力項目を反映"
-        : "アセスメントから新しい下書きを作成";
   }
-  $("#individual-document-controls").hidden = !can("documents.edit");
+  $("#individual-document-controls").hidden = Boolean(latestDocument("individual_support_plan"));
   if (monitoringButton) {
     monitoringButton.hidden = !can("documents.edit") || Boolean(monitoring);
     monitoringButton.disabled = !state.selectedChild || !activePlan;
   }
   $("#monitoring-document-controls").hidden = Boolean(monitoring);
-  $("#assessment-readiness").hidden = false;
-  $("#individual-readiness").hidden = false;
+  $("#assessment-readiness").hidden = Boolean(assessment);
+  $("#individual-readiness").hidden = Boolean(latestDocument("individual_support_plan"));
   $("#monitoring-readiness").hidden = Boolean(monitoring);
   $("#assessment-readiness").textContent = !state.selectedChild
     ? "利用者を選択してください。"
-    : assessment?.periodStart && assessment?.periodEnd
-      ? `現在の下書き：${formatDate(assessment.periodStart)} 〜 ${formatDate(assessment.periodEnd)}の支援の記録を反映しています。`
-      : "期間を指定して支援の記録をアセスメントへ反映できます。";
+    : !finalizedCurrent
+      ? state.schedules.current?.status === "draft" && !can("documents.approve")
+        ? "「現在の生活」は登録済みです。管理者に「この週間予定を確定」を依頼してください。"
+        : "「現在の生活」を登録後、「この週間予定を確定」を選んでください。"
+      : latestDocument("monitoring_record")
+        ? "前回モニタリングをもとに作成できます。"
+        : "現在の情報をもとに作成できます。";
+  const currentScheduleButton = $("#open-current-schedule-from-assessment");
+  if (currentScheduleButton) {
+    currentScheduleButton.hidden = !state.selectedChild || Boolean(finalizedCurrent) || !can("documents.edit");
+  }
   $("#individual-readiness").textContent = !assessment
     ? "アセスメントを作成すると、ここから作成できます。"
-    : latestDocument("individual_support_plan")?.status && !EDITABLE_DOCUMENT_STATUSES.includes(latestDocument("individual_support_plan").status)
-      ? "確定済みの計画書は変更せず、新しい下書きでアセスメントを反映します。"
-      : latestDocument("individual_support_plan")
-        ? "アセスメントをもとに、未入力の項目を反映できます。入力済みの内容と支援目標は変更しません。"
-        : "アセスメントをもとに、個別支援計画の下書きを作成できます。";
+    : "アセスメントをもとに作成できます。";
   $("#monitoring-readiness").textContent = activePlan
     ? "日誌・連絡帳をもとに作成できます。"
     : "運用中の個別支援計画が必要です。";
+}
+
+async function openCurrentScheduleFromAssessment(trigger) {
+  if (!state.selectedChild) return announce("先に利用者を選択してください。");
+  await switchView("child");
+  switchChildPanel("schedules");
+  $("#current-schedule").scrollIntoView({ behavior: "smooth", block: "start" });
+  trigger?.blur();
 }
 
 function renderDocumentLane(kind, container) {
@@ -1363,7 +1342,6 @@ function renderDocumentLane(kind, container) {
     item.append(
       ...(kind === "consultation_plan" ? [element("strong", { text: "登録済みの参考資料" })] : []),
       ...(statusLabel ? [element("span", { className: "status-chip", text: statusLabel })] : []),
-      ...(kind === "consultation_plan" || kind === "basic_assessment" ? [] : [element("p", { className: "document-workflow-copy", text: documentWorkflowCopy(kind, documentRecord) })]),
       element("div", { className: "document-date-meta" }, [
         element("span", { text: `対象期間：${formatDate(documentRecord.periodStart)} 〜 ${formatDate(documentRecord.periodEnd)}` }),
         element("span", { text: `最終更新：${formatDate(documentRecord.updatedAt, true)}` }),
@@ -1391,21 +1369,16 @@ function renderDocumentLane(kind, container) {
       }
     }
     if (kind === "basic_assessment" && can("documents.edit") && EDITABLE_DOCUMENT_STATUSES.includes(documentRecord.status)) {
-      const edit = element("button", { className: "button button-primary", text: "アセスメントを編集", attributes: { type: "button" } });
+      const edit = element("button", { className: "button button-primary", text: "編集する", attributes: { type: "button" } });
       edit.addEventListener("click", () => runAsync(() => openAssessmentEditor(documentRecord, edit)));
       actions.append(edit);
     }
     if (["individual_support_plan", "specialized_support_plan"].includes(kind) && can("documents.edit") && EDITABLE_DOCUMENT_STATUSES.includes(documentRecord.status)) {
-      const edit = element("button", { className: "button button-primary", text: kind === "individual_support_plan" ? "計画書を編集" : "専門的支援計画を編集", attributes: { type: "button" } });
+      const edit = element("button", { className: "button button-primary", text: "編集する", attributes: { type: "button" } });
       edit.addEventListener("click", () => runAsync(() => openPlanEditor(documentRecord, edit)));
       actions.append(edit);
     }
     if (kind === "monitoring_record") {
-      if (can("documents.edit") && EDITABLE_DOCUMENT_STATUSES.includes(documentRecord.status)) {
-        const edit = element("button", { className: "button button-primary", text: "モニタリングを編集", attributes: { type: "button" } });
-        edit.addEventListener("click", () => runAsync(() => openMonitoringEditor(documentRecord, edit)));
-        actions.append(edit);
-      }
       const results = documentRecord.id === latestDocument("monitoring_record")?.id ? state.monitoringResults : [];
       if (results.length) {
         const activePlan = latestDocument("individual_support_plan", (candidate) => candidate.status === "active");
@@ -1654,6 +1627,7 @@ async function loadDocuments() {
     state.monitoringResults = [];
   }
   await loadDocumentSnapshots(state.documents);
+  if (!state.schedules.current && !state.schedules.planned) await loadSchedules();
   renderDocuments();
 }
 
@@ -1664,19 +1638,28 @@ async function loadActiveResource() {
   }
   if (!state.selectedChild) {
     renderJournals();
+    renderContactEntries();
     renderDocuments();
     renderGuardians();
+    renderSchedule("current");
+    renderSchedule("planned");
     return;
   }
   const childId = encodeURIComponent(state.selectedChild.id);
-  if (state.activeView === "contact") {
+  if (state.activeView === "journals") {
     const { data } = await api(`/children/${childId}/daily-logs?limit=50`);
     state.journals = data.items || [];
     renderJournals();
+  } else if (state.activeView === "contact") {
+    const { data } = await api(`/children/${childId}/contact-book?limit=50`);
+    state.contactEntries = data.items || [];
+    renderContactEntries();
   } else if (state.activeView === "documents") {
     await loadDocuments();
   } else if (state.activeView === "child" && state.childPanel === "guardians") {
     await loadGuardians();
+  } else if (state.activeView === "child" && state.childPanel === "schedules") {
+    await loadSchedules();
   } else if (state.activeView === "admin" && can("admin.view")) {
     await Promise.all([
       can("staff.manage") ? loadStaff() : Promise.resolve(),
@@ -1686,8 +1669,6 @@ async function loadActiveResource() {
 }
 
 async function switchView(view, trigger) {
-  // 旧画面を開いたままのタブも、統合後の連絡帳へ案内します。
-  if (view === "journals") view = "contact";
   state.activeView = view;
   $$('[data-page-view]').forEach((section) => {
     const active = section.dataset.pageView === view;
@@ -2462,6 +2443,7 @@ async function submitJournal(event) {
   const body = journalFormBody(form, "final");
   try {
     const journalId = form.dataset.journalId;
+    let savedJournal;
     state.conflictReload = loadActiveResource;
     state.conflictResumeDialog = $("#journal-dialog");
     if (journalId) {
@@ -2470,14 +2452,27 @@ async function submitJournal(event) {
         etag: `"${form.dataset.journalRowVersion}"`,
         body,
       });
+      savedJournal = result.data;
     } else {
       const result = await idempotentCreate(`/children/${encodeURIComponent(state.selectedChild.id)}/daily-logs`, body);
+      savedJournal = result.data;
     }
     closeDialog($("#journal-dialog"));
     await loadActiveResource();
     state.conflictReload = null;
     state.conflictResumeDialog = null;
-    announce(journalId ? "支援記録を変更しました。" : "支援記録を保存しました。");
+    if (journalId) {
+      announce("日誌を変更しました。");
+      return;
+    }
+    if (kind === "specialized_support_plan") {
+      const created = state.documents.find((documentRecord) => documentRecord.id === result.data.id) || result.data;
+      await openPlanEditor(created, button);
+      announce("専門的支援の目標と活動プログラムを入力してください。");
+      return;
+    }
+    announce("日誌を保存しました。連絡帳の下書きを作成しています。");
+    await openContactDraftFromJournal($("#main-content"), savedJournal || body);
   } catch (error) {
     if (error.status !== 409) showFormError(form, errorContainer, errorMessage(error), []);
   }
@@ -2879,7 +2874,12 @@ async function generateDraft(button) {
   }
 }
 
-function setDefaultEvidencePeriod(form) {
+function openMonitoringGeneration(trigger) {
+  if (!state.selectedChild || !latestDocument("individual_support_plan", (item) => item.status === "active")) {
+    return announce("運用中の個別支援計画が必要です。");
+  }
+  const form = $("#monitoring-generation-form");
+  form.reset();
   const end = new Date();
   const start = new Date(end);
   start.setMonth(start.getMonth() - 6);
@@ -2887,161 +2887,6 @@ function setDefaultEvidencePeriod(form) {
     date.setMinutes(date.getMinutes() - date.getTimezoneOffset());
     form.elements[field].value = date.toISOString().slice(0, 10);
   }
-}
-
-function parentSummaryText(value, fallback) {
-  const normalized = typeof value === "string"
-    ? value.replace(/[【\[]\s*サンプル\s*[】\]]/g, "").replace(/\s+/g, " ").trim()
-    : "";
-  if (!normalized) return fallback;
-  const sentence = normalized.match(/[^。！？]+[。！？]?/)?.[0]?.trim() || normalized;
-  const characters = [...sentence];
-  return characters.length > 92 ? `${characters.slice(0, 91).join("")}…` : sentence;
-}
-
-function parentSummaryCard(icon, label, value, fallback, tone) {
-  const node = element("section", { className: `daily-summary-parent-card ${tone}` });
-  node.append(
-    element("span", { className: "daily-summary-parent-icon", text: icon, attributes: { "aria-hidden": "true" } }),
-    element("strong", { text: label }),
-    element("p", { text: parentSummaryText(value, fallback) }),
-  );
-  return node;
-}
-
-function openDailySummary(journal, trigger) {
-  const card = $("#daily-summary-card");
-  card.replaceChildren();
-  const header = element("header", { className: "daily-summary-header" });
-  const heading = element("div");
-  heading.append(
-    element("p", { className: "eyebrow", text: "Today at COCO" }),
-    element("h2", { id: "daily-summary-title", text: "今日のようす" }),
-    element("p", { className: "daily-summary-meta", text: `${state.selectedChild?.displayName || "利用者"}　|　${formatDate(journal.occurredAt, true)}` }),
-  );
-  header.append(heading);
-  const overview = element("section", { className: "daily-summary-overview" });
-  const activity = element("section", { className: "daily-summary-activity" });
-  const activityCopy = element("div");
-  activityCopy.append(element("span", { text: "今日の活動" }), element("strong", { text: journal.activity || "活動名未入力" }));
-  activity.append(
-    element("span", { className: "daily-summary-activity-icon", text: "✦", attributes: { "aria-hidden": "true" } }),
-    activityCopy,
-  );
-  overview.append(activity);
-  const dayMap = element("div", { className: "daily-summary-parent-map", attributes: { "aria-label": "今日の3つのポイント" } });
-  dayMap.append(
-    parentSummaryCard("✦", "やってみたこと", journal.activity, "今日の活動を行いました。", "is-activity"),
-    parentSummaryCard("☺", "今日のようす", journal.observation, "活動に参加しました。", "is-observation"),
-    parentSummaryCard("◎", "できたこと", journal.childResponse, "活動の中で取り組む姿が見られました。", "is-response"),
-  );
-  if (journal.healthNote) {
-    const health = element("section", { className: "daily-summary-parent-health" });
-    health.append(element("span", { text: "＋", attributes: { "aria-hidden": "true" } }), element("strong", { text: "健康・体調の連絡" }), element("p", { text: parentSummaryText(journal.healthNote, "") }));
-    dayMap.append(health);
-  }
-  card.append(header, overview, dayMap);
-  openDialog($("#daily-summary-dialog"), trigger);
-}
-
-function printDailySummary() {
-  if (!$("#daily-summary-dialog")?.open) return;
-  document.body.classList.add("daily-summary-printing");
-  window.print();
-}
-
-function openAssessmentGeneration(trigger) {
-  if (!state.selectedChild) return announce("利用者を選択してください。");
-  const assessment = latestDocument("basic_assessment");
-  if (assessment && !EDITABLE_DOCUMENT_STATUSES.includes(assessment.status)) {
-    return announce("確定済みのアセスメントは更新できません。新しい下書きを作成してください。");
-  }
-  const form = $("#assessment-generation-form");
-  form.reset();
-  if (assessment?.periodStart && assessment?.periodEnd) {
-    form.elements.periodStart.value = assessment.periodStart;
-    form.elements.periodEnd.value = assessment.periodEnd;
-  } else {
-    setDefaultEvidencePeriod(form);
-  }
-  $("#assessment-generation-title").textContent = assessment ? "アセスメントを更新" : "アセスメントを作成";
-  $("#assessment-generation-submit").textContent = assessment ? "支援の記録から更新" : "支援の記録から作成";
-  clearFormError(form, $("#assessment-generation-error"));
-  openDialog($("#assessment-generation-dialog"), trigger);
-}
-
-async function submitAssessmentGeneration(event) {
-  event.preventDefault();
-  const form = event.currentTarget;
-  const errorContainer = $("#assessment-generation-error");
-  if (!validateForm(form, errorContainer)) return;
-  const values = new FormData(form);
-  const assessment = latestDocument("basic_assessment");
-  const body = {
-    targetDocumentKind: "basic_assessment",
-    consultationPlanId: latestReferenceMaterial()?.id,
-    currentScheduleVersionId: state.schedules.current?.id,
-    previousMonitoringDocumentId: latestDocument("monitoring_record")?.id || undefined,
-    assessmentDocumentId: assessment?.id,
-    periodStart: values.get("periodStart"),
-    periodEnd: values.get("periodEnd"),
-  };
-  if (body.periodEnd < body.periodStart) return showFormError(form, errorContainer, "終了日は開始日以降にしてください。", ["periodEnd"]);
-  const evidenceDays = (Date.parse(`${body.periodEnd}T00:00:00Z`) - Date.parse(`${body.periodStart}T00:00:00Z`)) / 86_400_000;
-  if (evidenceDays > 366) return showFormError(form, errorContainer, "根拠期間は366日以内にしてください。", ["periodEnd"]);
-  try {
-    await idempotentCreate(`/children/${encodeURIComponent(state.selectedChild.id)}/draft-generations`, body);
-    closeDialog($("#assessment-generation-dialog"));
-    await loadDocuments();
-    announce(assessment ? "指定期間の支援の記録をアセスメントへ反映しました。" : "支援の記録をもとにアセスメントを作成しました。内容を確認して編集してください。");
-  } catch (error) {
-    if (error.status !== 409) showFormError(form, errorContainer, errorMessage(error), []);
-  }
-}
-
-async function generateIndividualPlanFromAssessment(button) {
-  const assessment = latestDocument("basic_assessment");
-  const individualPlan = latestDocument("individual_support_plan");
-  if (!state.selectedChild || !assessment || button.disabled) {
-    return announce("先にアセスメントを作成してください。");
-  }
-  const planCanRefresh = !individualPlan || EDITABLE_DOCUMENT_STATUSES.includes(individualPlan.status);
-  const originalLabel = button.textContent;
-  button.disabled = true;
-  button.setAttribute("aria-busy", "true");
-  state.conflictReload = loadDocuments;
-  try {
-    await idempotentCreate(`/children/${encodeURIComponent(state.selectedChild.id)}/draft-generations`, {
-      targetDocumentKind: "individual_support_plan",
-      consultationPlanId: latestReferenceMaterial()?.id,
-      assessmentDocumentId: assessment.id,
-      previousMonitoringDocumentId: latestDocument("monitoring_record")?.id || undefined,
-      individualSupportPlanDocumentId: planCanRefresh ? individualPlan?.id : undefined,
-    });
-    await loadDocuments();
-    state.conflictReload = null;
-    announce(individualPlan && planCanRefresh
-      ? "アセスメントの内容を個別支援計画の未入力項目へ反映しました。"
-      : "アセスメントをもとに個別支援計画を作成しました。内容を確認して編集してください。");
-  } catch (error) {
-    if (error.status !== 409) announce(errorMessage(error));
-  } finally {
-    if (button.isConnected) {
-      button.disabled = false;
-      button.removeAttribute("aria-busy");
-      button.textContent = originalLabel;
-    }
-    renderDocuments();
-  }
-}
-
-function openMonitoringGeneration(trigger) {
-  if (!state.selectedChild || !latestDocument("individual_support_plan", (item) => item.status === "active")) {
-    return announce("運用中の個別支援計画が必要です。");
-  }
-  const form = $("#monitoring-generation-form");
-  form.reset();
-  setDefaultEvidencePeriod(form);
   clearFormError(form, $("#monitoring-generation-error"));
   openDialog($("#monitoring-generation-dialog"), trigger);
 }
@@ -3084,66 +2929,6 @@ function openMonitoringResult(documentRecord, result, goal, trigger) {
   $("#monitoring-result-goal").textContent = goal?.title ? `対象目標：${goal.title}` : "対象目標の根拠を確認して評価してください。";
   clearFormError(form, $("#monitoring-result-error"));
   openDialog($("#monitoring-result-dialog"), trigger);
-}
-
-async function openMonitoringEditor(documentRecord, trigger) {
-  if (!state.selectedChild || documentRecord.documentKind !== "monitoring_record" || !EDITABLE_DOCUMENT_STATUSES.includes(documentRecord.status)) return;
-  const childId = encodeURIComponent(state.selectedChild.id);
-  let detailResult = state.documentDetails.get(documentRecord.id);
-  if (!detailResult) {
-    detailResult = await api(`/children/${childId}/documents/${encodeURIComponent(documentRecord.id)}`);
-    state.documentDetails.set(documentRecord.id, detailResult);
-  }
-  const detail = detailResult.data;
-  const form = $("#monitoring-editor-form");
-  form.reset();
-  form.elements.documentId.value = detail.id;
-  form.dataset.documentEtag = detailResult.etag || `"${detail.rowVersion}"`;
-  form.elements.periodStart.value = detail.periodStart || "";
-  form.elements.periodEnd.value = detail.periodEnd || "";
-  for (const field of MONITORING_TEMPLATE_FIELDS) form.elements[field].value = detail.payload?.[field] || "";
-  clearFormError(form, $("#monitoring-editor-error"));
-  openDialog($("#monitoring-editor-dialog"), trigger);
-}
-
-async function submitMonitoringEditor(event) {
-  event.preventDefault();
-  const form = event.currentTarget;
-  const errorContainer = $("#monitoring-editor-error");
-  if (!validateForm(form, errorContainer)) return;
-  const documentId = form.elements.documentId.value;
-  const currentDetail = state.documentDetails.get(documentId)?.data;
-  const payload = { ...(currentDetail?.payload || {}) };
-  for (const field of MONITORING_TEMPLATE_FIELDS) payload[field] = optionalEditorValue(form.elements[field].value);
-  const periodStart = form.elements.periodStart.value || null;
-  const periodEnd = form.elements.periodEnd.value || null;
-  if (periodStart && periodEnd && periodEnd < periodStart) return showFormError(form, errorContainer, "終了日は開始日以降にしてください。", ["periodEnd"]);
-  state.conflictResumeDialog = $("#monitoring-editor-dialog");
-  state.conflictReload = loadDocuments;
-  try {
-    await api(`/children/${encodeURIComponent(state.selectedChild.id)}/documents/${encodeURIComponent(documentId)}`, {
-      method: "PATCH",
-      etag: form.dataset.documentEtag,
-      body: { payload, periodStart, periodEnd },
-    });
-    closeDialog($("#monitoring-editor-dialog"));
-    state.conflictResumeDialog = null;
-    state.conflictReload = null;
-    await loadDocuments();
-    announce("モニタリング帳票を保存しました。");
-  } catch (error) {
-    if (error.status !== 409) showFormError(form, errorContainer, errorMessage(error), []);
-  }
-}
-
-function documentWorkflowCopy(kind, documentRecord) {
-  const copyByKind = {
-    individual_support_plan: "アセスメントの内容を個別支援計画へ反映しています。",
-    specialized_support_plan: "個別支援計画と専門的支援の内容をもとに整理しています。",
-    monitoring_record: "計画に沿った支援を振り返り、次の支援へつなげます。",
-  };
-  if (kind === "individual_support_plan" && documentRecord.status === "draft") return "アセスメントの内容を個別支援計画の下書きへ反映しています。";
-  return copyByKind[kind] || "内容を確認できます。";
 }
 
 async function submitMonitoringResult(event) {
@@ -3243,7 +3028,6 @@ async function openPlanEditor(documentRecord, trigger) {
   }
   const suggestedValues = planIsEmpty ? planDraftValuesFromAssessment(assessmentDetail) : {};
   for (const [field] of INDIVIDUAL_PLAN_PAYLOAD_FIELDS) form.elements[field].value = detail.payload?.[field] || suggestedValues[field] || "";
-  for (const field of PLAN_TEMPLATE_FIELDS) form.elements[field].value = detail.payload?.[field] || "";
   installPlanWritingTools(form);
   $$('[data-plan-length]', form).forEach(syncCustomTargetLength);
   updateAllPlanCharacterCounts(form);
@@ -3287,7 +3071,6 @@ async function openAssessmentEditor(documentRecord, trigger) {
   for (const [field, assessmentField] of ASSESSMENT_EDITOR_FIELDS) {
     form.elements[field].value = detail.payload?.[field] || (assessmentField ? detail.payload?.assessment?.[assessmentField] : "") || "";
   }
-  for (const field of ASSESSMENT_TEMPLATE_FIELDS) form.elements[field].value = detail.payload?.[field] || "";
   installAssessmentWritingTools(form);
   $$('[data-assessment-length]', form).forEach(syncCustomTargetLength);
   updateAllAssessmentCharacterCounts(form);
@@ -3383,7 +3166,6 @@ async function submitPlanEditor(event) {
   const currentDetail = state.documentDetails.get(documentId)?.data;
   const payload = { ...(currentDetail?.payload || {}) };
   for (const [field] of INDIVIDUAL_PLAN_PAYLOAD_FIELDS) payload[field] = optionalEditorValue(form.elements[field].value);
-  for (const field of PLAN_TEMPLATE_FIELDS) payload[field] = optionalEditorValue(form.elements[field].value);
   const body = {
     periodStart: form.elements.periodStart.value || null,
     periodEnd: form.elements.periodEnd.value || null,
@@ -3439,7 +3221,6 @@ async function submitAssessmentEditor(event) {
     payload[field] = value;
     if (assessmentField) assessment[assessmentField] = value;
   }
-  for (const field of ASSESSMENT_TEMPLATE_FIELDS) payload[field] = optionalEditorValue(form.elements[field].value);
   payload.assessment = assessment;
   state.conflictResumeDialog = $("#assessment-editor-dialog");
   state.conflictReload = loadDocuments;
@@ -4040,12 +3821,10 @@ function setupEvents() {
   $("#expand-contact-draft")?.addEventListener("click", () => runAsync(() => generateContactDraft($("#expand-contact-draft"))));
   $("#copy-contact-reply")?.addEventListener("click", () => runAsync(() => copyFieldText($("#contact-form").elements.facilityReply, $("#copy-contact-reply"), "事業所からの返信")));
   $("#contact-photo-input")?.addEventListener("change", () => renderContactPhotoPreview($("#contact-form")));
-  $("#print-daily-summary")?.addEventListener("click", printDailySummary);
-  window.addEventListener("afterprint", () => document.body.classList.remove("daily-summary-printing"));
   $("#create-guardian-button")?.addEventListener("click", (event) => openGuardianDialog(event.currentTarget));
-  $("#open-assessment-generation")?.addEventListener("click", (event) => openAssessmentGeneration(event.currentTarget));
-  $("#open-individual-plan-generation")?.addEventListener("click", (event) => runAsync(() => generateIndividualPlanFromAssessment(event.currentTarget)));
+  $("#add-schedule-item")?.addEventListener("click", () => addScheduleItem());
   $("#open-monitoring-generation")?.addEventListener("click", (event) => openMonitoringGeneration(event.currentTarget));
+  $("#open-current-schedule-from-assessment")?.addEventListener("click", (event) => runAsync(() => openCurrentScheduleFromAssessment(event.currentTarget)));
   $("#invite-staff-button")?.addEventListener("click", (event) => openStaffInvite(event.currentTarget));
   $("#create-facility-button")?.addEventListener("click", (event) => openFacilityCreate(event.currentTarget));
   $("#refresh-audit-button")?.addEventListener("click", () => runAsync(loadAuditEvents));
@@ -4055,10 +3834,9 @@ function setupEvents() {
   $("#journal-form")?.addEventListener("submit", submitJournal);
   $("#contact-form")?.addEventListener("submit", submitContact);
   $("#guardian-form")?.addEventListener("submit", submitGuardian);
-  $("#assessment-generation-form")?.addEventListener("submit", submitAssessmentGeneration);
+  $("#schedule-form")?.addEventListener("submit", submitSchedule);
   $("#monitoring-generation-form")?.addEventListener("submit", submitMonitoringGeneration);
   $("#monitoring-result-form")?.addEventListener("submit", submitMonitoringResult);
-  $("#monitoring-editor-form")?.addEventListener("submit", submitMonitoringEditor);
   $("#plan-editor-form")?.addEventListener("submit", submitPlanEditor);
   $("#assessment-editor-form")?.addEventListener("submit", submitAssessmentEditor);
   $("#reference-plan-editor-form")?.addEventListener("submit", submitReferencePlanEditor);
@@ -4136,8 +3914,11 @@ async function initialize() {
     if (rememberedChild) await selectChild(rememberedChild.id, { announceSelection: false });
     else if (remembered) forgetSelectedChild();
     renderJournals();
+    renderContactEntries();
     renderDocuments();
     renderGuardians();
+    renderSchedule("current");
+    renderSchedule("planned");
     $("#session-gate").hidden = true;
     $("#app-shell").hidden = false;
     setSaveState(navigator.onLine ? "synced" : "offline");

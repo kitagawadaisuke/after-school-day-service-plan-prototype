@@ -11,41 +11,12 @@ import {
 } from "../repositories/draft-generation.js";
 import { dateSchema, parseIfMatch, parseInput, setVersionEtag, uuidSchema } from "./validation.js";
 
-function isRealIsoDate(value) {
-  const [year, month, day] = value.split("-").map(Number);
-  const date = new Date(Date.UTC(year, month - 1, day));
-  return date.getUTCFullYear() === year
-    && date.getUTCMonth() === month - 1
-    && date.getUTCDate() === day;
-}
-
-const evidenceDateSchema = dateSchema.refine(isRealIsoDate, "実在する日付を指定してください。");
-
 const basicAssessmentGenerationSchema = z
   .object({
     targetDocumentKind: z.literal("basic_assessment"),
     consultationPlanId: uuidSchema.optional(),
     currentScheduleVersionId: uuidSchema.optional(),
     previousMonitoringDocumentId: uuidSchema.optional(),
-    assessmentDocumentId: uuidSchema.optional(),
-    periodStart: evidenceDateSchema.optional(),
-    periodEnd: evidenceDateSchema.optional(),
-  })
-  .refine((value) => Boolean(value.periodStart) === Boolean(value.periodEnd), {
-    path: ["periodEnd"],
-    message: "開始日と終了日を両方指定してください。",
-  })
-  .refine((value) => !value.periodStart || !value.periodEnd || value.periodEnd >= value.periodStart, {
-    path: ["periodEnd"],
-    message: "終了日は開始日以降にしてください。",
-  })
-  .refine((value) => {
-    if (!value.periodStart || !value.periodEnd) return true;
-    const days = (Date.parse(`${value.periodEnd}T00:00:00Z`) - Date.parse(`${value.periodStart}T00:00:00Z`)) / 86_400_000;
-    return days <= 366;
-  }, {
-    path: ["periodEnd"],
-    message: "根拠期間は366日以内にしてください。",
   })
   .strict();
 
@@ -55,9 +26,18 @@ const individualPlanGenerationSchema = z
     consultationPlanId: uuidSchema.optional(),
     assessmentDocumentId: uuidSchema,
     previousMonitoringDocumentId: uuidSchema.optional(),
-    individualSupportPlanDocumentId: uuidSchema.optional(),
   })
   .strict();
+
+function isRealIsoDate(value) {
+  const [year, month, day] = value.split("-").map(Number);
+  const date = new Date(Date.UTC(year, month - 1, day));
+  return date.getUTCFullYear() === year
+    && date.getUTCMonth() === month - 1
+    && date.getUTCDate() === day;
+}
+
+const evidenceDateSchema = dateSchema.refine(isRealIsoDate, "実在する日付を指定してください。");
 
 const monitoringGenerationSchema = z
   .object({
