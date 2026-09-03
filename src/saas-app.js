@@ -3892,8 +3892,6 @@ async function initialize() {
     renderContactEntries();
     renderDocuments();
     renderGuardians();
-    renderSchedule("current");
-    renderSchedule("planned");
     $("#session-gate").hidden = true;
     $("#app-shell").hidden = false;
     setSaveState(navigator.onLine ? "synced" : "offline");

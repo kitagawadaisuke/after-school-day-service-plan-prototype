@@ -149,6 +149,7 @@ test("保護者・受給者証を利用者台帳で扱い、週間予定画面�
   assert.match(html, /name="municipalityName"/);
   assert.match(html, /name="copaymentLimitYen"/);
   assert.doesNotMatch(html, /child-tab-schedules|child-panel-schedules|schedule-dialog|現在の生活|計画後の生活|週間予定/);
+  assert.doesNotMatch(script, /renderGuardians\(\);\s*renderSchedule\("current"\);/);
   assert.match(html, /data-journal-character-count="observation"/);
   assert.match(html, /id="save-journal-draft"[^>]+>下書き保存/);
   assert.match(html, /id="save-journal-final"[^>]+>記録を保存/);
