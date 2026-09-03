@@ -379,11 +379,13 @@ test("指定期間の支援記録からアセスメントを作成・更新し�
     assert.deepEqual(created.payload.provenance.supportRecordIds, [IDS.logOne, IDS.logTwo, IDS.logThree]);
     assert.equal(created.payload.supportRecordEvidence.excerpts.length, 3);
     assert.match(created.payload.overallAssessment, /支援記録3件/);
+    assert.match(created.payload.strengths, /制作・集団・外出などの活動/);
     assert.match(created.payload.movementSensory, /制作活動/);
     assert.match(created.payload.cognitionBehavior, /予定と異なることに戸惑い/);
     assert.match(created.payload.cognitionBehavior, /気持ちを切り替え/);
     assert.doesNotMatch(created.payload.cognitionBehavior, /サンプル/);
     assert.doesNotMatch(created.payload.cognitionBehavior, /支援の記録では/);
+    assert.doesNotMatch(JSON.stringify(created.payload), /サンプル/);
     assert.match(created.payload.relationshipsSocial, /集団活動/);
     assert.match(created.payload.publicBehavior, /外出/);
     assert.equal(created.payload.healthManagement, null);

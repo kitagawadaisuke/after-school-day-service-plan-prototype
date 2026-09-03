@@ -4,6 +4,15 @@ const MAX_GOAL_EVIDENCE_EXCERPTS = 12;
 const MAX_EVIDENCE_FIELD_CHARS = 240;
 const MAX_ASSESSMENT_RECORD_EXCERPTS = 12;
 const MAX_ASSESSMENT_FIELD_SENTENCES = 2;
+const ASSESSMENT_CHALLENGE_TERMS = Object.freeze(["戸惑", "困", "不安", "難", "拒否", "疲", "怒", "泣", "切り替", "予定と異"]);
+const ASSESSMENT_ACTIVITY_CATEGORIES = Object.freeze([
+  { label: "制作", terms: ["工作", "制作", "色紙", "シール", "粘土", "絵"] },
+  { label: "運動", terms: ["運動", "サーキット", "ボール", "体操", "ダンス"] },
+  { label: "集団", terms: ["集団", "カードゲーム", "ルール", "友だち"] },
+  { label: "調理", terms: ["調理", "おやつ", "料理"] },
+  { label: "学習", terms: ["学習", "読書", "宿題", "本を読"] },
+  { label: "外出", terms: ["外出", "公園", "散歩", "買い物"] },
+]);
 
 function dateTime(value) {
   if (!value) return null;
@@ -231,6 +240,22 @@ function assessmentRecordFieldCandidates(records) {
   );
 }
 
+function activityCategories(records) {
+  const categories = records.flatMap((record) => {
+    const text = cleanAssessmentSourceText(record.activity) || "";
+    return ASSESSMENT_ACTIVITY_CATEGORIES
+      .filter((category) => category.terms.some((term) => text.includes(term)))
+      .map((category) => category.label);
+  });
+  return [...new Set(categories)].slice(0, 4);
+}
+
+function conciseRecordSentences(records, fields, terms = null) {
+  const sentences = records.flatMap((record) => fields.flatMap((field) => assessmentSentences(record[field])));
+  const matching = terms ? sentences.filter((sentence) => terms.some((term) => sentence.includes(term))) : sentences;
+  return [...new Set(matching)].slice(-MAX_ASSESSMENT_FIELD_SENTENCES);
+}
+
 function assessmentSupportRecordDraftValues(supportRecords) {
   if (!supportRecords.length) {
     return {
@@ -243,26 +268,20 @@ function assessmentSupportRecordDraftValues(supportRecords) {
     };
   }
   const fieldCandidates = assessmentRecordFieldCandidates(supportRecords);
-  const activities = [...new Set(supportRecords
-    .map((record) => boundedEvidenceText(record.activity))
-    .filter(Boolean))]
-    .slice(0, 6);
-  const observations = supportRecords
-    .map((record) => boundedEvidenceText(record.observation || record.childResponse))
-    .filter(Boolean)
-    .slice(-3);
-  const activityText = activities.length ? activities.join("、") : "日々の活動";
-  const observationText = observations.join("／");
+  const categories = activityCategories(supportRecords);
+  const categoryText = categories.length ? `${categories.join("・")}などの活動` : "日々の活動";
+  const challenges = conciseRecordSentences(supportRecords, ["observation", "childResponse"], ASSESSMENT_CHALLENGE_TERMS);
+  const supportMethods = conciseRecordSentences(supportRecords, ["supportProvided"]);
   return {
     ...fieldCandidates,
-    strengths: `指定期間の支援記録では、${activityText}への参加の様子を確認しました。`,
-    concerns: observationText || null,
-    priorityNeeds: observationText
-      ? `支援の記録にある「${observationText}」について、本人の負担や環境との関係を確認しながら優先して支援します。`
+    strengths: `${categoryText}に参加する様子が記録されています。`,
+    concerns: challenges.length ? challenges.join(" ") : null,
+    priorityNeeds: challenges.length
+      ? "記録に見られた困りやすい場面について、本人の負担や環境との関係を確認しながら優先して支援します。"
       : null,
-    overallAssessment: `指定期間の支援記録${supportRecords.length}件を確認し、${activityText}での様子をアセスメントの候補として整理しました。`,
-    supportConsiderations: observationText
-      ? `記録にある「${observationText}」を踏まえ、本人の反応を確認しながら支援方法を調整します。`
+    overallAssessment: `指定期間の支援記録${supportRecords.length}件を確認し、${categoryText}での様子をアセスメントの候補として整理しました。`,
+    supportConsiderations: supportMethods.length
+      ? `${supportMethods.join(" ")} 本人の反応を確認しながら支援方法を調整します。`
       : "支援記録の内容をもとに、本人の反応を確認しながら支援方法を調整します。",
     planningNotes: "記録で確認した活動の様子を、本人・家族への聞き取りとあわせて支援計画に反映します。",
   };
@@ -398,8 +417,7 @@ export function buildBasicAssessmentDraft({
 }
 
 function boundedEvidenceText(value) {
-  if (typeof value !== "string") return null;
-  const normalized = value.replace(/\s+/g, " ").trim();
+  const normalized = cleanAssessmentSourceText(value);
   if (!normalized) return null;
   const characters = [...normalized];
   if (characters.length <= MAX_EVIDENCE_FIELD_CHARS) return normalized;

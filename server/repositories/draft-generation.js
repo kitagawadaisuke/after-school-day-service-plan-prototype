@@ -250,7 +250,7 @@ function retainAssessmentEntries(existingPayload, generatedPayload) {
   const generatedAssessment = generatedPayload.assessment || {};
   payload.assessment = { ...generatedAssessment, ...existingAssessment };
   for (const field of ["personWish", "familyWish", "strengths", "needs", "supportDirection", "planningNotes"]) {
-    payload.assessment[field] = hasEnteredValue(existingAssessment[field])
+    payload.assessment[field] = hasEnteredValue(existingAssessment[field]) && !isLegacySampleGeneratedValue(existingAssessment[field])
       ? existingAssessment[field]
       : generatedAssessment[field];
   }
