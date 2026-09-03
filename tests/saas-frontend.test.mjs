@@ -113,7 +113,8 @@ test("外部計画は任意の参考資料とし、事業所の計画と専門�
   assert.match(script, /text: "参考資料を削除"/);
   assert.match(script, /アセスメントを編集/);
   assert.match(script, /計画書を編集/);
-  assert.match(html, /アセスメント、個別支援計画、専門的支援計画、モニタリングのすべてで参照できます。/);
+  assert.match(html, /利用者ごとの計画書・面談資料・連絡事項を保管し、すべての帳票で参照します。/);
+  assert.match(css, /\.document-reference-shared \.document-reference-content \{ grid-template-columns: minmax\(0, 1fr\);/);
   assert.match(html, /id="reference-plan-editor-dialog"/);
   assert.match(html, /name="referenceMemo"/);
   assert.doesNotMatch(html, /name="childWish"/);
