@@ -2889,14 +2889,39 @@ function setDefaultEvidencePeriod(form) {
   }
 }
 
-function summaryTimelineItem(step, label, value) {
-  const item = element("li", { className: "daily-summary-timeline-item" });
-  item.append(
-    element("span", { className: "daily-summary-step", text: step }),
-    element("strong", { text: label }),
-    element("p", { text: value || "記録なし" }),
+const DAILY_SUMMARY_FLOW = Object.freeze([
+  { key: "observation", label: "観察", icon: "◎", detailLabel: "観察した事実" },
+  { key: "supportProvided", label: "支援", icon: "✦", detailLabel: "行った支援" },
+  { key: "childResponse", label: "反応", icon: "◌", detailLabel: "本人の反応" },
+]);
+
+const DAILY_SUMMARY_DOMAIN_ICONS = Object.freeze({
+  health_living: "♥",
+  motor_sensory: "↔",
+  cognition_behavior: "◇",
+  language_communication: "〰",
+  human_relations_sociality: "∞",
+});
+
+function summaryFlowNode(item, value) {
+  const hasEvidence = Boolean(value?.trim());
+  const node = element("li", { className: `daily-summary-flow-node${hasEvidence ? " is-complete" : " is-empty"}` });
+  node.append(
+    element("span", { className: "daily-summary-flow-icon", text: item.icon, attributes: { "aria-hidden": "true" } }),
+    element("strong", { text: item.label }),
+    element("small", { text: hasEvidence ? "記録あり" : "未記録" }),
   );
-  return item;
+  return node;
+}
+
+function summaryDomainNode(domain, active) {
+  const label = FIVE_DOMAIN_LABELS[domain] || domain;
+  const node = element("li", { className: `daily-summary-domain-node${active ? " is-active" : ""}` });
+  node.append(
+    element("span", { className: "daily-summary-domain-icon", text: DAILY_SUMMARY_DOMAIN_ICONS[domain] || "•", attributes: { "aria-hidden": "true" } }),
+    element("small", { text: label }),
+  );
+  return node;
 }
 
 function openDailySummary(journal, trigger) {
@@ -2911,33 +2936,44 @@ function openDailySummary(journal, trigger) {
     element("p", { className: "daily-summary-meta", text: `${state.selectedChild?.displayName || "利用者"}　|　${formatDate(journal.occurredAt, true)}` }),
   );
   header.append(heading, element("span", { className: `daily-summary-status ${journal.status === "draft" ? "is-draft" : ""}`, text: journal.status === "draft" ? "下書き" : "記録済み" }));
+  const completedSteps = DAILY_SUMMARY_FLOW.filter((item) => journal[item.key]?.trim()).length;
+  const overview = element("div", { className: "daily-summary-overview" });
   const activity = element("section", { className: "daily-summary-activity" });
-  activity.append(element("span", { text: "ACTIVITY" }), element("strong", { text: journal.activity || "活動名未入力" }));
-
-  const timeline = element("ol", { className: "daily-summary-timeline", attributes: { "aria-label": "支援の流れ" } });
-  timeline.append(
-    summaryTimelineItem("01", "観察した事実", journal.observation),
-    summaryTimelineItem("02", "行った支援", journal.supportProvided),
-    summaryTimelineItem("03", "本人の反応", journal.childResponse),
+  const activityCopy = element("div");
+  activityCopy.append(element("span", { text: "今日の活動" }), element("strong", { text: journal.activity || "活動名未入力" }));
+  activity.append(
+    element("span", { className: "daily-summary-activity-icon", text: "✦", attributes: { "aria-hidden": "true" } }),
+    activityCopy,
   );
+  const completion = element("section", { className: "daily-summary-completion", attributes: { "aria-label": `支援記録の充足度 ${completedSteps}/3` } });
+  completion.style.setProperty("--completion", `${Math.round((completedSteps / DAILY_SUMMARY_FLOW.length) * 100)}%`);
+  completion.append(element("strong", { text: `${completedSteps}/3` }), element("span", { text: "記録の充足" }));
+  overview.append(activity, completion);
 
-  const footer = element("div", { className: "daily-summary-footer" });
+  const flow = element("section", { className: "daily-summary-flow-panel", attributes: { "aria-label": "当日の支援の流れ" } });
+  flow.append(element("p", { className: "daily-summary-visual-label", text: "支援の流れ" }));
+  const flowList = element("ol", { className: "daily-summary-flow" });
+  DAILY_SUMMARY_FLOW.forEach((item) => flowList.append(summaryFlowNode(item, journal[item.key])));
+  flow.append(flowList);
+
   const domainPanel = element("section", { className: "daily-summary-domains", attributes: { "aria-label": "関連する5領域" } });
-  domainPanel.append(element("strong", { text: "関連する5領域" }));
-  const domainList = element("div", { className: "daily-summary-domain-list" });
-  if (domains.length) {
-    domains.forEach((domain) => domainList.append(element("span", { text: FIVE_DOMAIN_LABELS[domain] || domain })));
-  } else {
-    domainList.append(element("span", { className: "is-empty", text: "未設定" }));
-  }
+  domainPanel.append(element("p", { className: "daily-summary-visual-label", text: "関連する5領域" }));
+  const domainList = element("ul", { className: "daily-summary-domain-map" });
+  Object.keys(FIVE_DOMAIN_LABELS).forEach((domain) => domainList.append(summaryDomainNode(domain, domains.includes(domain))));
   domainPanel.append(domainList);
-  footer.append(domainPanel);
+
+  const details = element("details", { className: "daily-summary-details" });
+  details.append(element("summary", { text: "記録の詳細を確認" }));
+  const detailList = element("dl");
+  DAILY_SUMMARY_FLOW.forEach((item) => detailList.append(element("dt", { text: item.detailLabel }), element("dd", { text: journal[item.key] || "記録なし" })));
+  if (journal.healthNote) detailList.append(element("dt", { text: "健康上の連絡" }), element("dd", { text: journal.healthNote }));
+  details.append(detailList);
   if (journal.healthNote) {
-    const health = element("section", { className: "daily-summary-health" });
-    health.append(element("strong", { text: "健康上の連絡" }), element("p", { text: journal.healthNote }));
-    footer.append(health);
+    const health = element("p", { className: "daily-summary-health-flag", text: "健康メモあり" });
+    health.prepend(element("span", { text: "＋", attributes: { "aria-hidden": "true" } }));
+    domainPanel.append(health);
   }
-  card.append(header, activity, timeline, footer);
+  card.append(header, overview, flow, domainPanel, details);
   openDialog($("#daily-summary-dialog"), trigger);
 }
 

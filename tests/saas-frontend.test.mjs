@@ -195,7 +195,11 @@ test("保護者・受給者証を利用者台帳で扱い、週間予定画面�
   assert.match(script, /function openDailySummary\(/);
   assert.match(script, /function printDailySummary\(/);
   assert.match(script, /text: "当日のサマリー"/);
-  assert.match(css, /\.daily-summary-timeline \{ display: grid; grid-template-columns: repeat\(3, minmax\(0, 1fr\)\);/);
+  assert.match(script, /const DAILY_SUMMARY_FLOW/);
+  assert.match(script, /function summaryDomainNode\(/);
+  assert.match(css, /\.daily-summary-flow \{ display: grid; grid-template-columns: repeat\(3, minmax\(0, 1fr\)\);/);
+  assert.match(css, /\.daily-summary-domain-map \{ display: grid; grid-template-columns: repeat\(5, minmax\(0, 1fr\)\);/);
+  assert.doesNotMatch(css, /daily-summary-timeline-item/);
   assert.match(css, /body\.daily-summary-printing #app-shell/);
   assert.match(html, /data-contact-reply-length/);
   assert.match(html, /文章を整える/);
