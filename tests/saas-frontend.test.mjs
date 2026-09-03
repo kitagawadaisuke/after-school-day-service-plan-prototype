@@ -93,9 +93,11 @@ test("外部計画は任意の参考資料とし、事業所の計画と専門�
   assert.doesNotMatch(html, /計画をつくる/);
   assert.match(html, /class="document-lane-index" aria-hidden="true">01/);
   assert.match(html, /class="document-lane specialized"/);
-  assert.match(html, /class="document-lane-step">現状を整理/);
-  assert.match(html, /class="document-lane-step">方針を決める/);
-  assert.match(html, /class="document-lane-step">支援を振り返る/);
+  assert.doesNotMatch(html, /document-lane-step/);
+  assert.doesNotMatch(html, /本人・家族の状況を整理し、支援の出発点をつくります。/);
+  assert.doesNotMatch(html, /目標と具体的な支援を決め、日々の支援の基準にします。/);
+  assert.doesNotMatch(html, /専門職による支援目標と活動プログラムを、個別支援計画と分けて管理します。/);
+  assert.doesNotMatch(html, /計画に沿った支援を振り返り、次の支援へつなげます。/);
   assert.match(html, /id="open-monitoring-generation"/);
   assert.match(html, /<strong>共通の参考資料<\/strong>/);
   assert.match(html, /class="document-reference-panel document-reference-shared"/);
