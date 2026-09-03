@@ -120,6 +120,11 @@ function rewriteDeploymentRoleNames(sql, { runtimeRoleName, provisionerRoleName 
     .replaceAll(DEFAULT_PROVISIONER_ROLE_NAME, provisionerRoleName);
 }
 
+function migrationUserMatchesDeploymentRole(roleName) {
+  const migrationUser = process.env.MIGRATION_DATABASE_USER;
+  return typeof migrationUser === "string" && migrationUser === roleName;
+}
+
 async function loadSources({
   runtimeRoleName = DEFAULT_RUNTIME_ROLE_NAME,
   provisionerRoleName = DEFAULT_PROVISIONER_ROLE_NAME,
@@ -291,6 +296,9 @@ export async function runMigrations({
   }
   const ownsClient = !client;
   const databaseClient = client || new Client(await buildMigrationConnectionOptions());
+  const reuseRuntimeRoleForMigration = migrationUserMatchesDeploymentRole(resolvedRuntimeRoleName);
+  const reuseProvisionerRoleForMigration = migrationUserMatchesDeploymentRole(resolvedProvisionerRoleName);
+  const needsTemporaryPdfConfigurationGrant = reuseRuntimeRoleForMigration || reuseProvisionerRoleForMigration;
   if (ownsClient) await databaseClient.connect();
   let locked = false;
   try {
@@ -311,19 +319,43 @@ export async function runMigrations({
       // and password verifiers to owner-only bootstrap functions.
       await databaseClient.query("set local log_parameter_max_length = 0");
       await databaseClient.query("set local log_parameter_max_length_on_error = 0");
-      await configureRuntimeLogin(databaseClient, resolvedRuntimeLogin);
-      await configureProvisionerLogin(databaseClient, resolvedProvisionerLogin);
+      if (reuseRuntimeRoleForMigration) {
+        logger.info?.(JSON.stringify({ event: "runtime_database_login_reused", role: resolvedRuntimeRoleName }));
+      } else {
+        await configureRuntimeLogin(databaseClient, resolvedRuntimeLogin);
+      }
+      if (reuseProvisionerRoleForMigration) {
+        logger.info?.(JSON.stringify({ event: "provisioner_database_login_reused", role: resolvedProvisionerRoleName }));
+      } else {
+        await configureProvisionerLogin(databaseClient, resolvedProvisionerLogin);
+      }
+      if (needsTemporaryPdfConfigurationGrant) {
+        await databaseClient.query(
+          `grant execute on function app_private.configure_document_snapshot_finalization(text)
+           to ${process.env.MIGRATION_DATABASE_USER}`,
+        );
+      }
       await configureDocumentSnapshotFinalization(databaseClient, resolvedPdfFinalizationSecret);
+      if (needsTemporaryPdfConfigurationGrant) {
+        await databaseClient.query(
+          `revoke execute on function app_private.configure_document_snapshot_finalization(text)
+           from ${process.env.MIGRATION_DATABASE_USER}`,
+        );
+      }
       await databaseClient.query("commit");
     } catch (error) {
       await databaseClient.query("rollback");
       throw error;
     }
-    logger.info?.(JSON.stringify({ event: "runtime_database_login_configured", role: resolvedRuntimeRoleName }));
-    logger.info?.(JSON.stringify({
-      event: "provisioner_database_login_configured",
-      role: resolvedProvisionerRoleName,
-    }));
+    if (!reuseRuntimeRoleForMigration) {
+      logger.info?.(JSON.stringify({ event: "runtime_database_login_configured", role: resolvedRuntimeRoleName }));
+    }
+    if (!reuseProvisionerRoleForMigration) {
+      logger.info?.(JSON.stringify({
+        event: "provisioner_database_login_configured",
+        role: resolvedProvisionerRoleName,
+      }));
+    }
   } finally {
     if (locked) {
       try {
