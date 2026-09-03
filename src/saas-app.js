@@ -1261,14 +1261,13 @@ function renderDocuments() {
   $$('[data-create-document]').forEach((button) => { button.disabled = !state.selectedChild; });
   const assessment = latestDocument("basic_assessment");
   const activePlan = latestDocument("individual_support_plan", (item) => item.status === "active");
-  const finalizedCurrent = state.schedules.current?.status === "finalized" ? state.schedules.current : null;
   const assessmentButton = $('[data-generate-draft="basic_assessment"]');
   const individualButton = $('[data-generate-draft="individual_support_plan"]');
   const monitoringButton = $("#open-monitoring-generation");
   const monitoring = latestDocument("monitoring_record");
   if (assessmentButton) {
     assessmentButton.hidden = !can("documents.edit") || Boolean(assessment);
-    assessmentButton.disabled = !state.selectedChild || !finalizedCurrent;
+    assessmentButton.disabled = !state.selectedChild;
   }
   $("#assessment-document-controls").hidden = Boolean(assessment);
   if (individualButton) {
@@ -1286,31 +1285,15 @@ function renderDocuments() {
   $("#monitoring-readiness").hidden = Boolean(monitoring);
   $("#assessment-readiness").textContent = !state.selectedChild
     ? "利用者を選択してください。"
-    : !finalizedCurrent
-      ? state.schedules.current?.status === "draft" && !can("documents.approve")
-        ? "「現在の生活」は登録済みです。管理者に「この週間予定を確定」を依頼してください。"
-        : "「現在の生活」を登録後、「この週間予定を確定」を選んでください。"
-      : latestDocument("monitoring_record")
-        ? "前回モニタリングをもとに作成できます。"
-        : "現在の情報をもとに作成できます。";
-  const currentScheduleButton = $("#open-current-schedule-from-assessment");
-  if (currentScheduleButton) {
-    currentScheduleButton.hidden = !state.selectedChild || Boolean(finalizedCurrent) || !can("documents.edit");
-  }
+    : latestDocument("monitoring_record")
+      ? "前回モニタリングをもとに作成できます。"
+      : "現在の情報をもとに作成できます。";
   $("#individual-readiness").textContent = !assessment
     ? "アセスメントを作成すると、ここから作成できます。"
     : "アセスメントをもとに作成できます。";
   $("#monitoring-readiness").textContent = activePlan
     ? "日誌・連絡帳をもとに作成できます。"
     : "運用中の個別支援計画が必要です。";
-}
-
-async function openCurrentScheduleFromAssessment(trigger) {
-  if (!state.selectedChild) return announce("先に利用者を選択してください。");
-  await switchView("child");
-  switchChildPanel("schedules");
-  $("#current-schedule").scrollIntoView({ behavior: "smooth", block: "start" });
-  trigger?.blur();
 }
 
 function renderDocumentLane(kind, container) {
@@ -1627,7 +1610,6 @@ async function loadDocuments() {
     state.monitoringResults = [];
   }
   await loadDocumentSnapshots(state.documents);
-  if (!state.schedules.current && !state.schedules.planned) await loadSchedules();
   renderDocuments();
 }
 
@@ -1641,8 +1623,6 @@ async function loadActiveResource() {
     renderContactEntries();
     renderDocuments();
     renderGuardians();
-    renderSchedule("current");
-    renderSchedule("planned");
     return;
   }
   const childId = encodeURIComponent(state.selectedChild.id);
@@ -1658,8 +1638,6 @@ async function loadActiveResource() {
     await loadDocuments();
   } else if (state.activeView === "child" && state.childPanel === "guardians") {
     await loadGuardians();
-  } else if (state.activeView === "child" && state.childPanel === "schedules") {
-    await loadSchedules();
   } else if (state.activeView === "admin" && can("admin.view")) {
     await Promise.all([
       can("staff.manage") ? loadStaff() : Promise.resolve(),
@@ -3822,9 +3800,7 @@ function setupEvents() {
   $("#copy-contact-reply")?.addEventListener("click", () => runAsync(() => copyFieldText($("#contact-form").elements.facilityReply, $("#copy-contact-reply"), "事業所からの返信")));
   $("#contact-photo-input")?.addEventListener("change", () => renderContactPhotoPreview($("#contact-form")));
   $("#create-guardian-button")?.addEventListener("click", (event) => openGuardianDialog(event.currentTarget));
-  $("#add-schedule-item")?.addEventListener("click", () => addScheduleItem());
   $("#open-monitoring-generation")?.addEventListener("click", (event) => openMonitoringGeneration(event.currentTarget));
-  $("#open-current-schedule-from-assessment")?.addEventListener("click", (event) => runAsync(() => openCurrentScheduleFromAssessment(event.currentTarget)));
   $("#invite-staff-button")?.addEventListener("click", (event) => openStaffInvite(event.currentTarget));
   $("#create-facility-button")?.addEventListener("click", (event) => openFacilityCreate(event.currentTarget));
   $("#refresh-audit-button")?.addEventListener("click", () => runAsync(loadAuditEvents));
@@ -3834,7 +3810,6 @@ function setupEvents() {
   $("#journal-form")?.addEventListener("submit", submitJournal);
   $("#contact-form")?.addEventListener("submit", submitContact);
   $("#guardian-form")?.addEventListener("submit", submitGuardian);
-  $("#schedule-form")?.addEventListener("submit", submitSchedule);
   $("#monitoring-generation-form")?.addEventListener("submit", submitMonitoringGeneration);
   $("#monitoring-result-form")?.addEventListener("submit", submitMonitoringResult);
   $("#plan-editor-form")?.addEventListener("submit", submitPlanEditor);

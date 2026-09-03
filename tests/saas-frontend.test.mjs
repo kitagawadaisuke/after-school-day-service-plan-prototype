@@ -111,11 +111,9 @@ test("外部計画は任意の参考資料とし、事業所の計画と専門�
   assert.match(script, /targetDocumentKind: "basic_assessment"/);
   assert.match(script, /targetDocumentKind: "individual_support_plan"/);
   assert.match(script, /targetDocumentKind: "monitoring_record"/);
-  assert.match(script, /assessmentButton\.disabled = !state\.selectedChild \|\| !finalizedCurrent/);
+  assert.match(script, /assessmentButton\.disabled = !state\.selectedChild/);
   assert.match(script, /individualButton\.disabled = !state\.selectedChild \|\| !assessment/);
-  assert.match(html, /id="open-current-schedule-from-assessment"/);
-  assert.match(script, /function openCurrentScheduleFromAssessment\(/);
-  assert.match(script, /「現在の生活」を登録後、「この週間予定を確定」を選んでください。/);
+  assert.doesNotMatch(html, /open-current-schedule-from-assessment|現在の生活を登録する/);
   assert.match(script, /function openReferencePlanEditor\(/);
   assert.match(script, /suppressConflictDialog: true/);
   assert.match(script, /入力途中の参考資料を開きました。続きから入力してください。/);
@@ -136,7 +134,7 @@ test("外部計画は任意の参考資料とし、事業所の計画と専門�
   assert.match(script, /\/children\/\$\{encodeURIComponent\(state\.selectedChild\.id\)\}\/documents/);
 });
 
-test("保護者・受給者証・現在と計画後の週間予定を利用者台帳で扱う", () => {
+test("保護者・受給者証を利用者台帳で扱い、週間予定画面を表示しない", () => {
   assert.match(html, /role="tablist" aria-label="利用者情報の種類"/);
   assert.match(html, /id="guardian-form" novalidate/);
   assert.match(html, /name="guardianId" type="hidden"/);
@@ -150,10 +148,7 @@ test("保護者・受給者証・現在と計画後の週間予定を利用者�
   assert.match(html, /保存後は末尾4桁だけを表示/);
   assert.match(html, /name="municipalityName"/);
   assert.match(html, /name="copaymentLimitYen"/);
-  assert.match(html, /id="current-schedule"/);
-  assert.match(html, /id="planned-schedule"/);
-  assert.doesNotMatch(html, /日をまたぐ予定/);
-  assert.match(html, /duplicate-schedule-item/);
+  assert.doesNotMatch(html, /child-tab-schedules|child-panel-schedules|schedule-dialog|現在の生活|計画後の生活|週間予定/);
   assert.match(html, /data-journal-character-count="observation"/);
   assert.match(html, /id="save-journal-draft"[^>]+>下書き保存/);
   assert.match(html, /id="save-journal-final"[^>]+>記録を保存/);
@@ -206,10 +201,6 @@ test("保護者・受給者証・現在と計画後の週間予定を利用者�
   assert.match(script, /\/guardians/);
   assert.match(script, /function openGuardianEdit\(/);
   assert.match(script, /保護者・連絡先を変更しました。/);
-  assert.match(script, /scheduleKind=current/);
-  assert.match(script, /scheduleKind=planned/);
-  assert.match(script, /endMinute \+= 1440/);
-  assert.match(script, /予定を複製しました/);
   assert.match(script, /updateJournalCharacterCount/);
   assert.match(script, /function saveJournalDraft/);
   assert.match(script, /journal\.status === "draft"/);
@@ -348,7 +339,7 @@ test("フォーム・保存状態・競合ダイアログに主要なアクセ�
   assert.match(html, /id="journal-error" class="form-error" role="alert"/);
   assert.match(html, /id="contact-error" class="form-error" role="alert"/);
   assert.match(html, /id="guardian-error" class="form-error" role="alert"/);
-  assert.match(html, /id="schedule-error" class="form-error" role="alert"/);
+  assert.doesNotMatch(html, /id="schedule-error" class="form-error" role="alert"/);
   assert.match(script, /field\.setAttribute\("aria-invalid", "true"\)/);
   assert.match(script, /field\.setAttribute\("aria-describedby"/);
   assert.match(script, /restoreDialogFocus/);

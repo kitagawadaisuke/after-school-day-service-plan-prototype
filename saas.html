@@ -11,7 +11,7 @@
       content="相談支援計画から日々の記録、個別支援計画までを安全につなぐ放課後等デイサービス向け業務システム"
     >
   <link rel="stylesheet" href="/styles/saas.css?v=20260902-coco-forms-1">
-  <script type="module" src="/src/saas-app.js?v=20260902-coco-forms-1"></script>
+  <script type="module" src="/src/saas-app.js?v=20260903-no-weekly-schedule"></script>
   </head>
   <body>
     <a class="skip-link" href="#main-content">本文へ移動</a>
@@ -107,7 +107,6 @@
             <div class="section-tabs" role="tablist" aria-label="利用者情報の種類">
               <button id="child-tab-basic" type="button" role="tab" aria-selected="true" aria-controls="child-panel-basic" data-child-panel="basic">基本情報</button>
               <button id="child-tab-guardians" type="button" role="tab" aria-selected="false" aria-controls="child-panel-guardians" data-child-panel="guardians" tabindex="-1">保護者・連絡先</button>
-              <button id="child-tab-schedules" type="button" role="tab" aria-selected="false" aria-controls="child-panel-schedules" data-child-panel="schedules" tabindex="-1">週間予定</button>
             </div>
             <div id="child-panel-basic" role="tabpanel" aria-labelledby="child-tab-basic" data-child-tab-panel="basic">
               <div id="child-detail" class="detail-sheet empty-state">
@@ -120,12 +119,6 @@
                 <header class="subsection-heading"><div><p class="eyebrow">連絡先と関係者</p><h2 id="guardians-title">保護者</h2></div><button id="create-guardian-button" class="button button-primary permission-edit-clients" type="button" hidden>保護者を登録</button></header>
                 <div id="guardian-list" class="guardian-list empty-state"><strong>利用者を選択してください</strong></div>
               </section>
-            </div>
-            <div id="child-panel-schedules" role="tabpanel" aria-labelledby="child-tab-schedules" data-child-tab-panel="schedules" hidden>
-              <div class="schedule-columns">
-                <section class="schedule-lane" aria-labelledby="current-schedule-title"><header><span>いま</span><h2 id="current-schedule-title">現在の生活</h2><p>アセスメント時点で実際に過ごしている一週間です。</p></header><div id="current-schedule" class="schedule-content empty-state"><strong>週間予定は未登録です</strong></div></section>
-                <section class="schedule-lane planned" aria-labelledby="planned-schedule-title"><header><span>これから</span><h2 id="planned-schedule-title">計画後の生活</h2><p>支援計画を実施した後に目指す一週間です。</p></header><div id="planned-schedule" class="schedule-content empty-state"><strong>週間予定は未登録です</strong></div></section>
-              </div>
             </div>
           </section>
 
@@ -155,7 +148,7 @@
                 </div>
                 <div class="document-lane-record">
                   <div id="assessment-document-controls" class="document-lane-controls">
-                    <button class="button button-secondary permission-edit-documents" type="button" data-generate-draft="basic_assessment" aria-describedby="assessment-readiness" hidden>アセスメントを作成</button><small id="assessment-readiness" class="readiness-copy">確定した現在の生活が必要です。</small><button id="open-current-schedule-from-assessment" class="button button-ghost" type="button" hidden>現在の生活を登録する</button>
+                    <button class="button button-secondary permission-edit-documents" type="button" data-generate-draft="basic_assessment" aria-describedby="assessment-readiness" hidden>アセスメントを作成</button><small id="assessment-readiness" class="readiness-copy">利用者を選択すると作成できます。</small>
                   </div>
                   <div id="assessment-document-list" class="document-list empty-state"><strong>登録されたアセスメントはありません</strong></div>
                   <details id="external-reference-details" class="document-reference-panel document-reference-inline">
@@ -373,32 +366,6 @@
         <div class="dialog-actions"><button class="button button-ghost" type="button" data-close-dialog="guardian-dialog">キャンセル</button><button id="guardian-save-button" class="button button-primary" type="submit">登録する</button></div>
       </form>
     </dialog>
-
-    <dialog id="schedule-dialog" class="app-dialog form-dialog schedule-dialog permission-edit-documents" aria-labelledby="schedule-form-title">
-      <form id="schedule-form" novalidate>
-        <input name="scheduleKind" type="hidden">
-        <div class="dialog-heading"><p class="eyebrow">週間予定</p><h2 id="schedule-form-title">週間予定を編集</h2><p id="schedule-form-description">予定を時系列で登録します。</p></div>
-        <div id="schedule-error" class="form-error" role="alert" hidden></div>
-        <div class="field-grid">
-          <label class="field"><span>開始日</span><input name="validFrom" type="date"></label>
-          <label class="field"><span>終了日</span><input name="validTo" type="date"></label>
-          <label class="field field-wide"><span>一週間の概要</span><textarea name="summary" maxlength="8000" rows="3"></textarea></label>
-        </div>
-        <fieldset class="schedule-items-fieldset"><legend>予定</legend><div id="schedule-item-rows"></div><button id="add-schedule-item" class="button button-ghost" type="button">＋ 予定を追加</button></fieldset>
-        <div class="dialog-actions"><button class="button button-ghost" type="button" data-close-dialog="schedule-dialog">キャンセル</button><button class="button button-primary" type="submit">週間予定を保存</button></div>
-      </form>
-    </dialog>
-
-    <template id="schedule-item-template">
-      <div class="schedule-item-row">
-        <label class="field"><span>曜日</span><select name="dayOfWeek" required><option value="1">月</option><option value="2">火</option><option value="3">水</option><option value="4">木</option><option value="5">金</option><option value="6">土</option><option value="0">日</option></select></label>
-        <label class="field"><span>開始</span><input name="startTime" type="time" required></label>
-        <label class="field"><span>終了</span><span class="time-pair"><select name="endDay" aria-label="終了日"><option value="same">同日</option><option value="next">翌日</option></select><input name="endTime" type="time" aria-label="終了時刻" required></span></label>
-        <label class="field schedule-activity"><span>活動 <em>必須</em></span><input name="activity" maxlength="500" required></label>
-        <label class="field schedule-location"><span>場所</span><input name="location" maxlength="500"></label>
-        <div class="schedule-row-actions"><button class="button button-ghost duplicate-schedule-item" type="button">複製</button><button class="icon-button remove-schedule-item" type="button" aria-label="この予定を削除">×</button></div>
-      </div>
-    </template>
 
     <dialog id="monitoring-generation-dialog" class="app-dialog form-dialog permission-edit-documents" aria-labelledby="monitoring-generation-title">
       <form id="monitoring-generation-form" novalidate>
