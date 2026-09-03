@@ -61,7 +61,7 @@
             <span aria-hidden="true">01</span>基本情報
           </button>
           <button type="button" data-view="contact">
-            <span aria-hidden="true">02</span>連絡帳
+            <span aria-hidden="true">02</span>支援の記録
           </button>
           <button type="button" data-view="documents">
             <span aria-hidden="true">03</span>計画書
@@ -121,16 +121,10 @@
 
           <section id="view-contact" class="page-view" data-page-view="contact" aria-labelledby="contact-title" hidden>
             <header class="page-heading">
-              <div><p class="eyebrow">日々の記録・情報共有</p><h1 id="contact-title">連絡帳</h1><p>日々の支援記録と、保護者へお伝えする内容を一つの画面で確認・登録します。</p></div>
+              <div><p class="eyebrow">日々の支援記録</p><h1 id="contact-title">支援の記録</h1></div>
             </header>
-            <section class="contact-unified-section" aria-labelledby="support-record-title">
-              <header class="contact-unified-heading"><div><p class="eyebrow">事業所内の記録</p><h2 id="support-record-title">支援の記録</h2><p>活動・観察・行った支援・本人の反応を記録し、連絡帳や計画書の根拠にします。</p></div><button id="create-journal-button" class="button button-secondary permission-edit-journals" type="button" hidden>支援記録を追加</button></header>
-              <div id="journal-list" class="record-list empty-state"><strong>利用者を選択してください</strong></div>
-            </section>
-            <section class="contact-unified-section" aria-labelledby="contact-book-title">
-              <header class="contact-unified-heading"><div><p class="eyebrow">保護者へのお知らせ</p><h2 id="contact-book-title">連絡帳</h2><p>支援の記録をもとに、当日の様子・写真・引継ぎ事項を残します。</p></div></header>
-              <div id="contact-list" class="record-list empty-state"><strong>利用者を選択してください</strong></div>
-            </section>
+            <div class="support-record-actions"><button id="create-journal-button" class="button button-primary permission-edit-journals" type="button" hidden>支援記録を追加</button></div>
+            <div id="journal-list" class="record-list empty-state"><strong>利用者を選択してください</strong></div>
           </section>
 
           <section id="view-documents" class="page-view" data-page-view="documents" aria-label="計画書" hidden>

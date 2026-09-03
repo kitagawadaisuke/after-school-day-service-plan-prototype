@@ -50,10 +50,12 @@ test("SaaSシェルはセッション・所属・利用者を起点にした業�
   assert.match(html, /id="logout-button"[^>]+type="button">ログアウト/);
   assert.match(html, /data-view="audit"/);
   assert.match(html, /<span aria-hidden="true">04<\/span>操作履歴/);
-  assert.match(html, /<span aria-hidden="true">02<\/span>連絡帳/);
+  assert.match(html, /<span aria-hidden="true">02<\/span>支援の記録/);
   assert.doesNotMatch(html, /data-view="journals"/);
   assert.doesNotMatch(html, /id="view-journals"/);
-  assert.match(html, /id="support-record-title">支援の記録/);
+  assert.match(html, /<h1 id="contact-title">支援の記録<\/h1>/);
+  assert.doesNotMatch(html, /保護者へのお知らせ/);
+  assert.doesNotMatch(html, /id="contact-list"/);
   assert.match(html, /id="view-audit"/);
   assert.match(html, /登録・編集・削除などの操作を確認できます。/);
   assert.match(html, /職員・事業所設定/);
@@ -208,9 +210,9 @@ test("保護者・受給者証を利用者台帳で扱い、週間予定画面�
   assert.match(script, /familyMessage: "", requestSummary, facilityReply/);
   assert.doesNotMatch(script, /form\.elements\.familyMessage/);
   assert.match(script, /function journalContactSourceText\(/);
-  assert.match(script, /日誌を保存しました。連絡帳の下書きを作成しています。/);
-  assert.match(script, /text: "連絡帳を作成"/);
-  assert.match(script, /openContactDraftFromJournal\(createContactButton, journal\)/);
+  assert.match(script, /支援記録を保存しました。/);
+  assert.doesNotMatch(script, /text: "連絡帳を作成"/);
+  assert.doesNotMatch(script, /openContactDraftFromJournal\(createContactButton, journal\)/);
   assert.match(script, /function deleteJournal\(/);
   assert.match(script, /function deleteContactEntry\(/);
   assert.match(script, /text: "削除"/);
@@ -219,7 +221,7 @@ test("保護者・受給者証を利用者台帳で扱い、週間予定画面�
   assert.match(script, /"daily_log\.deleted": "日誌を削除"/);
   assert.match(script, /"contact_book\.deleted": "連絡帳を削除"/);
   assert.match(script, /daily-logs\/\$\{encodeURIComponent\(journalId\)\}/);
-  assert.match(script, /日誌を変更しました/);
+  assert.match(script, /支援記録を変更しました。/);
   assert.match(html, /活動・場面 <em>必須<\/em>/);
   assert.match(script, /\/guardians/);
   assert.match(script, /function openGuardianEdit\(/);

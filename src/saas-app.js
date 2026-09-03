@@ -1028,13 +1028,11 @@ function renderJournals() {
     }
     if (can("journals.edit")) {
       const actions = element("div", { className: "record-actions" });
-      const createContactButton = element("button", { className: "button button-quiet", text: "連絡帳を作成", attributes: { type: "button" } });
-      createContactButton.addEventListener("click", () => runAsync(() => openContactDraftFromJournal(createContactButton, journal)));
       const editButton = element("button", { className: "button button-quiet", text: journal.status === "draft" ? "続きを入力" : "編集", attributes: { type: "button" } });
       editButton.addEventListener("click", () => openJournalDialog(editButton, journal));
       const deleteButton = element("button", { className: "button button-danger", text: "削除", attributes: { type: "button" } });
       deleteButton.addEventListener("click", () => runAsync(() => deleteJournal(deleteButton, journal)));
-      actions.append(createContactButton, editButton, deleteButton);
+      actions.append(editButton, deleteButton);
       body.append(actions);
     }
     item.append(date, body);
@@ -1650,21 +1648,15 @@ async function loadActiveResource() {
   }
   if (!state.selectedChild) {
     renderJournals();
-    renderContactEntries();
     renderDocuments();
     renderGuardians();
     return;
   }
   const childId = encodeURIComponent(state.selectedChild.id);
   if (state.activeView === "contact") {
-    const [journals, contacts] = await Promise.all([
-      api(`/children/${childId}/daily-logs?limit=50`),
-      api(`/children/${childId}/contact-book?limit=50`),
-    ]);
-    state.journals = journals.data.items || [];
-    state.contactEntries = contacts.data.items || [];
+    const { data } = await api(`/children/${childId}/daily-logs?limit=50`);
+    state.journals = data.items || [];
     renderJournals();
-    renderContactEntries();
   } else if (state.activeView === "documents") {
     await loadDocuments();
   } else if (state.activeView === "child" && state.childPanel === "guardians") {
@@ -2454,7 +2446,6 @@ async function submitJournal(event) {
   const body = journalFormBody(form, "final");
   try {
     const journalId = form.dataset.journalId;
-    let savedJournal;
     state.conflictReload = loadActiveResource;
     state.conflictResumeDialog = $("#journal-dialog");
     if (journalId) {
@@ -2463,27 +2454,14 @@ async function submitJournal(event) {
         etag: `"${form.dataset.journalRowVersion}"`,
         body,
       });
-      savedJournal = result.data;
     } else {
       const result = await idempotentCreate(`/children/${encodeURIComponent(state.selectedChild.id)}/daily-logs`, body);
-      savedJournal = result.data;
     }
     closeDialog($("#journal-dialog"));
     await loadActiveResource();
     state.conflictReload = null;
     state.conflictResumeDialog = null;
-    if (journalId) {
-      announce("日誌を変更しました。");
-      return;
-    }
-    if (kind === "specialized_support_plan") {
-      const created = state.documents.find((documentRecord) => documentRecord.id === result.data.id) || result.data;
-      await openPlanEditor(created, button);
-      announce("専門的支援の目標と活動プログラムを入力してください。");
-      return;
-    }
-    announce("日誌を保存しました。連絡帳の下書きを作成しています。");
-    await openContactDraftFromJournal($("#main-content"), savedJournal || body);
+    announce(journalId ? "支援記録を変更しました。" : "支援記録を保存しました。");
   } catch (error) {
     if (error.status !== 409) showFormError(form, errorContainer, errorMessage(error), []);
   }
@@ -3988,7 +3966,6 @@ async function initialize() {
     if (rememberedChild) await selectChild(rememberedChild.id, { announceSelection: false });
     else if (remembered) forgetSelectedChild();
     renderJournals();
-    renderContactEntries();
     renderDocuments();
     renderGuardians();
     $("#session-gate").hidden = true;

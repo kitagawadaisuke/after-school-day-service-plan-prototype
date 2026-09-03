@@ -1864,16 +1864,10 @@ main {
   background: color-mix(in srgb, var(--forest-pale) 32%, white);
 }
 
-.contact-unified-section { margin-top: 26px; }
-.contact-unified-section + .contact-unified-section { margin-top: 34px; }
-.contact-unified-heading { display: flex; align-items: flex-end; justify-content: space-between; gap: 20px; margin-bottom: 13px; padding: 0 4px; }
-.contact-unified-heading h2, .contact-unified-heading p { margin: 0; }
-.contact-unified-heading h2 { margin-top: 5px; font-size: 23px; }
-.contact-unified-heading > div > p:last-child { margin-top: 7px; color: var(--ink-soft); font-size: 13px; line-height: 1.6; }
-.contact-unified-heading .button { flex: 0 0 auto; }
+.support-record-actions { display: flex; justify-content: flex-end; margin: -55px 0 18px; }
 
 @media (max-width: 640px) {
-  .contact-unified-heading { align-items: flex-start; flex-direction: column; }
+  .support-record-actions { justify-content: flex-start; margin: 0 0 16px; }
 }
 
 .assessment-template-fields > summary {
