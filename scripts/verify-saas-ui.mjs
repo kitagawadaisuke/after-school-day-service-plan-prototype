@@ -40,6 +40,14 @@ try {
     else if (url.pathname.endsWith("/facilities")) body = { items: [{ id: ids.facility, name: "みらいステップ中央", code: "MS-01", serviceType: "放課後等デイサービス", status: "active", rowVersion: 1 }] };
     else if (url.pathname === `/api/v1/children/${ids.child}`) body = child;
     else if (url.pathname.endsWith("/children")) body = { items: [child] };
+    else if (url.pathname.endsWith("/daily-logs")) body = {
+      items: [{
+        id: "018f1db5-c170-7c35-a784-3cfc6f98c501", occurredAt: "2026-09-03T06:00:00.000Z",
+        activity: "集団での工作", observation: "友だちへ自分から声をかけ、順番を守って参加した。",
+        supportProvided: "予定を短く伝え、必要な場面で選択肢を示した。", childResponse: "安心して最後まで制作に取り組めた。",
+        healthNote: "体調の変化なし", fiveDomains: ["cognition_behavior", "human_relations_sociality"], status: "final", rowVersion: 1,
+      }],
+    };
     else if (url.pathname.endsWith("/writing-assist") && request.method() === "POST") {
       const input = request.postDataJSON();
       writingRequests.push(input);
@@ -81,6 +89,11 @@ try {
   assert.equal(await targetSelect.inputValue(), "200");
   assert.equal(await customTarget.isHidden(), true);
   await page.locator('[data-close-dialog="journal-dialog"]').click();
+  await page.getByRole("button", { name: "当日のサマリー" }).click();
+  await page.locator("#daily-summary-dialog").waitFor({ state: "visible" });
+  assert.match(await page.locator("#daily-summary-card").textContent(), /観察した事実[\s\S]*行った支援[\s\S]*本人の反応/);
+  assert.match(await page.locator("#daily-summary-card").textContent(), /関連する5領域/);
+  await page.locator('[data-close-dialog="daily-summary-dialog"]').click();
 
   await page.locator('.primary-nav [data-view="documents"]').click();
   await page.locator("#assessment-title").waitFor();

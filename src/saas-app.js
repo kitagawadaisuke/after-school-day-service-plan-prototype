@@ -1026,15 +1026,18 @@ function renderJournals() {
       journal.fiveDomains.forEach((domain) => tags.append(element("li", { text: FIVE_DOMAIN_LABELS[domain] || domain })));
       body.append(tags);
     }
+    const actions = element("div", { className: "record-actions" });
+    const summaryButton = element("button", { className: "button button-secondary", text: "当日のサマリー", attributes: { type: "button" } });
+    summaryButton.addEventListener("click", () => openDailySummary(journal, summaryButton));
+    actions.append(summaryButton);
     if (can("journals.edit")) {
-      const actions = element("div", { className: "record-actions" });
       const editButton = element("button", { className: "button button-quiet", text: journal.status === "draft" ? "続きを入力" : "編集", attributes: { type: "button" } });
       editButton.addEventListener("click", () => openJournalDialog(editButton, journal));
       const deleteButton = element("button", { className: "button button-danger", text: "削除", attributes: { type: "button" } });
       deleteButton.addEventListener("click", () => runAsync(() => deleteJournal(deleteButton, journal)));
       actions.append(editButton, deleteButton);
-      body.append(actions);
     }
+    body.append(actions);
     item.append(date, body);
     container.append(item);
   }
@@ -2886,6 +2889,64 @@ function setDefaultEvidencePeriod(form) {
   }
 }
 
+function summaryTimelineItem(step, label, value) {
+  const item = element("li", { className: "daily-summary-timeline-item" });
+  item.append(
+    element("span", { className: "daily-summary-step", text: step }),
+    element("strong", { text: label }),
+    element("p", { text: value || "記録なし" }),
+  );
+  return item;
+}
+
+function openDailySummary(journal, trigger) {
+  const card = $("#daily-summary-card");
+  card.replaceChildren();
+  const domains = journal.fiveDomains || [];
+  const header = element("header", { className: "daily-summary-header" });
+  const heading = element("div");
+  heading.append(
+    element("p", { className: "eyebrow", text: "Daily Support Summary" }),
+    element("h2", { id: "daily-summary-title", text: "当日の支援サマリー" }),
+    element("p", { className: "daily-summary-meta", text: `${state.selectedChild?.displayName || "利用者"}　|　${formatDate(journal.occurredAt, true)}` }),
+  );
+  header.append(heading, element("span", { className: `daily-summary-status ${journal.status === "draft" ? "is-draft" : ""}`, text: journal.status === "draft" ? "下書き" : "記録済み" }));
+  const activity = element("section", { className: "daily-summary-activity" });
+  activity.append(element("span", { text: "ACTIVITY" }), element("strong", { text: journal.activity || "活動名未入力" }));
+
+  const timeline = element("ol", { className: "daily-summary-timeline", attributes: { "aria-label": "支援の流れ" } });
+  timeline.append(
+    summaryTimelineItem("01", "観察した事実", journal.observation),
+    summaryTimelineItem("02", "行った支援", journal.supportProvided),
+    summaryTimelineItem("03", "本人の反応", journal.childResponse),
+  );
+
+  const footer = element("div", { className: "daily-summary-footer" });
+  const domainPanel = element("section", { className: "daily-summary-domains", attributes: { "aria-label": "関連する5領域" } });
+  domainPanel.append(element("strong", { text: "関連する5領域" }));
+  const domainList = element("div", { className: "daily-summary-domain-list" });
+  if (domains.length) {
+    domains.forEach((domain) => domainList.append(element("span", { text: FIVE_DOMAIN_LABELS[domain] || domain })));
+  } else {
+    domainList.append(element("span", { className: "is-empty", text: "未設定" }));
+  }
+  domainPanel.append(domainList);
+  footer.append(domainPanel);
+  if (journal.healthNote) {
+    const health = element("section", { className: "daily-summary-health" });
+    health.append(element("strong", { text: "健康上の連絡" }), element("p", { text: journal.healthNote }));
+    footer.append(health);
+  }
+  card.append(header, activity, timeline, footer);
+  openDialog($("#daily-summary-dialog"), trigger);
+}
+
+function printDailySummary() {
+  if (!$("#daily-summary-dialog")?.open) return;
+  document.body.classList.add("daily-summary-printing");
+  window.print();
+}
+
 function openAssessmentGeneration(trigger) {
   if (!state.selectedChild) return announce("利用者を選択してください。");
   const assessment = latestDocument("basic_assessment");
@@ -3980,6 +4041,8 @@ function setupEvents() {
   $("#expand-contact-draft")?.addEventListener("click", () => runAsync(() => generateContactDraft($("#expand-contact-draft"))));
   $("#copy-contact-reply")?.addEventListener("click", () => runAsync(() => copyFieldText($("#contact-form").elements.facilityReply, $("#copy-contact-reply"), "事業所からの返信")));
   $("#contact-photo-input")?.addEventListener("change", () => renderContactPhotoPreview($("#contact-form")));
+  $("#print-daily-summary")?.addEventListener("click", printDailySummary);
+  window.addEventListener("afterprint", () => document.body.classList.remove("daily-summary-printing"));
   $("#create-guardian-button")?.addEventListener("click", (event) => openGuardianDialog(event.currentTarget));
   $("#open-assessment-generation")?.addEventListener("click", (event) => openAssessmentGeneration(event.currentTarget));
   $("#open-individual-plan-generation")?.addEventListener("click", (event) => runAsync(() => generateIndividualPlanFromAssessment(event.currentTarget)));

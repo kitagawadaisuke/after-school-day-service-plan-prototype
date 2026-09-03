@@ -181,6 +181,14 @@ test("保護者・受給者証を利用者台帳で扱い、週間予定画面�
   assert.match(html, /data-journal-character-count="observation"/);
   assert.match(html, /id="save-journal-draft"[^>]+>下書き保存/);
   assert.match(html, /id="save-journal-final"[^>]+>記録を保存/);
+  assert.match(html, /id="daily-summary-dialog"/);
+  assert.match(html, /id="daily-summary-card"/);
+  assert.match(html, /id="print-daily-summary"[^>]+>印刷 \/ PDF保存/);
+  assert.match(script, /function openDailySummary\(/);
+  assert.match(script, /function printDailySummary\(/);
+  assert.match(script, /text: "当日のサマリー"/);
+  assert.match(css, /\.daily-summary-timeline \{ display: grid; grid-template-columns: repeat\(3, minmax\(0, 1fr\)\);/);
+  assert.match(css, /body\.daily-summary-printing #app-shell/);
   assert.match(html, /data-contact-reply-length/);
   assert.match(html, /文章を整える/);
   assert.match(html, /data-copy-journal-field="observation"[^>]*>コピー/);

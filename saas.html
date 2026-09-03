@@ -317,6 +317,11 @@
       </form>
     </dialog>
 
+    <dialog id="daily-summary-dialog" class="app-dialog daily-summary-dialog" aria-labelledby="daily-summary-title">
+      <article id="daily-summary-card" class="daily-summary-card" aria-live="polite"></article>
+      <div class="dialog-actions daily-summary-actions"><button class="button button-ghost" type="button" data-close-dialog="daily-summary-dialog">閉じる</button><button id="print-daily-summary" class="button button-primary" type="button">印刷 / PDF保存</button></div>
+    </dialog>
+
     <dialog id="contact-dialog" class="app-dialog form-dialog permission-edit-journals" aria-labelledby="contact-form-title">
       <form id="contact-form" novalidate>
         <div class="dialog-heading"><p class="eyebrow">日々の情報共有</p><h2 id="contact-form-title">日誌から連絡帳を作成</h2><p id="contact-form-description">同じ日の日誌をもとに、事業所からの連絡と写真を確認して登録します。</p></div>
