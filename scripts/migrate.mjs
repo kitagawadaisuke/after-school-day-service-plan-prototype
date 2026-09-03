@@ -7,8 +7,9 @@ import { assertPdfFinalizationSecret } from "../server/security/pdf-finalization
 
 const { Client } = pg;
 const MIGRATION_LOCK_NAME = "michinote-schema-migrations-v1";
-const RUNTIME_ROLE_NAME = "michinote_runtime";
-const PROVISIONER_ROLE_NAME = "michinote_provisioner";
+const DEFAULT_RUNTIME_ROLE_NAME = "michinote_runtime";
+const DEFAULT_PROVISIONER_ROLE_NAME = "michinote_provisioner";
+const DATABASE_ROLE_NAME_PATTERN = /^[A-Za-z_][A-Za-z0-9_]{0,62}$/;
 const SCRAM_ITERATIONS = 4096;
 const migrationsDirectory = new URL("../db/migrations/", import.meta.url);
 
@@ -36,9 +37,12 @@ function provisionerLoginFromEnvironment() {
   };
 }
 
-function validateRuntimeLogin(runtimeLogin) {
-  if (!runtimeLogin || runtimeLogin.user !== RUNTIME_ROLE_NAME) {
-    throw new Error(`RUNTIME_DATABASE_USER must be ${RUNTIME_ROLE_NAME}`);
+function validateRuntimeLogin(runtimeLogin, roleName = DEFAULT_RUNTIME_ROLE_NAME) {
+  if (!DATABASE_ROLE_NAME_PATTERN.test(roleName)) {
+    throw new Error("RUNTIME_DATABASE_USER is not a valid PostgreSQL role name");
+  }
+  if (!runtimeLogin || runtimeLogin.user !== roleName) {
+    throw new Error(`RUNTIME_DATABASE_USER must be ${roleName}`);
   }
   if (
     typeof runtimeLogin.password !== "string"
@@ -51,9 +55,12 @@ function validateRuntimeLogin(runtimeLogin) {
   return runtimeLogin;
 }
 
-function validateProvisionerLogin(provisionerLogin) {
-  if (!provisionerLogin || provisionerLogin.user !== PROVISIONER_ROLE_NAME) {
-    throw new Error(`PROVISION_DATABASE_USER must be ${PROVISIONER_ROLE_NAME}`);
+function validateProvisionerLogin(provisionerLogin, roleName = DEFAULT_PROVISIONER_ROLE_NAME) {
+  if (!DATABASE_ROLE_NAME_PATTERN.test(roleName)) {
+    throw new Error("PROVISION_DATABASE_USER is not a valid PostgreSQL role name");
+  }
+  if (!provisionerLogin || provisionerLogin.user !== roleName) {
+    throw new Error(`PROVISION_DATABASE_USER must be ${roleName}`);
   }
   if (
     typeof provisionerLogin.password !== "string"
@@ -107,15 +114,30 @@ async function configureDocumentSnapshotFinalization(client, secretValue) {
   );
 }
 
-async function loadSources() {
+function rewriteDeploymentRoleNames(sql, { runtimeRoleName, provisionerRoleName }) {
+  return sql
+    .replaceAll(DEFAULT_RUNTIME_ROLE_NAME, runtimeRoleName)
+    .replaceAll(DEFAULT_PROVISIONER_ROLE_NAME, provisionerRoleName);
+}
+
+async function loadSources({
+  runtimeRoleName = DEFAULT_RUNTIME_ROLE_NAME,
+  provisionerRoleName = DEFAULT_PROVISIONER_ROLE_NAME,
+} = {}) {
   const names = (await readdir(migrationsDirectory))
     .filter((name) => /^\d+.*\.sql$/.test(name))
     .sort();
   const versioned = await Promise.all(names.map(async (name) => {
-    const sql = await readFile(new URL(name, migrationsDirectory), "utf8");
+    const sql = rewriteDeploymentRoleNames(await readFile(new URL(name, migrationsDirectory), "utf8"), {
+      runtimeRoleName,
+      provisionerRoleName,
+    });
     return { name, sql, sha256: checksum(sql), repeatable: false };
   }));
-  const grantsSql = await readFile(new URL("../db/runtime-grants.sql", import.meta.url), "utf8");
+  const grantsSql = rewriteDeploymentRoleNames(
+    await readFile(new URL("../db/runtime-grants.sql", import.meta.url), "utf8"),
+    { runtimeRoleName, provisionerRoleName },
+  );
   return [
     ...versioned,
     {
@@ -245,11 +267,19 @@ export async function runMigrations({
   runtimeLogin,
   provisionerLogin,
   pdfFinalizationSecret,
+  runtimeRoleName,
+  provisionerRoleName,
 } = {}) {
-  const resolvedRuntimeLogin = validateRuntimeLogin(runtimeLogin || runtimeLoginFromEnvironment());
-  const resolvedProvisionerLogin = validateProvisionerLogin(
-    provisionerLogin || provisionerLoginFromEnvironment(),
-  );
+  const resolvedRuntimeLogin = runtimeLogin || runtimeLoginFromEnvironment();
+  const resolvedProvisionerLogin = provisionerLogin || provisionerLoginFromEnvironment();
+  const resolvedRuntimeRoleName = runtimeRoleName
+    || process.env.RUNTIME_DATABASE_USER
+    || DEFAULT_RUNTIME_ROLE_NAME;
+  const resolvedProvisionerRoleName = provisionerRoleName
+    || process.env.PROVISION_DATABASE_USER
+    || DEFAULT_PROVISIONER_ROLE_NAME;
+  validateRuntimeLogin(resolvedRuntimeLogin, resolvedRuntimeRoleName);
+  validateProvisionerLogin(resolvedProvisionerLogin, resolvedProvisionerRoleName);
   const resolvedPdfFinalizationSecret = assertPdfFinalizationSecret(
     pdfFinalizationSecret || requiredEnvironment("PDF_FINALIZATION_SECRET"),
   );
@@ -267,7 +297,10 @@ export async function runMigrations({
     await ensureHistory(databaseClient);
     await databaseClient.query("select pg_advisory_lock(hashtext($1))", [MIGRATION_LOCK_NAME]);
     locked = true;
-    for (const source of sources || await loadSources()) {
+    for (const source of sources || await loadSources({
+      runtimeRoleName: resolvedRuntimeRoleName,
+      provisionerRoleName: resolvedProvisionerRoleName,
+    })) {
       const outcome = await applyMigrationSource(databaseClient, source);
       logger.info?.(JSON.stringify({ event: "migration", name: source.name, outcome }));
     }
@@ -286,10 +319,10 @@ export async function runMigrations({
       await databaseClient.query("rollback");
       throw error;
     }
-    logger.info?.(JSON.stringify({ event: "runtime_database_login_configured", role: RUNTIME_ROLE_NAME }));
+    logger.info?.(JSON.stringify({ event: "runtime_database_login_configured", role: resolvedRuntimeRoleName }));
     logger.info?.(JSON.stringify({
       event: "provisioner_database_login_configured",
-      role: PROVISIONER_ROLE_NAME,
+      role: resolvedProvisionerRoleName,
     }));
   } finally {
     if (locked) {

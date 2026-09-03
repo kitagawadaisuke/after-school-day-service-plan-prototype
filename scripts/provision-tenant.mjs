@@ -14,7 +14,7 @@ const { Client } = pg;
 const UUID_PATTERN = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
 const EMAIL_PATTERN = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 const FACILITY_CODE_PATTERN = /^[A-Za-z0-9][A-Za-z0-9_-]{0,63}$/;
-const PROVISIONER_ROLE_NAME = "michinote_provisioner";
+const DATABASE_ROLE_NAME_PATTERN = /^[A-Za-z_][A-Za-z0-9_]{0,62}$/;
 
 function requiredEnvironment(name, env = process.env) {
   const value = env[name];
@@ -238,8 +238,8 @@ export async function buildProvisioningConnectionOptions(
   const sslMode = env.PROVISION_DATABASE_SSL || "require";
   const user = requiredEnvironment("PROVISION_DATABASE_USER", env);
   const password = requiredEnvironment("PROVISION_DATABASE_PASSWORD", env);
-  if (user !== PROVISIONER_ROLE_NAME) {
-    throw new Error(`PROVISION_DATABASE_USER must be ${PROVISIONER_ROLE_NAME}`);
+  if (!DATABASE_ROLE_NAME_PATTERN.test(user)) {
+    throw new Error("PROVISION_DATABASE_USER is not a valid PostgreSQL role name");
   }
   if (password.length < 32 || password.length > 1024 || password.includes("\0")) {
     throw new Error("PROVISION_DATABASE_PASSWORD is invalid");
