@@ -54,6 +54,18 @@ export function planRows(goals = [], { maxRows = 4 } = {}) {
   return rows.map((goal) => `<tr><td>${text(goal.title)}</td><td>${text(goal.support_details)}</td><td>${text(printableDate(goal.target_date))}</td><td>${text((goal.five_domains || []).map((domain) => DOMAIN_LABELS[domain] || domain).join("\n"))}</td></tr>`).join("");
 }
 
+export function payloadPlanRows(payload = {}, { maxRows = 4 } = {}) {
+  const rows = [];
+  for (let index = 1; index <= maxRows; index += 1) {
+    const title = value(payload, [`supportGoal${index}`]);
+    const supportDetails = value(payload, [`supportContent${index}`]);
+    const targetDate = value(payload, [`supportTargetDate${index}`]);
+    const fiveDomains = value(payload, [`supportFiveDomains${index}`]).split(/[、,/]/).map((item) => item.trim()).filter(Boolean);
+    if (title || supportDetails || targetDate || fiveDomains.length) rows.push({ goal_kind: "support", title, support_details: supportDetails, target_date: targetDate, five_domains: fiveDomains });
+  }
+  return rows;
+}
+
 export function scheduleCells(schedules = []) {
   const planned = schedules.find((schedule) => schedule.schedule_kind === "planned") || schedules.find((schedule) => schedule.schedule_kind === "current");
   const items = planned?.items || [];
@@ -61,6 +73,13 @@ export function scheduleCells(schedules = []) {
     const day = index === 7 ? null : (index + 1) % 7;
     return `<td>${text(day === null ? "" : items.filter((item) => Number(item.day_of_week) === day).map((item) => item.activity).join("\n"))}</td>`;
   }).join("");
+}
+
+export function payloadScheduleCells(payload = {}, schedules = []) {
+  const keys = ["weeklyMonday", "weeklyTuesday", "weeklyWednesday", "weeklyThursday", "weeklyFriday", "weeklySaturday", "weeklySunday", "weeklySchoolHoliday"];
+  const hasTemplateValues = keys.some((key) => value(payload, [key]));
+  if (!hasTemplateValues) return scheduleCells(schedules);
+  return keys.map((key) => `<td>${text(value(payload, [key]))}</td>`).join("");
 }
 
 export function buildCocoForm({ source, snapshotKind, title, bodyHtml, pageClass = "" }) {

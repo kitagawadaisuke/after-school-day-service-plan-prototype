@@ -148,6 +148,17 @@ test("保護者・受給者証を利用者台帳で扱い、週間予定画面�
   assert.match(html, /保存後は末尾4桁だけを表示/);
   assert.match(html, /name="municipalityName"/);
   assert.match(html, /name="copaymentLimitYen"/);
+  assert.match(html, /アセスメントシートに記載する確認項目/);
+  assert.match(html, /name="dailyMeal"/);
+  assert.match(html, /name="favoriteCharacter"/);
+  assert.match(script, /const ASSESSMENT_TEMPLATE_FIELDS/);
+  assert.match(html, /個別支援計画に記載する確認項目/);
+  assert.match(html, /name="supportGoal1"/);
+  assert.match(html, /name="weeklySchoolHoliday"/);
+  assert.match(script, /const PLAN_TEMPLATE_FIELDS/);
+  assert.match(html, /id="monitoring-editor-form"/);
+  assert.match(html, /name="monitoringSupportGoal1"/);
+  assert.match(script, /const MONITORING_TEMPLATE_FIELDS/);
   assert.doesNotMatch(html, /child-tab-schedules|child-panel-schedules|schedule-dialog|現在の生活|計画後の生活|週間予定/);
   assert.doesNotMatch(script, /renderGuardians\(\);\s*renderSchedule\("current"\);/);
   assert.match(html, /data-journal-character-count="observation"/);

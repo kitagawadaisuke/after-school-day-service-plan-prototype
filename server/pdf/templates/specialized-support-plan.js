@@ -1,16 +1,18 @@
-import { buildCocoForm, cell, planRows, section, signedDate, text, value } from "./coco-form.js";
+import { buildCocoForm, cell, payloadPlanRows, planRows, section, signedDate, text, value } from "./coco-form.js";
 
 export const SPECIALIZED_SUPPORT_PLAN_ORIENTATION = "portrait";
 
 export function renderSpecializedSupportPlan(source, snapshotKind) {
   const payload = source.document.payload || {};
-  const supportGoals = source.goals?.length ? source.goals : [{
+  const storedSupportGoals = source.goals?.filter((goal) => goal.goal_kind === "support") || [];
+  const templateSupportGoals = payloadPlanRows(payload, { maxRows: 3 });
+  const supportGoals = storedSupportGoals.length ? storedSupportGoals : (templateSupportGoals.length ? templateSupportGoals : [{
     goal_kind: "support",
     title: value(payload, ["specializedSupportTarget"]),
     support_details: value(payload, ["specializedSupportContent"]),
     target_date: value(payload, ["specializedTargetDate"]),
     five_domains: value(payload, ["specializedFiveDomains"]).split(/[、,/]/).filter(Boolean),
-  }];
+  }]);
   const longTerm = source.goals?.find((goal) => goal.goal_kind === "long_term");
   const shortTerm = source.goals?.find((goal) => goal.goal_kind === "short_term");
   const bodyHtml = [

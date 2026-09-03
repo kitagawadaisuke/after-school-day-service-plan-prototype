@@ -65,6 +65,22 @@ const INDIVIDUAL_PLAN_PAYLOAD_FIELDS = Object.freeze([
   ["specializedFiveDomains", "5領域"],
 ]);
 const INDIVIDUAL_PLAN_FIELD_LABELS = Object.freeze(Object.fromEntries(INDIVIDUAL_PLAN_PAYLOAD_FIELDS));
+// 帳票上の固定欄。支援目標を未登録でも、指定帳票の各行を直接編集できるようにする。
+const PLAN_TEMPLATE_FIELDS = Object.freeze([
+  "longTermGoal", "shortTermGoal",
+  "supportGoal1", "supportContent1", "supportTargetDate1", "supportFiveDomains1",
+  "supportGoal2", "supportContent2", "supportTargetDate2", "supportFiveDomains2",
+  "supportGoal3", "supportContent3", "supportTargetDate3", "supportFiveDomains3",
+  "supportGoal4", "supportContent4", "supportTargetDate4", "supportFiveDomains4",
+  "weeklyMonday", "weeklyTuesday", "weeklyWednesday", "weeklyThursday", "weeklyFriday", "weeklySaturday", "weeklySunday", "weeklySchoolHoliday", "weeklyNotes",
+]);
+const MONITORING_TEMPLATE_FIELDS = Object.freeze([
+  "supportIssues", "childWishes", "familyWishes", "longTermGoal", "shortTermGoal", "overallEvaluation", "nextPlanDirection", "remarks",
+  "monitoringSupportGoal1", "monitoringSupportContent1", "monitoringProgress1", "monitoringChange1", "monitoringNotes1",
+  "monitoringSupportGoal2", "monitoringSupportContent2", "monitoringProgress2", "monitoringChange2", "monitoringNotes2",
+  "monitoringSupportGoal3", "monitoringSupportContent3", "monitoringProgress3", "monitoringChange3", "monitoringNotes3",
+  "monitoringSupportGoal4", "monitoringSupportContent4", "monitoringProgress4", "monitoringChange4", "monitoringNotes4",
+]);
 const ASSESSMENT_EDITOR_FIELDS = Object.freeze([
   ["childWishes", "personWish"],
   ["familyWishes", "familyWish"],
@@ -91,6 +107,13 @@ const ASSESSMENT_FIELD_LABELS = Object.freeze({
   overallAssessment: "総合的なアセスメント", supportConsiderations: "支援で大切にすること", medicalSafetyNotes: "医療・安全上の留意事項",
   supportNetwork: "連携先と役割", planningNotes: "個別支援計画へ引き継ぐこと",
 });
+const ASSESSMENT_TEMPLATE_FIELDS = Object.freeze([
+  "dailyMeal", "dailyDressing", "dailyToileting", "dailyBathing", "dailySleep", "scheduleManagement", "schoolClass", "learning",
+  "socialUnderstanding", "environmentAdaptation", "friendRelationships", "publicBehavior", "speaksIndependently", "listensToOthers", "hobbies", "lessons",
+  "familyCareerPath", "childCareerPath", "supportNotes", "favoriteFood", "dislikedFood", "favoriteSnack", "drinks", "favoritePlay", "difficultPlay",
+  "favoriteCharacter", "difficultCharacter", "favoriteThings", "sleepPattern", "favoriteOutings", "difficultOutings", "outingNotes", "outsideNotes",
+  "otherServices", "desiredServiceDays",
+]);
 const ASSESSMENT_CONTEXT_FIELDS = Object.freeze(ASSESSMENT_EDITOR_FIELDS.slice(0, 12).map(([fieldName]) => fieldName));
 const ASSESSMENT_SYNTHESIS_FIELDS = Object.freeze(new Set([
   "overallAssessment", "supportConsiderations",
@@ -1362,6 +1385,11 @@ function renderDocumentLane(kind, container) {
       actions.append(edit);
     }
     if (kind === "monitoring_record") {
+      if (can("documents.edit") && EDITABLE_DOCUMENT_STATUSES.includes(documentRecord.status)) {
+        const edit = element("button", { className: "button button-primary", text: "帳票を編集", attributes: { type: "button" } });
+        edit.addEventListener("click", () => runAsync(() => openMonitoringEditor(documentRecord, edit)));
+        actions.append(edit);
+      }
       const results = documentRecord.id === latestDocument("monitoring_record")?.id ? state.monitoringResults : [];
       if (results.length) {
         const activePlan = latestDocument("individual_support_plan", (candidate) => candidate.status === "active");
@@ -2909,6 +2937,56 @@ function openMonitoringResult(documentRecord, result, goal, trigger) {
   openDialog($("#monitoring-result-dialog"), trigger);
 }
 
+async function openMonitoringEditor(documentRecord, trigger) {
+  if (!state.selectedChild || documentRecord.documentKind !== "monitoring_record" || !EDITABLE_DOCUMENT_STATUSES.includes(documentRecord.status)) return;
+  const childId = encodeURIComponent(state.selectedChild.id);
+  let detailResult = state.documentDetails.get(documentRecord.id);
+  if (!detailResult) {
+    detailResult = await api(`/children/${childId}/documents/${encodeURIComponent(documentRecord.id)}`);
+    state.documentDetails.set(documentRecord.id, detailResult);
+  }
+  const detail = detailResult.data;
+  const form = $("#monitoring-editor-form");
+  form.reset();
+  form.elements.documentId.value = detail.id;
+  form.dataset.documentEtag = detailResult.etag || `"${detail.rowVersion}"`;
+  form.elements.periodStart.value = detail.periodStart || "";
+  form.elements.periodEnd.value = detail.periodEnd || "";
+  for (const field of MONITORING_TEMPLATE_FIELDS) form.elements[field].value = detail.payload?.[field] || "";
+  clearFormError(form, $("#monitoring-editor-error"));
+  openDialog($("#monitoring-editor-dialog"), trigger);
+}
+
+async function submitMonitoringEditor(event) {
+  event.preventDefault();
+  const form = event.currentTarget;
+  const errorContainer = $("#monitoring-editor-error");
+  if (!validateForm(form, errorContainer)) return;
+  const documentId = form.elements.documentId.value;
+  const currentDetail = state.documentDetails.get(documentId)?.data;
+  const payload = { ...(currentDetail?.payload || {}) };
+  for (const field of MONITORING_TEMPLATE_FIELDS) payload[field] = optionalEditorValue(form.elements[field].value);
+  const periodStart = form.elements.periodStart.value || null;
+  const periodEnd = form.elements.periodEnd.value || null;
+  if (periodStart && periodEnd && periodEnd < periodStart) return showFormError(form, errorContainer, "終了日は開始日以降にしてください。", ["periodEnd"]);
+  state.conflictResumeDialog = $("#monitoring-editor-dialog");
+  state.conflictReload = loadDocuments;
+  try {
+    await api(`/children/${encodeURIComponent(state.selectedChild.id)}/documents/${encodeURIComponent(documentId)}`, {
+      method: "PATCH",
+      etag: form.dataset.documentEtag,
+      body: { payload, periodStart, periodEnd },
+    });
+    closeDialog($("#monitoring-editor-dialog"));
+    state.conflictResumeDialog = null;
+    state.conflictReload = null;
+    await loadDocuments();
+    announce("モニタリング帳票を保存しました。");
+  } catch (error) {
+    if (error.status !== 409) showFormError(form, errorContainer, errorMessage(error), []);
+  }
+}
+
 async function submitMonitoringResult(event) {
   event.preventDefault();
   const form = event.currentTarget;
@@ -3006,6 +3084,7 @@ async function openPlanEditor(documentRecord, trigger) {
   }
   const suggestedValues = planIsEmpty ? planDraftValuesFromAssessment(assessmentDetail) : {};
   for (const [field] of INDIVIDUAL_PLAN_PAYLOAD_FIELDS) form.elements[field].value = detail.payload?.[field] || suggestedValues[field] || "";
+  for (const field of PLAN_TEMPLATE_FIELDS) form.elements[field].value = detail.payload?.[field] || "";
   installPlanWritingTools(form);
   $$('[data-plan-length]', form).forEach(syncCustomTargetLength);
   updateAllPlanCharacterCounts(form);
@@ -3049,6 +3128,7 @@ async function openAssessmentEditor(documentRecord, trigger) {
   for (const [field, assessmentField] of ASSESSMENT_EDITOR_FIELDS) {
     form.elements[field].value = detail.payload?.[field] || (assessmentField ? detail.payload?.assessment?.[assessmentField] : "") || "";
   }
+  for (const field of ASSESSMENT_TEMPLATE_FIELDS) form.elements[field].value = detail.payload?.[field] || "";
   installAssessmentWritingTools(form);
   $$('[data-assessment-length]', form).forEach(syncCustomTargetLength);
   updateAllAssessmentCharacterCounts(form);
@@ -3144,6 +3224,7 @@ async function submitPlanEditor(event) {
   const currentDetail = state.documentDetails.get(documentId)?.data;
   const payload = { ...(currentDetail?.payload || {}) };
   for (const [field] of INDIVIDUAL_PLAN_PAYLOAD_FIELDS) payload[field] = optionalEditorValue(form.elements[field].value);
+  for (const field of PLAN_TEMPLATE_FIELDS) payload[field] = optionalEditorValue(form.elements[field].value);
   const body = {
     periodStart: form.elements.periodStart.value || null,
     periodEnd: form.elements.periodEnd.value || null,
@@ -3199,6 +3280,7 @@ async function submitAssessmentEditor(event) {
     payload[field] = value;
     if (assessmentField) assessment[assessmentField] = value;
   }
+  for (const field of ASSESSMENT_TEMPLATE_FIELDS) payload[field] = optionalEditorValue(form.elements[field].value);
   payload.assessment = assessment;
   state.conflictResumeDialog = $("#assessment-editor-dialog");
   state.conflictReload = loadDocuments;
@@ -3812,6 +3894,7 @@ function setupEvents() {
   $("#guardian-form")?.addEventListener("submit", submitGuardian);
   $("#monitoring-generation-form")?.addEventListener("submit", submitMonitoringGeneration);
   $("#monitoring-result-form")?.addEventListener("submit", submitMonitoringResult);
+  $("#monitoring-editor-form")?.addEventListener("submit", submitMonitoringEditor);
   $("#plan-editor-form")?.addEventListener("submit", submitPlanEditor);
   $("#assessment-editor-form")?.addEventListener("submit", submitAssessmentEditor);
   $("#reference-plan-editor-form")?.addEventListener("submit", submitReferencePlanEditor);

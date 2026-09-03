@@ -1857,6 +1857,24 @@ main {
 .writing-disclosure .plan-writing-tools,
 .writing-disclosure .journal-disclosure-tools { margin: 0; border: 0; border-radius: 0; background: transparent; }
 
+.assessment-template-fields {
+  margin-top: 18px;
+  border: 1px solid var(--line-strong);
+  border-radius: 12px;
+  background: color-mix(in srgb, var(--forest-pale) 32%, white);
+}
+
+.assessment-template-fields > summary {
+  cursor: pointer;
+  padding: 13px 15px;
+  color: var(--forest);
+  font-weight: 800;
+  line-height: 1.5;
+}
+
+.assessment-template-fields > p { margin: 0; padding: 0 15px 13px; color: var(--ink-soft); font-size: 13px; line-height: 1.6; }
+.assessment-template-fields > .field-grid { padding: 14px; border-top: 1px solid var(--line); }
+
 .draft-assist {
   display: grid;
   grid-template-columns: minmax(0, 1fr) auto;
