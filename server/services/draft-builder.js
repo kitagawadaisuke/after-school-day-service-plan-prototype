@@ -153,20 +153,20 @@ export function buildBasicAssessmentDraft({
   const monitoringDraft = monitoringAssessmentDraftValues(previousMonitoring, previousMonitoringGoalResults);
   return {
     templateVersion: "basic-assessment-v2",
-    periodStart: consultationPlan?.periodStart || currentSchedule.validFrom || null,
-    periodEnd: consultationPlan?.periodEnd || currentSchedule.validTo || null,
+    periodStart: consultationPlan?.periodStart || currentSchedule?.validFrom || null,
+    periodEnd: consultationPlan?.periodEnd || currentSchedule?.validTo || null,
     payload: {
       generation: baseGeneration({
         targetDocumentKind: "basic_assessment",
         generatedAt,
         sourceDocuments: [consultationPlan, previousMonitoring],
         period: {
-          start: consultationPlan?.periodStart || currentSchedule.validFrom || null,
-          end: consultationPlan?.periodEnd || currentSchedule.validTo || null,
+          start: consultationPlan?.periodStart || currentSchedule?.validFrom || null,
+          end: consultationPlan?.periodEnd || currentSchedule?.validTo || null,
         },
         counts: {
           guardians: guardians.length,
-          scheduleItems: currentSchedule.items.length,
+          scheduleItems: currentSchedule?.items.length || 0,
           previousMonitoringResults: previousMonitoringGoalResults.length,
         },
       }),
@@ -177,12 +177,12 @@ export function buildBasicAssessmentDraft({
           rowVersion: Number(guardian.rowVersion),
           isPrimary: Boolean(guardian.isPrimary),
         })),
-        currentSchedule: {
+        currentSchedule: currentSchedule ? {
           id: currentSchedule.id,
           versionNumber: Number(currentSchedule.versionNumber),
           rowVersion: Number(currentSchedule.rowVersion),
           status: currentSchedule.status,
-        },
+        } : null,
         previousMonitoring: documentReference(previousMonitoring),
         previousMonitoringResultIds: previousMonitoringGoalResults.map((result) => result.id),
       },
@@ -207,7 +207,7 @@ export function buildBasicAssessmentDraft({
         previousMonitoringGoalResults,
       ),
       ...monitoringDraft,
-      currentScheduleFacts: {
+      currentScheduleFacts: currentSchedule ? {
         scheduleVersionId: currentSchedule.id,
         summary: currentSchedule.summary,
         validFrom: currentSchedule.validFrom,
@@ -221,7 +221,7 @@ export function buildBasicAssessmentDraft({
           location: item.location,
           serviceKind: item.serviceKind,
         })),
-      },
+      } : null,
       assessment: {
         personWish: monitoringDraft.childWishes,
         familyWish: monitoringDraft.familyWishes,

@@ -16,6 +16,7 @@ const IDS = {
   membership: "018f2db5-c170-7c35-a784-3cfc6f98d401",
   child: "018f2db5-c170-7c35-a784-3cfc6f98d501",
   otherChild: "018f2db5-c170-7c35-a784-3cfc6f98d502",
+  scheduleFreeChild: "018f2db5-c170-7c35-a784-3cfc6f98d503",
   guardian: "018f2db5-c170-7c35-a784-3cfc6f98d601",
   schedule: "018f2db5-c170-7c35-a784-3cfc6f98d701",
   scheduleItem: "018f2db5-c170-7c35-a784-3cfc6f98d702",
@@ -403,6 +404,30 @@ test("相談支援計画がなくても、事業所のアセスメントと個�
     assert.equal(individual.statusCode, 201);
     assert.equal(individual.json().payload.generation.sourceDocuments.some((document) => document.documentKind === "consultation_plan"), false);
     assert.equal(individual.json().payload.generation.evidenceCounts.consultationGoals, 0);
+  });
+});
+
+test("週間予定がなくても、アセスメント下書きを作れる", async () => {
+  await withApp("plan_approver", async (app, db) => {
+    await db.query(
+      `insert into public.children (
+        id, tenant_id, facility_id, management_code, display_name, legal_name,
+        birth_date, grade, disability_category, created_by, updated_by
+      ) values ($1, $2, $3, 'C-003', '予定なし利用児（架空）', '予定なし利用児（架空）',
+        '2018-05-10', '小学2年', '発達支援', $4, $4)`,
+      [IDS.scheduleFreeChild, IDS.tenant, IDS.facility, IDS.user],
+    );
+
+    const assessment = await app.inject({
+      method: "POST",
+      url: `/api/v1/children/${IDS.scheduleFreeChild}/draft-generations`,
+      payload: { targetDocumentKind: "basic_assessment" },
+    });
+
+    assert.equal(assessment.statusCode, 201);
+    assert.equal(assessment.json().payload.provenance.currentSchedule, null);
+    assert.equal(assessment.json().payload.currentScheduleFacts, null);
+    assert.equal(assessment.json().payload.generation.evidenceCounts.scheduleItems, 0);
   });
 });
 

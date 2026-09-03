@@ -178,9 +178,10 @@ async function readCurrentSchedule(client, actor, childId, scheduleVersionId) {
     parameters,
   );
   if (!result.rows[0]) {
+    if (!scheduleVersionId) return null;
     throw unprocessable(
-      "CURRENT_SCHEDULE_REQUIRED",
-      "確定済みの現在の生活スケジュールを登録してからアセスメント下書きを作成してください。",
+      "INVALID_CURRENT_SCHEDULE",
+      "指定された現在の生活スケジュールを利用できません。",
     );
   }
   const items = await client.query(
@@ -259,7 +260,7 @@ export async function generateBasicAssessment(client, actor, childId, input, opt
   );
   return {
     document,
-    sourceIds: [consultationPlan?.id, currentSchedule.id, previousMonitoring?.id].filter(Boolean),
+    sourceIds: [consultationPlan?.id, currentSchedule?.id, previousMonitoring?.id].filter(Boolean),
     evidenceCounts: built.payload.generation.evidenceCounts,
   };
 }
