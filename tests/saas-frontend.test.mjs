@@ -103,6 +103,7 @@ test("外部計画は任意の参考資料とし、事業所の計画と専門�
   assert.match(html, /id="assessment-document-controls"/);
   assert.match(html, /id="assessment-generation-dialog"/);
   assert.match(script, /function openAssessmentGeneration\(/);
+  assert.match(css, /\.readiness-copy, \.document-workflow-copy, \.document-item \.document-workflow-copy[^}]+font-size: 13px/);
   assert.match(script, /assessment-document-controls"\)\.hidden = !can\("documents\.edit"\)/);
   assert.match(script, /if \(view === "journals"\) view = "contact"/);
   assert.match(script, /kind === "monitoring_record" && !documents\.length && state\.selectedChild/);
