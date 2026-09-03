@@ -40,6 +40,8 @@
         <div class="facility-identity" aria-live="polite">
           <span>ご利用事業所</span>
           <strong id="sidebar-facility-name">事業所を読み込んでいます</strong>
+          <label class="facility-switcher-label" for="facility-select">切り替え</label>
+          <select id="facility-select" aria-label="表示する事業所"></select>
         </div>
 
         <button
@@ -76,10 +78,6 @@
 
       <div class="workspace">
         <header class="topbar">
-          <div class="workspace-context" hidden>
-            <label for="facility-select">事業所</label>
-            <select id="facility-select" aria-label="表示する事業所"></select>
-          </div>
           <div class="session-context">
             <div id="network-save-status" class="save-status" role="status" aria-live="polite" data-state="saved" hidden>
               <span aria-hidden="true"></span><b>同期済み</b>
