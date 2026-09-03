@@ -37,9 +37,33 @@ function htmlText(value) {
   return escapeHtml(plain(value)).replaceAll("\n", "<br>");
 }
 
+function textUnits(value) {
+  return [...plain(value)].reduce((total, character) => {
+    if (/\s/.test(character)) return total + 0.35;
+    if (/^[\x00-\x7F]$/.test(character)) return total + 0.58;
+    return total + 1;
+  }, 0);
+}
+
+function fittedFontSize(value, width, height, preferredSize) {
+  const units = textUnits(value);
+  if (!units) return preferredSize;
+
+  // 帳票の枠は固定なので、文字数に応じて行数と文字サイズを両方見積もる。
+  // 余白を含めて少し小さめに算出し、改行後の末尾が枠外へ出ないようにする。
+  const availableWidth = Math.max(1, width - 2);
+  const availableHeight = Math.max(1, height - 1);
+  const estimated = Math.sqrt((availableWidth * availableHeight) / (units * 1.48));
+  const fitted = Math.min(preferredSize, estimated);
+  return Math.max(2.8, Math.round(fitted * 10) / 10);
+}
+
 function field({ x, y, w, h, value, size = 7.4, align = "left" }) {
-  if (!plain(value).trim()) return "";
-  return `<div class="official-field" style="left:${x}pt;top:${y}pt;width:${w}pt;height:${h}pt;font-size:${size}pt;text-align:${align}">${htmlText(value)}</div>`;
+  const content = plain(value);
+  if (!content.trim()) return "";
+  const fittedSize = fittedFontSize(content, w, h, size);
+  const compact = fittedSize < size;
+  return `<div class="official-field${compact ? " official-field--compact" : ""}" data-font-size="${fittedSize}" style="left:${x}pt;top:${y}pt;width:${w}pt;height:${h}pt;font-size:${fittedSize}pt;text-align:${align}">${htmlText(content)}</div>`;
 }
 
 function page(image, fields) {
@@ -206,5 +230,5 @@ export function renderOfficialCocoTemplate(source) {
         : kind === "monitoring_record" ? renderMonitoring(source)
           : null;
   if (!body) return null;
-  return `<!doctype html><html lang="ja" data-document-kind="${escapeHtml(kind)}" data-orientation="portrait"><head><meta charset="utf-8"><title>${title}</title><style>@page{size:A4 portrait;margin:0}*{box-sizing:border-box}html,body{margin:0;padding:0}.template-contract{display:none}.official-page{position:relative;width:${PAGE_WIDTH}pt;height:${PAGE_HEIGHT}pt;break-after:page;overflow:hidden}.official-page:last-child{break-after:auto}.official-page>img{position:absolute;inset:0;width:100%;height:100%;display:block}.official-field{position:absolute;z-index:1;overflow:hidden;white-space:pre-wrap;overflow-wrap:anywhere;word-break:break-word;line-height:1.24;color:#111;font-family: "IPAGothic","Noto Sans CJK JP","Yu Gothic","Meiryo",sans-serif}</style></head><body><div class="template-contract"><h1 class="coco-title">${title}</h1><span>具体的な支援内容（活動プログラム）</span></div>${body}</body></html>`;
+  return `<!doctype html><html lang="ja" data-document-kind="${escapeHtml(kind)}" data-orientation="portrait"><head><meta charset="utf-8"><title>${title}</title><style>@page{size:A4 portrait;margin:0}*{box-sizing:border-box}html,body{margin:0;padding:0}.template-contract{display:none}.official-page{position:relative;width:${PAGE_WIDTH}pt;height:${PAGE_HEIGHT}pt;break-after:page;overflow:hidden}.official-page:last-child{break-after:auto}.official-page>img{position:absolute;inset:0;width:100%;height:100%;display:block}.official-field{position:absolute;z-index:1;overflow:hidden;white-space:pre-wrap;overflow-wrap:anywhere;word-break:break-word;line-height:1.24;color:#111;font-family: "IPAGothic","Noto Sans CJK JP","Yu Gothic","Meiryo",sans-serif}.official-field--compact{line-height:1.18;letter-spacing:-.01em}</style></head><body><div class="template-contract"><h1 class="coco-title">${title}</h1><span>具体的な支援内容（活動プログラム）</span></div>${body}</body></html>`;
 }
