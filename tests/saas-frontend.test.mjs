@@ -291,9 +291,10 @@ test("保存済みの書類ではPDFを一つだけ出力・参照する", () =>
   assert.match(script, /document-item--compact/);
   assert.doesNotMatch(script, /kind === "consultation_plan" \? "登録済みの参考資料" : `第\$\{documentRecord\.versionNumber\}版`/);
   assert.match(script, /PDF_LAYOUT_TEMPLATE_VERSIONS/);
-  assert.match(script, /basic_assessment: "coco-assessment-v1"/);
-  assert.match(script, /individual_support_plan: "coco-individual-plan-v1"/);
-  assert.match(script, /specialized_support_plan: "coco-specialized-plan-v1"/);
+  assert.match(script, /coco-assessment-v2/);
+  assert.match(script, /basic_assessment: "coco-assessment-v2"/);
+  assert.match(script, /individual_support_plan: "coco-individual-plan-v2"/);
+  assert.match(script, /specialized_support_plan: "coco-specialized-plan-v2"/);
   assert.match(script, /body: \{ templateVersion: requiredVersion \}/);
   assert.match(script, /documentRecord\.documentKind !== "consultation_plan"/);
   assert.match(script, /snapshot\.snapshotKind === snapshotKind/);

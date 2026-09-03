@@ -1186,10 +1186,11 @@ async function loadDocumentSnapshots(documents = state.documents) {
 // it, so staff do not have to open and re-save their own content just to get a
 // corrected form.
 const PDF_LAYOUT_TEMPLATE_VERSIONS = Object.freeze({
-  basic_assessment: "coco-assessment-v1",
-  individual_support_plan: "coco-individual-plan-v1",
-  specialized_support_plan: "coco-specialized-plan-v1",
-  monitoring_record: "coco-monitoring-v1",
+  // v2: supplied COCO forms are used as the PDF page backgrounds.
+  basic_assessment: "coco-assessment-v2",
+  individual_support_plan: "coco-individual-plan-v2",
+  specialized_support_plan: "coco-specialized-plan-v2",
+  monitoring_record: "coco-monitoring-v2",
 });
 
 function requiredPdfTemplateVersion(documentRecord) {
