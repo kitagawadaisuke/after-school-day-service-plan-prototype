@@ -388,6 +388,37 @@ async function readPreviousMonitoringGoalResults(client, actor, childId, monitor
   }));
 }
 
+function retainIndividualPlanEntries(existingPayload, generatedPayload) {
+  const fields = [
+    "userAndFamilyWishes",
+    "supportIssues",
+    "childWishes",
+    "familyWishes",
+    "overallSupportPolicy",
+    "consultationPlanBasis",
+    "supportConsiderations",
+    "serviceDelivery",
+    "coordination",
+    "monitoringPlan",
+    "explanationNotes",
+    "specializedGoal",
+    "specializedSupportTarget",
+    "specializedSupportContent",
+    "specializedTargetDate",
+    "specializedFiveDomains",
+  ];
+  const payload = { ...existingPayload, ...generatedPayload };
+  for (const field of fields) {
+    payload[field] = hasEnteredValue(existingPayload?.[field])
+      ? existingPayload[field]
+      : generatedPayload[field];
+  }
+  payload.plan = { ...(generatedPayload.plan || {}), ...(existingPayload?.plan || {}) };
+  payload.generation = generatedPayload.generation;
+  payload.provenance = generatedPayload.provenance;
+  return payload;
+}
+
 export async function generateIndividualSupportPlan(client, actor, childId, input, options = {}) {
   await readChild(client, actor, childId);
   const consultationPlan = input.consultationPlanId
@@ -430,17 +461,39 @@ export async function generateIndividualSupportPlan(client, actor, childId, inpu
     previousMonitoringGoalResults,
     generatedAt: options.generatedAt,
   });
-  const document = await createGeneratedDocument(
-    client,
-    actor,
-    childId,
-    "individual_support_plan",
-    built,
-  );
+  let document;
+  if (input.individualSupportPlanDocumentId) {
+    const existing = await readSourceDocument(
+      client,
+      actor,
+      childId,
+      input.individualSupportPlanDocumentId,
+      "individual_support_plan",
+    );
+    if (!EDITABLE_STATUSES.includes(existing.status)) {
+      throw conflict("PLAN_NOT_EDITABLE", "確定済みの個別支援計画にはアセスメントを再反映できません。新しい下書きを作成してください。");
+    }
+    document = await updateDocument(client, actor, childId, existing.id, existing.rowVersion, {
+      templateVersion: built.templateVersion,
+      periodStart: built.periodStart,
+      periodEnd: built.periodEnd,
+      payload: retainIndividualPlanEntries(existing.payload, built.payload),
+    });
+  } else {
+    document = await createGeneratedDocument(
+      client,
+      actor,
+      childId,
+      "individual_support_plan",
+      built,
+    );
+  }
   const goals = [];
-  for (const candidate of built.goals) {
-    const created = await createDocumentGoal(client, actor, childId, document.id, candidate);
-    goals.push(created.goal);
+  if (!input.individualSupportPlanDocumentId) {
+    for (const candidate of built.goals) {
+      const created = await createDocumentGoal(client, actor, childId, document.id, candidate);
+      goals.push(created.goal);
+    }
   }
   return {
     document: { ...document, goals },

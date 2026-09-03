@@ -433,6 +433,42 @@ test("相談支援計画・アセスメント・前回モニタリングから�
   });
 });
 
+test("アセスメントから個別支援計画を作成し、再反映では入力済みの項目と目標を保持する", async () => {
+  await withApp("plan_approver", async (app) => {
+    const createdResponse = await generate(app, {
+      targetDocumentKind: "individual_support_plan",
+      assessmentDocumentId: IDS.assessment,
+    });
+    assert.equal(createdResponse.statusCode, 201);
+    const created = createdResponse.json();
+    assert.equal(created.payload.overallSupportPolicy, "予定を視覚的に共有する");
+    assert.equal(created.goals.length, 0);
+
+    const editedResponse = await app.inject({
+      method: "PATCH",
+      url: `/api/v1/children/${IDS.child}/documents/${created.id}`,
+      headers: { "if-match": '"1"' },
+      payload: {
+        payload: { ...created.payload, overallSupportPolicy: "会議で確認した支援方針" },
+      },
+    });
+    assert.equal(editedResponse.statusCode, 200);
+
+    const refreshedResponse = await generate(app, {
+      targetDocumentKind: "individual_support_plan",
+      assessmentDocumentId: IDS.assessment,
+      individualSupportPlanDocumentId: created.id,
+    });
+    assert.equal(refreshedResponse.statusCode, 201);
+    const refreshed = refreshedResponse.json();
+    assert.equal(refreshed.id, created.id);
+    assert.equal(refreshed.rowVersion, 3);
+    assert.equal(refreshed.payload.overallSupportPolicy, "会議で確認した支援方針");
+    assert.equal(refreshed.goals.length, 0);
+    assert.equal(refreshed.payload.assessmentCandidates.strengths, "絵や写真を見て順序を理解できる");
+  });
+});
+
 test("相談支援計画がなくても、事業所のアセスメントと個別支援計画を作れる", async () => {
   await withApp("plan_approver", async (app) => {
     const assessment = await generate(app, {

@@ -88,7 +88,7 @@ test("最後に開いた利用者は同じ職員・事業所のブラウザタ�
 test("外部計画は任意の参考資料とし、事業所の計画と専門的支援計画を正式工程で扱う", () => {
   assert.match(html, /data-create-document="consultation_plan"/);
   assert.match(html, /id="open-assessment-generation"/);
-  assert.match(html, /data-generate-draft="individual_support_plan"/);
+  assert.match(html, /id="open-individual-plan-generation"/);
   assert.doesNotMatch(html, /1　整理する|2　計画にする|3　振り返る/);
   assert.doesNotMatch(html, /計画をつくる/);
   assert.match(html, /class="document-lane-index" aria-hidden="true">01/);
@@ -124,6 +124,7 @@ test("外部計画は任意の参考資料とし、事業所の計画と専門�
   assert.match(script, /targetDocumentKind: "basic_assessment"/);
   assert.match(script, /assessmentDocumentId: assessment\?\.id/);
   assert.match(script, /targetDocumentKind: "individual_support_plan"/);
+  assert.match(script, /individualSupportPlanDocumentId: planCanRefresh \? individualPlan\?\.id : undefined/);
   assert.match(script, /targetDocumentKind: "monitoring_record"/);
   assert.match(script, /assessmentButton\.disabled = !state\.selectedChild/);
   assert.match(script, /individualButton\.disabled = !state\.selectedChild \|\| !assessment/);

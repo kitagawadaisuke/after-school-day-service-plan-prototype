@@ -55,6 +55,7 @@ const individualPlanGenerationSchema = z
     consultationPlanId: uuidSchema.optional(),
     assessmentDocumentId: uuidSchema,
     previousMonitoringDocumentId: uuidSchema.optional(),
+    individualSupportPlanDocumentId: uuidSchema.optional(),
   })
   .strict();
 

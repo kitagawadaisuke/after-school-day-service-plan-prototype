@@ -1284,7 +1284,7 @@ function renderDocuments() {
   const assessment = latestDocument("basic_assessment");
   const activePlan = latestDocument("individual_support_plan", (item) => item.status === "active");
   const assessmentButton = $("#open-assessment-generation");
-  const individualButton = $('[data-generate-draft="individual_support_plan"]');
+  const individualButton = $("#open-individual-plan-generation");
   const monitoringButton = $("#open-monitoring-generation");
   const monitoring = latestDocument("monitoring_record");
   if (assessmentButton) {
@@ -1295,17 +1295,24 @@ function renderDocuments() {
   }
   $("#assessment-document-controls").hidden = !can("documents.edit");
   if (individualButton) {
-    individualButton.hidden = !can("documents.edit") || Boolean(latestDocument("individual_support_plan"));
+    const individualPlan = latestDocument("individual_support_plan");
+    const planCanRefresh = !individualPlan || EDITABLE_DOCUMENT_STATUSES.includes(individualPlan.status);
+    individualButton.hidden = !can("documents.edit");
     individualButton.disabled = !state.selectedChild || !assessment;
+    individualButton.textContent = !individualPlan
+      ? "アセスメントから作成"
+      : planCanRefresh
+        ? "アセスメントから未入力項目を反映"
+        : "アセスメントから新しい下書きを作成";
   }
-  $("#individual-document-controls").hidden = Boolean(latestDocument("individual_support_plan"));
+  $("#individual-document-controls").hidden = !can("documents.edit");
   if (monitoringButton) {
     monitoringButton.hidden = !can("documents.edit") || Boolean(monitoring);
     monitoringButton.disabled = !state.selectedChild || !activePlan;
   }
   $("#monitoring-document-controls").hidden = Boolean(monitoring);
   $("#assessment-readiness").hidden = false;
-  $("#individual-readiness").hidden = Boolean(latestDocument("individual_support_plan"));
+  $("#individual-readiness").hidden = false;
   $("#monitoring-readiness").hidden = Boolean(monitoring);
   $("#assessment-readiness").textContent = !state.selectedChild
     ? "利用者を選択してください。"
@@ -1314,7 +1321,11 @@ function renderDocuments() {
       : "期間を指定して支援の記録をアセスメントへ反映できます。";
   $("#individual-readiness").textContent = !assessment
     ? "アセスメントを作成すると、ここから作成できます。"
-    : "アセスメントをもとに作成できます。";
+    : latestDocument("individual_support_plan")?.status && !EDITABLE_DOCUMENT_STATUSES.includes(latestDocument("individual_support_plan").status)
+      ? "確定済みの計画書は変更せず、新しい下書きでアセスメントを反映します。"
+      : latestDocument("individual_support_plan")
+        ? "アセスメントをもとに、未入力の項目を反映できます。入力済みの内容と支援目標は変更しません。"
+        : "アセスメントをもとに、個別支援計画の下書きを作成できます。";
   $("#monitoring-readiness").textContent = activePlan
     ? "日誌・連絡帳をもとに作成できます。"
     : "運用中の個別支援計画が必要です。";
@@ -2924,6 +2935,42 @@ async function submitAssessmentGeneration(event) {
   }
 }
 
+async function generateIndividualPlanFromAssessment(button) {
+  const assessment = latestDocument("basic_assessment");
+  const individualPlan = latestDocument("individual_support_plan");
+  if (!state.selectedChild || !assessment || button.disabled) {
+    return announce("先にアセスメントを作成してください。");
+  }
+  const planCanRefresh = !individualPlan || EDITABLE_DOCUMENT_STATUSES.includes(individualPlan.status);
+  const originalLabel = button.textContent;
+  button.disabled = true;
+  button.setAttribute("aria-busy", "true");
+  state.conflictReload = loadDocuments;
+  try {
+    await idempotentCreate(`/children/${encodeURIComponent(state.selectedChild.id)}/draft-generations`, {
+      targetDocumentKind: "individual_support_plan",
+      consultationPlanId: latestReferenceMaterial()?.id,
+      assessmentDocumentId: assessment.id,
+      previousMonitoringDocumentId: latestDocument("monitoring_record")?.id || undefined,
+      individualSupportPlanDocumentId: planCanRefresh ? individualPlan?.id : undefined,
+    });
+    await loadDocuments();
+    state.conflictReload = null;
+    announce(individualPlan && planCanRefresh
+      ? "アセスメントの内容を個別支援計画の未入力項目へ反映しました。"
+      : "アセスメントをもとに個別支援計画を作成しました。内容を確認して編集してください。");
+  } catch (error) {
+    if (error.status !== 409) announce(errorMessage(error));
+  } finally {
+    if (button.isConnected) {
+      button.disabled = false;
+      button.removeAttribute("aria-busy");
+      button.textContent = originalLabel;
+    }
+    renderDocuments();
+  }
+}
+
 function openMonitoringGeneration(trigger) {
   if (!state.selectedChild || !latestDocument("individual_support_plan", (item) => item.status === "active")) {
     return announce("運用中の個別支援計画が必要です。");
@@ -3935,6 +3982,7 @@ function setupEvents() {
   $("#contact-photo-input")?.addEventListener("change", () => renderContactPhotoPreview($("#contact-form")));
   $("#create-guardian-button")?.addEventListener("click", (event) => openGuardianDialog(event.currentTarget));
   $("#open-assessment-generation")?.addEventListener("click", (event) => openAssessmentGeneration(event.currentTarget));
+  $("#open-individual-plan-generation")?.addEventListener("click", (event) => runAsync(() => generateIndividualPlanFromAssessment(event.currentTarget)));
   $("#open-monitoring-generation")?.addEventListener("click", (event) => openMonitoringGeneration(event.currentTarget));
   $("#invite-staff-button")?.addEventListener("click", (event) => openStaffInvite(event.currentTarget));
   $("#create-facility-button")?.addEventListener("click", (event) => openFacilityCreate(event.currentTarget));
