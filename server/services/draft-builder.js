@@ -3,6 +3,7 @@ const MIN_LINKED_LOGS_FOR_REVIEW = 2;
 const MAX_GOAL_EVIDENCE_EXCERPTS = 12;
 const MAX_EVIDENCE_FIELD_CHARS = 240;
 const MAX_ASSESSMENT_RECORD_EXCERPTS = 12;
+const MAX_ASSESSMENT_FIELD_SENTENCES = 2;
 
 function dateTime(value) {
   if (!value) return null;
@@ -190,11 +191,27 @@ function recordSearchText(record) {
     .join(" ");
 }
 
-function recordAssessmentSentence(record) {
-  const activity = boundedEvidenceText(record.activity);
-  const observation = boundedEvidenceText(record.observation || record.childResponse);
-  if (activity && observation) return `${activity}では、${observation}`;
-  return observation || activity || null;
+function cleanAssessmentSourceText(value) {
+  if (typeof value !== "string") return null;
+  const normalized = value
+    .replace(/[【\[]\s*サンプル\s*[】\]]/g, "")
+    .replace(/\s+/g, " ")
+    .trim();
+  return normalized || null;
+}
+
+function assessmentSentences(value) {
+  const text = cleanAssessmentSourceText(value);
+  if (!text) return [];
+  return text.match(/[^。！？]+[。！？]?/g)
+    ?.map((sentence) => sentence.trim())
+    .filter(Boolean) || [];
+}
+
+function matchingAssessmentSentences(record, rule) {
+  const sources = [record.observation, record.childResponse, record.supportProvided, record.activity];
+  return sources.flatMap(assessmentSentences)
+    .filter((sentence) => rule.terms.some((term) => sentence.includes(term)));
 }
 
 function recordCandidateForField(records, rule) {
@@ -202,9 +219,10 @@ function recordCandidateForField(records, rule) {
     const text = recordSearchText(record);
     return rule.terms.some((term) => text.includes(term));
   });
-  const sentences = [...new Set(matches.map(recordAssessmentSentence).filter(Boolean))].slice(-2);
+  const sentences = [...new Set(matches.flatMap((record) => matchingAssessmentSentences(record, rule)))]
+    .slice(-MAX_ASSESSMENT_FIELD_SENTENCES);
   if (!sentences.length) return null;
-  return `支援の記録では、${sentences.join("／")}様子が記録されています。`;
+  return sentences.join(" ");
 }
 
 function assessmentRecordFieldCandidates(records) {

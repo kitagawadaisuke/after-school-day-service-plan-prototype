@@ -282,18 +282,18 @@ async function setupDatabase() {
     throw error;
   }
 
-  for (const [id, occurredAt, activity] of [
-    [IDS.logOne, "2026-05-01T06:00:00.000Z", "工作"],
-    [IDS.logTwo, "2026-05-08T06:00:00.000Z", "集団活動"],
-    [IDS.logThree, "2026-05-15T06:00:00.000Z", "外出"],
+  for (const [id, occurredAt, activity, observation, supportProvided, childResponse] of [
+    [IDS.logOne, "2026-05-01T06:00:00.000Z", "工作", "【サンプル】制作活動では、手順を確認しながら集中して取り組み、完成した作品を職員に見せていました。", "手順を一つずつ示した。", "完成後に笑顔で作品を見せた。"],
+    [IDS.logTwo, "2026-05-08T06:00:00.000Z", "集団活動", "【サンプル】集団活動では、順番を待って友だちと役割を分担することができました。", "役割を視覚的に伝えた。", "友だちに道具を渡した。"],
+    [IDS.logThree, "2026-05-15T06:00:00.000Z", "外出", "【サンプル】外出先で予定と異なることに戸惑いが見られましたが、選べる方法を二つ提示すると気持ちを切り替え、安心して活動を続けられました。", "選べる方法を二つ提示した。", "選択後は落ち着いて再開した。"],
   ]) {
     await db.query(
       `insert into public.daily_logs (
         id, tenant_id, facility_id, child_id, occurred_at, activity, observation,
         support_provided, child_response, five_domains, recorded_by, updated_by
-      ) values ($1, $2, $3, $4, $5, $6, '架空の観察記録', '架空の支援記録',
-        '架空の本人反応', array['cognition_behavior'], $7, $7)`,
-      [id, IDS.tenant, IDS.facility, IDS.child, occurredAt, activity, IDS.user],
+      ) values ($1, $2, $3, $4, $5, $6, $7, $8,
+        $9, array['cognition_behavior'], $10, $10)`,
+      [id, IDS.tenant, IDS.facility, IDS.child, occurredAt, activity, observation, supportProvided, childResponse, IDS.user],
     );
   }
   for (const logId of [IDS.logOne, IDS.logTwo]) {
@@ -379,8 +379,11 @@ test("指定期間の支援記録からアセスメントを作成・更新し�
     assert.deepEqual(created.payload.provenance.supportRecordIds, [IDS.logOne, IDS.logTwo, IDS.logThree]);
     assert.equal(created.payload.supportRecordEvidence.excerpts.length, 3);
     assert.match(created.payload.overallAssessment, /支援記録3件/);
-    assert.match(created.payload.movementSensory, /工作/);
-    assert.match(created.payload.cognitionBehavior, /工作/);
+    assert.match(created.payload.movementSensory, /制作活動/);
+    assert.match(created.payload.cognitionBehavior, /予定と異なることに戸惑い/);
+    assert.match(created.payload.cognitionBehavior, /気持ちを切り替え/);
+    assert.doesNotMatch(created.payload.cognitionBehavior, /サンプル/);
+    assert.doesNotMatch(created.payload.cognitionBehavior, /支援の記録では/);
     assert.match(created.payload.relationshipsSocial, /集団活動/);
     assert.match(created.payload.publicBehavior, /外出/);
     assert.equal(created.payload.healthManagement, null);
@@ -392,7 +395,11 @@ test("指定期間の支援記録からアセスメントを作成・更新し�
       url: `/api/v1/children/${IDS.child}/documents/${created.id}`,
       headers: { "if-match": '"1"' },
       payload: {
-      payload: { ...created.payload, strengths: "職員が確認した本人の強み" },
+      payload: {
+        ...created.payload,
+        strengths: "職員が確認した本人の強み",
+        cognitionBehavior: "支援の記録では、【サンプル】古い候補文です。",
+      },
       },
     });
     assert.equal(manuallyEdited.statusCode, 200);
@@ -411,6 +418,8 @@ test("指定期間の支援記録からアセスメントを作成・更新し�
     assert.equal(refreshed.rowVersion, 3);
     assert.equal(refreshed.periodStart, "2026-05-08");
     assert.equal(refreshed.payload.strengths, "職員が確認した本人の強み");
+    assert.doesNotMatch(refreshed.payload.cognitionBehavior, /サンプル/);
+    assert.doesNotMatch(refreshed.payload.cognitionBehavior, /古い候補文/);
     assert.deepEqual(refreshed.payload.provenance.supportRecordIds, [IDS.logTwo, IDS.logThree]);
   });
 });
@@ -545,9 +554,9 @@ test("期間内の日誌と連絡帳からモニタリング下書きを作り�
     assert.equal(enoughEvidence.excerpts.length, 2);
     assert.deepEqual(enoughEvidence.excerpts.map((entry) => entry.date), ["2026-05-01", "2026-05-08"]);
     assert.equal(enoughEvidence.excerpts[0].activity, "工作");
-    assert.equal(enoughEvidence.excerpts[0].observation, "架空の観察記録");
-    assert.equal(enoughEvidence.excerpts[0].supportProvided, "架空の支援記録");
-    assert.equal(enoughEvidence.excerpts[0].childResponse, "架空の本人反応");
+    assert.match(enoughEvidence.excerpts[0].observation, /制作活動/);
+    assert.equal(enoughEvidence.excerpts[0].supportProvided, "手順を一つずつ示した。");
+    assert.equal(enoughEvidence.excerpts[0].childResponse, "完成後に笑顔で作品を見せた。");
     assert.equal(insufficientEvidence.excerpts.length, 0);
     assert.equal(insufficient.progressSummary.includes("未評価"), true);
 

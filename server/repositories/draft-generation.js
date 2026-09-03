@@ -234,11 +234,15 @@ function hasEnteredValue(value) {
   return typeof value === "string" ? Boolean(value.trim()) : value !== null && value !== undefined;
 }
 
+function isLegacySampleGeneratedValue(value) {
+  return typeof value === "string" && /[【\[]\s*サンプル\s*[】\]]/.test(value);
+}
+
 function retainAssessmentEntries(existingPayload, generatedPayload) {
   const payload = { ...existingPayload, ...generatedPayload };
   for (const [field, generatedValue] of Object.entries(generatedPayload)) {
     if (typeof generatedValue !== "string" && generatedValue !== null) continue;
-    payload[field] = hasEnteredValue(existingPayload?.[field])
+    payload[field] = hasEnteredValue(existingPayload?.[field]) && !isLegacySampleGeneratedValue(existingPayload[field])
       ? existingPayload[field]
       : generatedValue;
   }
