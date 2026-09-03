@@ -109,6 +109,9 @@ test("外部計画は任意の参考資料とし、事業所の計画と専門�
   assert.ok(html.indexOf('id="monitoring-readiness"') < html.indexOf('id="open-monitoring-generation"'));
   assert.match(script, /function openAssessmentGeneration\(/);
   assert.match(css, /\.readiness-copy, \.document-workflow-copy, \.document-item \.document-workflow-copy[^}]+font-size: 13px/);
+  assert.match(css, /--document-action-width: min\(648px, 100%\)/);
+  assert.match(css, /\.document-lane-controls[^}]+width: var\(--document-action-width\)/);
+  assert.match(css, /\.document-actions[^}]+width: var\(--document-action-width\)/);
   assert.match(script, /assessment-document-controls"\)\.hidden = !can\("documents\.edit"\)/);
   assert.match(script, /if \(view === "journals"\) view = "contact"/);
   assert.match(script, /kind === "monitoring_record" && !documents\.length && state\.selectedChild/);
