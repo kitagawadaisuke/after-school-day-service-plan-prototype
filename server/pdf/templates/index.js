@@ -3,6 +3,7 @@ import { renderConsultationPlan, CONSULTATION_PLAN_ORIENTATION } from "./consult
 import { renderIndividualSupportPlan, INDIVIDUAL_SUPPORT_PLAN_ORIENTATION } from "./individual-support-plan.js";
 import { renderMonitoringRecord, MONITORING_RECORD_ORIENTATION } from "./monitoring-record.js";
 import { renderSpecializedSupportPlan, SPECIALIZED_SUPPORT_PLAN_ORIENTATION } from "./specialized-support-plan.js";
+import { renderOfficialCocoTemplate } from "./official-coco-template.js";
 
 const TEMPLATES = Object.freeze({
   basic_assessment: Object.freeze({ render: renderBasicAssessment, orientation: BASIC_ASSESSMENT_ORIENTATION }),
@@ -16,7 +17,7 @@ export function renderDocumentTemplate(source, snapshotKind) {
   const template = TEMPLATES[source?.document?.document_kind];
   if (!template) throw new TypeError("unsupported document kind for PDF rendering");
   return {
-    html: template.render(source, snapshotKind),
+    html: renderOfficialCocoTemplate(source) || template.render(source, snapshotKind),
     orientation: template.orientation,
   };
 }
