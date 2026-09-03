@@ -49,7 +49,11 @@ test("SaaSシェルはセッション・所属・利用者を起点にした業�
   assert.match(html, /id="staff-role"/);
   assert.match(html, /id="logout-button"[^>]+type="button">ログアウト/);
   assert.match(html, /data-view="audit"/);
-  assert.match(html, /<span aria-hidden="true">05<\/span>操作履歴/);
+  assert.match(html, /<span aria-hidden="true">04<\/span>操作履歴/);
+  assert.match(html, /<span aria-hidden="true">02<\/span>連絡帳/);
+  assert.doesNotMatch(html, /data-view="journals"/);
+  assert.doesNotMatch(html, /id="view-journals"/);
+  assert.match(html, /id="support-record-title">支援の記録/);
   assert.match(html, /id="view-audit"/);
   assert.match(html, /登録・編集・削除などの操作を確認できます。/);
   assert.match(html, /職員・事業所設定/);
@@ -96,6 +100,7 @@ test("外部計画は任意の参考資料とし、事業所の計画と専門�
   assert.match(html, /すべての帳票の作成・編集時に確認します。/);
   assert.match(html, /id="assessment-document-controls"/);
   assert.match(script, /assessment-document-controls"\)\.hidden = Boolean\(assessment\)/);
+  assert.match(script, /if \(view === "journals"\) view = "contact"/);
   assert.match(script, /kind === "monitoring_record" && !documents\.length && state\.selectedChild/);
   assert.match(html, /参考資料を登録/);
   assert.match(html, /id="reference-material-view-dialog"/);

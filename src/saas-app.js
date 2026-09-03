@@ -1656,13 +1656,14 @@ async function loadActiveResource() {
     return;
   }
   const childId = encodeURIComponent(state.selectedChild.id);
-  if (state.activeView === "journals") {
-    const { data } = await api(`/children/${childId}/daily-logs?limit=50`);
-    state.journals = data.items || [];
+  if (state.activeView === "contact") {
+    const [journals, contacts] = await Promise.all([
+      api(`/children/${childId}/daily-logs?limit=50`),
+      api(`/children/${childId}/contact-book?limit=50`),
+    ]);
+    state.journals = journals.data.items || [];
+    state.contactEntries = contacts.data.items || [];
     renderJournals();
-  } else if (state.activeView === "contact") {
-    const { data } = await api(`/children/${childId}/contact-book?limit=50`);
-    state.contactEntries = data.items || [];
     renderContactEntries();
   } else if (state.activeView === "documents") {
     await loadDocuments();
@@ -1677,6 +1678,8 @@ async function loadActiveResource() {
 }
 
 async function switchView(view, trigger) {
+  // 旧画面を開いたままのタブも、統合後の連絡帳へ案内します。
+  if (view === "journals") view = "contact";
   state.activeView = view;
   $$('[data-page-view]').forEach((section) => {
     const active = section.dataset.pageView === view;
