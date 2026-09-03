@@ -91,8 +91,8 @@ try {
   await page.locator('[data-close-dialog="journal-dialog"]').click();
   await page.getByRole("button", { name: "当日のサマリー" }).click();
   await page.locator("#daily-summary-dialog").waitFor({ state: "visible" });
-  assert.match(await page.locator("#daily-summary-card").textContent(), /観察[\s\S]*支援[\s\S]*反応/);
-  assert.match(await page.locator("#daily-summary-card").textContent(), /関連する5領域/);
+  assert.match(await page.locator("#daily-summary-card").textContent(), /やってみたこと[\s\S]*今日のようす[\s\S]*できたこと/);
+  assert.match(await page.locator("#daily-summary-card").textContent(), /今日の活動/);
   await page.locator('[data-close-dialog="daily-summary-dialog"]').click();
 
   await page.locator('.primary-nav [data-view="documents"]').click();

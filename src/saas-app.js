@@ -2889,37 +2889,22 @@ function setDefaultEvidencePeriod(form) {
   }
 }
 
-const DAILY_SUMMARY_FLOW = Object.freeze([
-  { key: "observation", label: "観察", icon: "◎", detailLabel: "観察した事実" },
-  { key: "supportProvided", label: "支援", icon: "✦", detailLabel: "行った支援" },
-  { key: "childResponse", label: "反応", icon: "◌", detailLabel: "本人の反応" },
-]);
-
-const DAILY_SUMMARY_DOMAIN_ICONS = Object.freeze({
-  health_living: "♥",
-  motor_sensory: "↔",
-  cognition_behavior: "◇",
-  language_communication: "〰",
-  human_relations_sociality: "∞",
-});
-
-function summaryFlowNode(item, value) {
-  const hasEvidence = Boolean(value?.trim());
-  const node = element("li", { className: `daily-summary-flow-node${hasEvidence ? " is-complete" : " is-empty"}` });
-  node.append(
-    element("span", { className: "daily-summary-flow-icon", text: item.icon, attributes: { "aria-hidden": "true" } }),
-    element("strong", { text: item.label }),
-    element("small", { text: hasEvidence ? "記録あり" : "未記録" }),
-  );
-  return node;
+function parentSummaryText(value, fallback) {
+  const normalized = typeof value === "string"
+    ? value.replace(/[【\[]\s*サンプル\s*[】\]]/g, "").replace(/\s+/g, " ").trim()
+    : "";
+  if (!normalized) return fallback;
+  const sentence = normalized.match(/[^。！？]+[。！？]?/)?.[0]?.trim() || normalized;
+  const characters = [...sentence];
+  return characters.length > 92 ? `${characters.slice(0, 91).join("")}…` : sentence;
 }
 
-function summaryDomainNode(domain, active) {
-  const label = FIVE_DOMAIN_LABELS[domain] || domain;
-  const node = element("li", { className: `daily-summary-domain-node${active ? " is-active" : ""}` });
+function parentSummaryCard(icon, label, value, fallback, tone) {
+  const node = element("section", { className: `daily-summary-parent-card ${tone}` });
   node.append(
-    element("span", { className: "daily-summary-domain-icon", text: DAILY_SUMMARY_DOMAIN_ICONS[domain] || "•", attributes: { "aria-hidden": "true" } }),
-    element("small", { text: label }),
+    element("span", { className: "daily-summary-parent-icon", text: icon, attributes: { "aria-hidden": "true" } }),
+    element("strong", { text: label }),
+    element("p", { text: parentSummaryText(value, fallback) }),
   );
   return node;
 }
@@ -2927,17 +2912,15 @@ function summaryDomainNode(domain, active) {
 function openDailySummary(journal, trigger) {
   const card = $("#daily-summary-card");
   card.replaceChildren();
-  const domains = journal.fiveDomains || [];
   const header = element("header", { className: "daily-summary-header" });
   const heading = element("div");
   heading.append(
-    element("p", { className: "eyebrow", text: "Daily Support Summary" }),
-    element("h2", { id: "daily-summary-title", text: "当日の支援サマリー" }),
+    element("p", { className: "eyebrow", text: "Today at COCO" }),
+    element("h2", { id: "daily-summary-title", text: "今日のようす" }),
     element("p", { className: "daily-summary-meta", text: `${state.selectedChild?.displayName || "利用者"}　|　${formatDate(journal.occurredAt, true)}` }),
   );
-  header.append(heading, element("span", { className: `daily-summary-status ${journal.status === "draft" ? "is-draft" : ""}`, text: journal.status === "draft" ? "下書き" : "記録済み" }));
-  const completedSteps = DAILY_SUMMARY_FLOW.filter((item) => journal[item.key]?.trim()).length;
-  const overview = element("div", { className: "daily-summary-overview" });
+  header.append(heading);
+  const overview = element("section", { className: "daily-summary-overview" });
   const activity = element("section", { className: "daily-summary-activity" });
   const activityCopy = element("div");
   activityCopy.append(element("span", { text: "今日の活動" }), element("strong", { text: journal.activity || "活動名未入力" }));
@@ -2945,35 +2928,19 @@ function openDailySummary(journal, trigger) {
     element("span", { className: "daily-summary-activity-icon", text: "✦", attributes: { "aria-hidden": "true" } }),
     activityCopy,
   );
-  const completion = element("section", { className: "daily-summary-completion", attributes: { "aria-label": `支援記録の充足度 ${completedSteps}/3` } });
-  completion.style.setProperty("--completion", `${Math.round((completedSteps / DAILY_SUMMARY_FLOW.length) * 100)}%`);
-  completion.append(element("strong", { text: `${completedSteps}/3` }), element("span", { text: "記録の充足" }));
-  overview.append(activity, completion);
-
-  const flow = element("section", { className: "daily-summary-flow-panel", attributes: { "aria-label": "当日の支援の流れ" } });
-  flow.append(element("p", { className: "daily-summary-visual-label", text: "支援の流れ" }));
-  const flowList = element("ol", { className: "daily-summary-flow" });
-  DAILY_SUMMARY_FLOW.forEach((item) => flowList.append(summaryFlowNode(item, journal[item.key])));
-  flow.append(flowList);
-
-  const domainPanel = element("section", { className: "daily-summary-domains", attributes: { "aria-label": "関連する5領域" } });
-  domainPanel.append(element("p", { className: "daily-summary-visual-label", text: "関連する5領域" }));
-  const domainList = element("ul", { className: "daily-summary-domain-map" });
-  Object.keys(FIVE_DOMAIN_LABELS).forEach((domain) => domainList.append(summaryDomainNode(domain, domains.includes(domain))));
-  domainPanel.append(domainList);
-
-  const details = element("details", { className: "daily-summary-details" });
-  details.append(element("summary", { text: "記録の詳細を確認" }));
-  const detailList = element("dl");
-  DAILY_SUMMARY_FLOW.forEach((item) => detailList.append(element("dt", { text: item.detailLabel }), element("dd", { text: journal[item.key] || "記録なし" })));
-  if (journal.healthNote) detailList.append(element("dt", { text: "健康上の連絡" }), element("dd", { text: journal.healthNote }));
-  details.append(detailList);
+  overview.append(activity);
+  const dayMap = element("div", { className: "daily-summary-parent-map", attributes: { "aria-label": "今日の3つのポイント" } });
+  dayMap.append(
+    parentSummaryCard("✦", "やってみたこと", journal.activity, "今日の活動を行いました。", "is-activity"),
+    parentSummaryCard("☺", "今日のようす", journal.observation, "活動に参加しました。", "is-observation"),
+    parentSummaryCard("◎", "できたこと", journal.childResponse, "活動の中で取り組む姿が見られました。", "is-response"),
+  );
   if (journal.healthNote) {
-    const health = element("p", { className: "daily-summary-health-flag", text: "健康メモあり" });
-    health.prepend(element("span", { text: "＋", attributes: { "aria-hidden": "true" } }));
-    domainPanel.append(health);
+    const health = element("section", { className: "daily-summary-parent-health" });
+    health.append(element("span", { text: "＋", attributes: { "aria-hidden": "true" } }), element("strong", { text: "健康・体調の連絡" }), element("p", { text: parentSummaryText(journal.healthNote, "") }));
+    dayMap.append(health);
   }
-  card.append(header, overview, flow, domainPanel, details);
+  card.append(header, overview, dayMap);
   openDialog($("#daily-summary-dialog"), trigger);
 }
 
