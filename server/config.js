@@ -50,8 +50,11 @@ const configSchema = z
     PDF_RENDER_QUEUE_LIMIT: z.coerce.number().int().min(0).max(4).default(1),
     PDF_RENDER_RETRY_AFTER_SECONDS: z.coerce.number().int().min(1).max(60).default(5),
     PDF_JOB_LEASE_SECONDS: z.coerce.number().int().min(60).max(600).default(120),
+    WRITING_ASSISTANT_PROVIDER: z.enum(["openai", "anthropic"]).default("openai"),
     OPENAI_API_KEY: z.preprocess((value) => value || undefined, z.string().min(20).optional()),
     OPENAI_MODEL: z.string().min(1).max(100).default("gpt-4.1"),
+    ANTHROPIC_API_KEY: z.preprocess((value) => value || undefined, z.string().min(20).optional()),
+    ANTHROPIC_MODEL: z.string().min(1).max(100).default("claude-opus-5"),
     COGNITO_USER_POOL_ID: z.preprocess((value) => value || undefined, z.string().min(1).optional()),
     COGNITO_CLIENT_ID: z.preprocess((value) => value || undefined, z.string().min(1).optional()),
     COGNITO_CLIENT_SECRET: z.preprocess((value) => value || undefined, z.string().min(1).optional()),
@@ -227,8 +230,11 @@ export function loadConfig(env = process.env) {
     pdfRenderQueueLimit: value.PDF_RENDER_QUEUE_LIMIT,
     pdfRenderRetryAfterSeconds: value.PDF_RENDER_RETRY_AFTER_SECONDS,
     pdfJobLeaseSeconds: value.PDF_JOB_LEASE_SECONDS,
+    writingAssistantProvider: value.WRITING_ASSISTANT_PROVIDER,
     openAiApiKey: value.OPENAI_API_KEY,
     openAiModel: value.OPENAI_MODEL,
+    anthropicApiKey: value.ANTHROPIC_API_KEY,
+    anthropicModel: value.ANTHROPIC_MODEL,
     cognito: value.AUTH_MODE === "cognito"
       ? {
           region: value.AWS_REGION || inferredCognitoRegion || "ap-northeast-3",

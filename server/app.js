@@ -156,7 +156,11 @@ export async function buildApp(options = {}) {
   const recordSecurityAuthFailure = options.recordSecurityAuthFailure
     || createSecurityAuthAudit({ pool, config });
   const writingAssistant = options.writingAssistant
-    || createWritingAssistant({ apiKey: config.openAiApiKey, model: config.openAiModel });
+    || createWritingAssistant({
+      provider: config.writingAssistantProvider,
+      apiKey: config.writingAssistantProvider === "anthropic" ? config.anthropicApiKey : config.openAiApiKey,
+      model: config.writingAssistantProvider === "anthropic" ? config.anthropicModel : config.openAiModel,
+    });
   const mailService = options.mailService || createMailService(config, options.mailDependencies);
   const idempotencyRetentionWorker = config.nodeEnv === "production" && pool
     ? startIdempotencyRetentionWorker({ pool, logger: app.log })

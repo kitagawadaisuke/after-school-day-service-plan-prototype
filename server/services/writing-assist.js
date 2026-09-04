@@ -126,37 +126,74 @@ export function writingAssistPrompt(input) {
   ].join("\n");
 }
 
-export function createWritingAssistant({ apiKey, model = "gpt-4.1", fetchImpl = globalThis.fetch, timeoutMs = 30_000 } = {}) {
-  return {
-    async generate(input) {
-      if (!apiKey) throw serviceUnavailable("AIによる文章作成はまだ設定されていません。");
-      let response;
-      try {
-        const body = {
-          model,
-          store: false,
-          input: writingAssistPrompt(input),
-          max_output_tokens: 1200,
-        };
-        if (model.startsWith("gpt-5")) body.reasoning = { effort: "minimal" };
-        response = await fetchImpl("https://api.openai.com/v1/responses", {
-          method: "POST",
+function claudeOutputText(payload) {
+  return (payload?.content || [])
+    .filter((item) => item?.type === "text")
+    .map((item) => item.text || "")
+    .join("")
+    .trim();
+}
+
+export function createWritingAssistant({ provider = "openai", apiKey, model = "gpt-4.1", fetchImpl = globalThis.fetch, timeoutMs = 30_000 } = {}) {
+  const isAnthropic = provider === "anthropic";
+
+  async function generateText(prompt, maxTokens, failureMessage) {
+    if (!apiKey) throw serviceUnavailable("AIによる文章作成はまだ設定されていません。");
+    let response;
+    try {
+      const request = isAnthropic
+        ? {
+          url: "https://api.anthropic.com/v1/messages",
+          headers: {
+            "x-api-key": apiKey,
+            "anthropic-version": "2023-06-01",
+            "Content-Type": "application/json",
+          },
+          body: {
+            model,
+            max_tokens: maxTokens,
+            messages: [{ role: "user", content: prompt }],
+          },
+        }
+        : {
+          url: "https://api.openai.com/v1/responses",
           headers: {
             Authorization: `Bearer ${apiKey}`,
             "Content-Type": "application/json",
           },
-          body: JSON.stringify(body),
-          signal: AbortSignal.timeout(timeoutMs),
-        });
-      } catch {
-        throw serviceUnavailable("AIによる文章作成に接続できません。しばらくしてから再度お試しください。");
-      }
+          body: {
+            model,
+            store: false,
+            input: prompt,
+            max_output_tokens: maxTokens,
+            ...(model.startsWith("gpt-5") ? { reasoning: { effort: "minimal" } } : {}),
+          },
+        };
+      response = await fetchImpl(request.url, {
+        method: "POST",
+        headers: request.headers,
+        body: JSON.stringify(request.body),
+        signal: AbortSignal.timeout(timeoutMs),
+      });
+    } catch {
+      throw serviceUnavailable("AIによる文章作成に接続できません。しばらくしてから再度お試しください。");
+    }
+    let payload = null;
+    try { payload = await response.json(); } catch { /* handled below */ }
+    if (!response.ok) throw serviceUnavailable(failureMessage);
+    const text = isAnthropic ? claudeOutputText(payload) : outputText(payload);
+    if (!text) throw serviceUnavailable(failureMessage);
+    return text;
+  }
 
-      let payload = null;
-      try { payload = await response.json(); } catch { /* handled below */ }
-      if (!response.ok) throw serviceUnavailable("AIによる文章作成を完了できませんでした。しばらくしてから再度お試しください。");
-      const text = outputText(payload);
-      if (!text) throw serviceUnavailable("AIによる文章作成を完了できませんでした。入力内容を確認して再度お試しください。");
+  return {
+    isAvailable: Boolean(apiKey),
+    async generate(input) {
+      const text = await generateText(
+        writingAssistPrompt(input),
+        1200,
+        "AIによる文章作成を完了できませんでした。しばらくしてから再度お試しください。",
+      );
       return { text, characterCount: characterCount(text), targetCharacters: input.targetCharacters };
     },
   };
